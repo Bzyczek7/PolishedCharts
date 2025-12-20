@@ -48,7 +48,8 @@ async def test_e2e_alert_flow():
         symbols=["IBM"],
         interval=0.1,
         db_session_factory=mock_factory,
-        alert_engine=engine
+        alert_engine=engine,
+        rate_limit_sleep=0
     )
 
     # 2. Run the poller cycle

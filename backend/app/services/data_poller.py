@@ -19,7 +19,8 @@ class DataPoller:
         symbols: List[str], 
         interval: int = 3600, 
         db_session_factory: Callable[[], Any] = None, 
-        alert_engine: AlertEngine = None
+        alert_engine: AlertEngine = None,
+        rate_limit_sleep: int = 12
     ):
         self.av_service = alpha_vantage_service
         self.symbols = symbols
@@ -28,6 +29,7 @@ class DataPoller:
         self.db_session_factory = db_session_factory
         self.alert_engine = alert_engine
         self.indicator_cache: Dict[str, Dict[str, Any]] = {} # ticker -> indicator_data
+        self.rate_limit_sleep = rate_limit_sleep
 
     async def start(self):
         self.is_running = True
@@ -65,6 +67,8 @@ class DataPoller:
                                 "prev_crsi_lower": prev_crsi["cRSI_LowerBand"],
                             })
                         
+                        print(f"DEBUG Indicator data for {ticker}: {indicator_data}")
+                        
                         # 2. Cache Indicators
                         self.indicator_cache[ticker] = indicator_data
                         
@@ -80,7 +84,7 @@ class DataPoller:
                     logger.error(f"Error fetching data for {ticker}: {e}")
                 
                 # Simple rate limit handling: wait a bit between symbols if needed
-                await asyncio.sleep(12) # 5 calls per minute (free tier) -> 12s per call
+                await asyncio.sleep(self.rate_limit_sleep)
 
             # Wait for next interval
             await asyncio.sleep(self.interval)
