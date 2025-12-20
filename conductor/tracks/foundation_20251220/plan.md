@@ -1,0 +1,26 @@
+# Plan: Foundation & Core Alerting Infrastructure
+
+## Phase 1: Project Initialization & Backend Setup
+- [ ] Task: Initialize project structure (monorepo or separate folders) and Docker Compose configuration for PostgreSQL and Redis.
+- [ ] Task: Set up FastAPI application skeleton with Pydantic settings management and database connection logic (SQLAlchemy/AsyncPG).
+- [ ] Task: Define initial database models (`User`, `Alert`, `Symbol`, `Candle`) and run migrations (Alembic).
+- [ ] Task: Conductor - User Manual Verification 'Project Initialization & Backend Setup' (Protocol in workflow.md)
+
+## Phase 2: Market Data Integration (Alpha Vantage)
+- [ ] Task: Create a service/module to fetch daily/intraday OHLCV data from Alpha Vantage API.
+- [ ] Task: Implement a background scheduler (or simple loop) to poll Alpha Vantage for updates (respecting rate limits).
+- [ ] Task: Create an API endpoint (`GET /api/candles/{symbol}`) to serve stored candle data to the frontend.
+- [ ] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md)
+
+## Phase 3: Frontend Scaffold & Charting
+- [ ] Task: Initialize React application using Vite with TypeScript and Tailwind CSS.
+- [ ] Task: Implement a basic API client (axios/fetch) to communicate with the FastAPI backend.
+- [ ] Task: Create a `ChartComponent` using `lightweight-charts` that fetches and displays candle data for a hardcoded symbol (e.g., "IBM").
+- [ ] Task: Conductor - User Manual Verification 'Frontend Scaffold & Charting' (Protocol in workflow.md)
+
+## Phase 4: Basic Alert Engine & End-to-End Test
+- [ ] Task: Implement the "Create Alert" API endpoint (`POST /api/alerts`) and corresponding frontend form.
+- [ ] Task: Implement the Alert Engine logic: a service that evaluates active alerts against the latest market data.
+- [ ] Task: Connect the engine to the data poller: when new data arrives, trigger the evaluation logic.
+- [ ] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change.
+- [ ] Task: Conductor - User Manual Verification 'Basic Alert Engine & End-to-End Test' (Protocol in workflow.md)
