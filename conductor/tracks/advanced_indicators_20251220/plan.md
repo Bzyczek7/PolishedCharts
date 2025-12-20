@@ -14,10 +14,10 @@
   - [x] Subtask: Write failing tests for ADXVMA calculation (Red Phase).
   - [x] Subtask: Implement ADXVMA calculation logic (Green Phase).
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Validate indicator calculations against TradingView reference data.
-  - [ ] Subtask: Export sample data from TradingView for TDFI, cRSI, ADXVMA on known symbols (e.g., IBM, AAPL).
-  - [ ] Subtask: Create golden dataset tests comparing our calculations to TradingView outputs.
-  - [ ] Subtask: Document any acceptable tolerance ranges for floating-point differences.
+- [x] Task: Validate indicator calculations against TradingView reference data. e35ec55
+  - [x] Subtask: Export sample data from TradingView for TDFI, cRSI, ADXVMA on known symbols (e.g., IBM, AAPL).
+  - [x] Subtask: Create golden dataset tests comparing our calculations to TradingView outputs.
+  - [x] Subtask: Document any acceptable tolerance ranges for floating-point differences.
 - [ ] Task: Define Pydantic models for indicator output schema (main series, auxiliary series, metadata).
   - [ ] Subtask: Create `backend/app/schemas/indicator.py`.
   - [ ] Subtask: Define `TDFIOutput`, `cRSIOutput`, `ADXVMAOutput` models.
