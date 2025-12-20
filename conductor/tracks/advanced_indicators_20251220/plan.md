@@ -65,12 +65,12 @@
   - [x] Subtask: Write failing tests for `AlertForm` new conditions.
   - [x] Subtask: Implement UI for new alert conditions.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Update `DataPoller` to compute and cache indicator values alongside OHLCV data.
-  - [ ] Subtask: Modify `DataPoller` to call indicator calculation functions after fetching new candles.
-  - [ ] Subtask: Write failing tests for indicator computation in polling loop.
-  - [ ] Subtask: Implement indicator caching (in-memory or Redis for MVP).
-  - [ ] Subtask: Update `AlertEngine` to read cached indicator values during evaluation.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Update `DataPoller` to compute and cache indicator values alongside OHLCV data. 35710dc
+  - [x] Subtask: Modify `DataPoller` to call indicator calculation functions after fetching new candles.
+  - [x] Subtask: Write failing tests for indicator computation in polling loop.
+  - [x] Subtask: Implement indicator caching (in-memory or Redis for MVP).
+  - [x] Subtask: Update `AlertEngine` to read cached indicator values during evaluation.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: End-to-end test: Verify full flow from frontend layout selection to backend alert triggering for a new indicator.
   - [ ] Subtask: Write failing E2E test.
   - [ ] Subtask: Run E2E test and verify.
