@@ -27,7 +27,7 @@
   - [x] Subtask: Verify test coverage and refactor.
 - [x] Task: Conductor - User Manual Verification 'Backend Indicator Calculation & Schema' (Protocol in workflow.md)
 
-## Phase 2: Frontend Indicator Display & Layout System
+## Phase 2: Frontend Indicator Display & Layout System [checkpoint: 321b166]
 - [x] Task: Create `frontend/src/api/indicators.ts` for API calls to fetch indicator data. ded8a1c
   - [x] Subtask: Write failing tests for indicator API client.
   - [x] Subtask: Implement indicator API client.
