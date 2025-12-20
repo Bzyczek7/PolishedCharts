@@ -1,0 +1,8 @@
+{
+  "track_id": "advanced_indicators_20251220",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2025-12-20T17:00:00Z",
+  "updated_at": "2025-12-20T17:00:00Z",
+  "description": "Implement advanced indicator support and alerting: add TDFI, cRSI, and ADXVMA indicators plus corresponding alert conditions and UI controls to enable/disable them per symbol."
+}
