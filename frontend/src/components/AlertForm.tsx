@@ -21,7 +21,7 @@ const AlertForm = ({ symbolId, onAlertCreated }: AlertFormProps) => {
       await createAlert({
         symbol_id: symbolId,
         condition,
-        threshold: parseFloat(threshold),
+        threshold: condition === 'crsi_band_cross' ? 0 : parseFloat(threshold),
       })
       setMessage('Alert created successfully!')
       setThreshold('')
@@ -48,21 +48,24 @@ const AlertForm = ({ symbolId, onAlertCreated }: AlertFormProps) => {
           >
             <option value="price_above">Price Above</option>
             <option value="price_below">Price Below</option>
+            <option value="crsi_band_cross">cRSI Band Cross</option>
           </select>
         </div>
-        <div>
-          <label htmlFor="threshold" className="block text-sm font-medium text-slate-400 mb-1">Threshold Price</label>
-          <input 
-            id="threshold"
-            type="number" 
-            step="0.01"
-            value={threshold}
-            onChange={(e) => setThreshold(e.target.value)}
-            required
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g. 150.00"
-          />
-        </div>
+        {condition !== 'crsi_band_cross' && (
+            <div>
+                <label htmlFor="threshold" className="block text-sm font-medium text-slate-400 mb-1">Threshold Price</label>
+                <input 
+                    id="threshold"
+                    type="number" 
+                    step="0.01"
+                    value={threshold}
+                    onChange={(e) => setThreshold(e.target.value)}
+                    required
+                    className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 150.00"
+                />
+            </div>
+        )}
         <button 
           type="submit" 
           disabled={isSubmitting}
