@@ -57,10 +57,10 @@
 - [ ] Task: Conductor - User Manual Verification 'Frontend Indicator Display & Layout System' (Protocol in workflow.md)
 
 ## Phase 3: Enhanced Alert Evaluation & End-to-End Testing
-- [ ] Task: Update `AlertEngine` to support cRSI band-cross alert condition.
-  - [ ] Subtask: Write failing tests for cRSI band-cross evaluation.
-  - [ ] Subtask: Implement cRSI band-cross logic in `AlertEngine`.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Update `AlertEngine` to support cRSI band-cross alert condition. 012c0a2
+  - [x] Subtask: Write failing tests for cRSI band-cross evaluation.
+  - [x] Subtask: Implement cRSI band-cross logic in `AlertEngine`.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Integrate new alert conditions into the `AlertForm` on the frontend.
   - [ ] Subtask: Write failing tests for `AlertForm` new conditions.
   - [ ] Subtask: Implement UI for new alert conditions.
