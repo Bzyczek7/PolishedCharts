@@ -1,4 +1,5 @@
 import './App.css'
+import ChartComponent from './components/ChartComponent'
 
 function App() {
   return (
@@ -8,8 +9,8 @@ function App() {
         <p className="text-slate-400">Your personalized trading dashboard</p>
       </header>
       <main>
-        <div className="bg-slate-800 rounded-lg p-6 h-[500px] flex items-center justify-center border border-slate-700">
-          <p className="text-slate-500">Chart will be initialized here</p>
+        <div className="bg-slate-800 rounded-lg p-6 h-[500px] border border-slate-700">
+          <ChartComponent symbol="IBM" />
         </div>
       </main>
     </div>

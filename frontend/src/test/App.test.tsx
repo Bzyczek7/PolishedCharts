@@ -1,9 +1,23 @@
 import { render, screen } from '@testing-library/react'
 import App from '../App'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
+
+vi.mock('../api/candles', () => ({
+  getCandles: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn().mockReturnValue({
+    addCandlestickSeries: vi.fn().mockReturnValue({
+      setData: vi.fn(),
+    }),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+  }),
+  ColorType: { Solid: 'solid' },
+}))
 
 test('renders tradingalert heading', () => {
   render(<App />)
-  // Assuming we change App.tsx to include the title
   expect(screen.getByText(/TradingAlert/i)).toBeDefined()
 })
