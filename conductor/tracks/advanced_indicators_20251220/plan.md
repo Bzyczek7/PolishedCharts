@@ -2,10 +2,10 @@
 
 ## Phase 1: Backend Indicator Calculation & Schema
 - [x] Task: Research and select Python libraries for TDFI, cRSI, and ADXVMA calculation (e.g., `ta-lib`, `pandas_ta`, or custom implementation). cb8a3be
-- [ ] Task: Implement TDFI calculation function within `backend/app/services/indicators.py`.
-  - [ ] Subtask: Write failing tests for TDFI calculation (Red Phase).
-  - [ ] Subtask: Implement TDFI calculation logic (Green Phase).
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Implement TDFI calculation function within `backend/app/services/indicators.py`. 2c98784
+  - [x] Subtask: Write failing tests for TDFI calculation (Red Phase).
+  - [x] Subtask: Implement TDFI calculation logic (Green Phase).
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Implement cRSI calculation function within `backend/app/services/indicators.py`.
   - [ ] Subtask: Write failing tests for cRSI calculation (Red Phase).
   - [ ] Subtask: Implement cRSI calculation logic (Green Phase).
