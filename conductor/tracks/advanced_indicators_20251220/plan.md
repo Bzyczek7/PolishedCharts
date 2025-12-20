@@ -61,10 +61,10 @@
   - [x] Subtask: Write failing tests for cRSI band-cross evaluation.
   - [x] Subtask: Implement cRSI band-cross logic in `AlertEngine`.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Integrate new alert conditions into the `AlertForm` on the frontend.
-  - [ ] Subtask: Write failing tests for `AlertForm` new conditions.
-  - [ ] Subtask: Implement UI for new alert conditions.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Integrate new alert conditions into the `AlertForm` on the frontend. b2defd8
+  - [x] Subtask: Write failing tests for `AlertForm` new conditions.
+  - [x] Subtask: Implement UI for new alert conditions.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Update `DataPoller` to compute and cache indicator values alongside OHLCV data.
   - [ ] Subtask: Modify `DataPoller` to call indicator calculation functions after fetching new candles.
   - [ ] Subtask: Write failing tests for indicator computation in polling loop.
