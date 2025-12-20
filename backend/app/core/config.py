@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = "tradingalert"
     POSTGRES_SERVER: str = "localhost"
     DATABASE_URL: Optional[str] = None
-
+    
+    ALPHA_VANTAGE_API_KEY: str = "demo"
     @property
     def async_database_url(self) -> str:
         if self.DATABASE_URL:
