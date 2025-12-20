@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import Layout from './components/Layout'
 import Toolbar from './components/Toolbar'
+import SymbolSearch from './components/SymbolSearch'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
@@ -15,7 +16,8 @@ import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
 import type { TDFIOutput, cRSIOutput, ADXVMAOutput } from './api/indicators'
 
 function App() {
-  const [symbol] = useState('IBM')
+  const [symbol, setSymbol] = useState('IBM')
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   
@@ -23,6 +25,17 @@ function App() {
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setIsSearchOpen((open) => !open)
+      }
+    }
+    window.addEventListener("keydown", down)
+    return () => window.removeEventListener("keydown", down)
+  }, [])
 
   useEffect(() => {
     const saved = loadLayouts()
@@ -132,9 +145,15 @@ function App() {
       <div className="flex flex-col h-full w-full p-4 space-y-4">
         <Toolbar 
             symbol={symbol}
-            onSymbolClick={() => console.log('Symbol search')}
+            onSymbolClick={() => setIsSearchOpen(true)}
             onIndicatorsClick={() => console.log('Indicators')}
             onFullscreenToggle={() => console.log('Fullscreen')}
+        />
+
+        <SymbolSearch 
+            open={isSearchOpen} 
+            onOpenChange={setIsSearchOpen} 
+            onSelect={setSymbol} 
         />
 
         <div className="flex-1 flex flex-col space-y-4 min-h-0">

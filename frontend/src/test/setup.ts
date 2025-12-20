@@ -11,6 +11,17 @@ Object.defineProperty(window, 'matchMedia', {
     removeListener: vi.fn(), // deprecated
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+        dispatchEvent: vi.fn(),
+      })),
+    });
+    
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    
+    global.ResizeObserver = ResizeObserverMock;
+
+window.Element.prototype.scrollIntoView = vi.fn();
+    
