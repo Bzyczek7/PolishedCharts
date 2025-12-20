@@ -2,9 +2,9 @@
 
 ## Phase 1: Layout Shell & Sidebar Foundation
 - [x] Task: Install and configure Shadcn/UI and required dependencies (Radix UI, Lucide React, cmdk for Command). 2f60ede
-- [ ] Task: Write failing tests for sidebar rendering and initial collapsed/expanded state (Red Phase).
-- [ ] Task: Create the main responsive layout shell with a collapsible right sidebar component structure to pass rendering tests (Green Phase).
-- [ ] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase).
+- [~] Task: Write failing tests for sidebar rendering and initial collapsed/expanded state (Red Phase).
+- [x] Task: Create the main responsive layout shell with a collapsible right sidebar component structure to pass rendering tests (Green Phase). f9c08ff
+- [~] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase).
 - [ ] Task: Implement sidebar collapse/expand logic with `Ctrl+B` shortcut and 300ms transitions (Green Phase).
 - [ ] Task: Write failing tests for localStorage persistence of sidebar state (Red Phase).
 - [ ] Task: Implement localStorage persistence for sidebar state (width, collapsed state, active tab) (Green Phase).
