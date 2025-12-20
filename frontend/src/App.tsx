@@ -3,6 +3,7 @@ import './App.css'
 import Layout from './components/Layout'
 import Toolbar from './components/Toolbar'
 import SymbolSearch from './components/SymbolSearch'
+import IndicatorSearch from './components/IndicatorSearch'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
@@ -18,6 +19,7 @@ import type { TDFIOutput, cRSIOutput, ADXVMAOutput } from './api/indicators'
 function App() {
   const [symbol, setSymbol] = useState('IBM')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   
@@ -31,6 +33,10 @@ function App() {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setIsSearchOpen((open) => !open)
+      }
+      if (e.key === "i" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setIsIndicatorsOpen((open) => !open)
       }
     }
     window.addEventListener("keydown", down)
@@ -146,7 +152,7 @@ function App() {
         <Toolbar 
             symbol={symbol}
             onSymbolClick={() => setIsSearchOpen(true)}
-            onIndicatorsClick={() => console.log('Indicators')}
+            onIndicatorsClick={() => setIsIndicatorsOpen(true)}
             onFullscreenToggle={() => console.log('Fullscreen')}
         />
 
@@ -154,6 +160,12 @@ function App() {
             open={isSearchOpen} 
             onOpenChange={setIsSearchOpen} 
             onSelect={setSymbol} 
+        />
+
+        <IndicatorSearch 
+            open={isIndicatorsOpen} 
+            onOpenChange={setIsIndicatorsOpen} 
+            onSelect={toggleIndicator} 
         />
 
         <div className="flex-1 flex flex-col space-y-4 min-h-0">
