@@ -1,18 +1,19 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType } from 'lightweight-charts'
-import { getCandles } from '../api/candles'
+import { createChart, ColorType, LineSeries, CandlestickSeries } from 'lightweight-charts'
+import type { Candle } from '../api/candles'
 
 interface OverlayIndicator {
-    data: { time: string; value: number }[]
+    data: { time: number; value: number }[]
     color: string
 }
 
 interface ChartComponentProps {
   symbol: string
+  candles: Candle[]
   overlays?: OverlayIndicator[]
 }
 
-const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const seriesRef = useRef<any>(null)
 
@@ -32,7 +33,7 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
       height: 400,
     })
 
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
         downColor: '#ef4444',
         borderVisible: false,
@@ -44,7 +45,7 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
 
     // Render Overlays
     overlays.forEach(overlay => {
-        const lineSeries = chart.addLineSeries({
+        const lineSeries = chart.addSeries(LineSeries, {
             color: overlay.color,
             lineWidth: 2,
         })
@@ -57,12 +58,9 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
 
     window.addEventListener('resize', handleResize)
 
-    const fetchData = async () => {
-      try {
-        const data = await getCandles(symbol)
-        
-        const formattedData = data.map(c => ({
-          time: c.timestamp.split('T')[0], // YYYY-MM-DD
+    if (candles.length > 0) {
+        const formattedData = candles.map(c => ({
+          time: Math.floor(new Date(c.timestamp).getTime() / 1000) as any,
           open: c.open,
           high: c.high,
           low: c.low,
@@ -70,7 +68,7 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
         }));
 
         // Sort by time to be safe
-        const sortedData = formattedData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        const sortedData = formattedData.sort((a, b) => a.time - b.time);
         
         // Filter out duplicates
         const uniqueData = sortedData.filter((item, index, arr) => 
@@ -78,19 +76,13 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
         );
         
         candlestickSeries.setData(uniqueData);
-
-      } catch (error) {
-        console.error('Error fetching chart data:', error)
-      }
     }
-
-    fetchData()
 
     return () => {
       window.removeEventListener('resize', handleResize)
       chart.remove()
     }
-  }, [symbol])
+  }, [symbol, candles, overlays])
 
   return (
     <div 

@@ -2,16 +2,21 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
-import LayoutManager, { Layout } from './components/LayoutManager'
+import LayoutManager from './components/LayoutManager'
+import type { Layout } from './components/LayoutManager'
 import IndicatorPane from './components/IndicatorPane'
 import { loadLayouts, saveLayouts } from './services/layoutService'
-import { getTDFI, getcRSI, getADXVMA, TDFIOutput, cRSIOutput, ADXVMAOutput } from './api/indicators'
+import { getCandles } from './api/candles'
+import type { Candle } from './api/candles'
+import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
+import type { TDFIOutput, cRSIOutput, ADXVMAOutput } from './api/indicators'
 
 function App() {
   const [symbol] = useState('IBM')
   const [layouts, setLayouts] = useState<Layout[]>([])
   const [activeLayout, setActiveLayout] = useState<Layout | null>(null)
   
+  const [candles, setCandles] = useState<Candle[]>([])
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
@@ -21,22 +26,33 @@ function App() {
     setLayouts(saved)
     if (saved.length > 0) {
         setActiveLayout(saved[0])
+    } else {
+        // Initialize with a default layout
+        const defaultLayout: Layout = {
+            id: 'default',
+            name: 'Default Layout',
+            activeIndicators: [],
+            indicatorParams: {}
+        }
+        setActiveLayout(defaultLayout)
     }
   }, [])
 
   useEffect(() => {
     const fetchData = async () => {
         try {
-            const [tdfi, crsi, adxvma] = await Promise.all([
+            const [candleData, tdfi, crsi, adxvma] = await Promise.all([
+                getCandles(symbol),
                 getTDFI(symbol),
                 getcRSI(symbol),
                 getADXVMA(symbol)
             ])
+            setCandles(candleData)
             setTdfiData(tdfi)
             setCrsiData(crsi)
             setAdxvmaData(adxvma)
         } catch (e) {
-            console.error('Failed to fetch indicator data', e)
+            console.error('Failed to fetch data', e)
         }
     }
     fetchData()
@@ -56,27 +72,43 @@ function App() {
   }
 
   const toggleIndicator = (indicator: string) => {
-    if (!activeLayout) return
-    const active = activeLayout.activeIndicators.includes(indicator)
-    const updated: Layout = {
-        ...activeLayout,
-        activeIndicators: active 
-            ? activeLayout.activeIndicators.filter(i => i !== indicator)
-            : [...activeLayout.activeIndicators, indicator]
+    const currentLayout = activeLayout || {
+        id: 'default',
+        name: 'Default Layout',
+        activeIndicators: [],
+        indicatorParams: {}
     }
+    
+    const active = currentLayout.activeIndicators.includes(indicator)
+    const updated: Layout = {
+        ...currentLayout,
+        activeIndicators: active 
+            ? currentLayout.activeIndicators.filter(i => i !== indicator)
+            : [...currentLayout.activeIndicators, indicator]
+    }
+    
     setActiveLayout(updated)
-    const updatedLayouts = layouts.map(l => l.id === updated.id ? updated : l)
-    setLayouts(updatedLayouts)
-    saveLayouts(updatedLayouts)
+    
+    // Only update saved layouts if it's not the transient default or if we want to auto-save
+    if (updated.id !== 'default') {
+        const updatedLayouts = layouts.map(l => l.id === updated.id ? updated : l)
+        setLayouts(updatedLayouts)
+        saveLayouts(updatedLayouts)
+    }
   }
 
-  const formatDataForChart = (values: (number | null)[]) => {
-    // This is a simplification, ideally we need timestamps matched with candles
-    // For now, let's assume indices match if the backend returns same length
-    return values.map((v, i) => ({
-        time: new Date(Date.now() - (values.length - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  const formatDataForChart = (timestamps: string[], values: (number | null)[]) => {
+    const formatted = values.map((v, i) => ({
+        // Use Unix timestamp (seconds) for best compatibility with any timeframe
+        time: Math.floor(new Date(timestamps[i]).getTime() / 1000) as any,
         value: v ?? 0
     }))
+    
+    // Sort and filter duplicates just in case
+    const sorted = formatted.sort((a, b) => a.time - b.time)
+    return sorted.filter((item, index, arr) => 
+        index === 0 || item.time !== arr[index - 1].time
+    )
   }
 
   return (
@@ -107,8 +139,9 @@ function App() {
           <div className="bg-slate-800 rounded-lg p-6 h-[500px] border border-slate-700">
             <ChartComponent 
                 symbol={symbol} 
+                candles={candles}
                 overlays={activeLayout?.activeIndicators.includes('adxvma') && adxvmaData ? [
-                    { data: formatDataForChart(adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
+                    { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
                 ] : []}
             />
           </div>
@@ -117,7 +150,7 @@ function App() {
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                   <IndicatorPane 
                     name="TDFI" 
-                    data={formatDataForChart(tdfiData.tdfi)}
+                    data={formatDataForChart(tdfiData.timestamps, tdfiData.tdfi)}
                     displayType="line"
                     color={tdfiData.metadata.color_schemes.line}
                     scaleRanges={tdfiData.metadata.scale_ranges}
@@ -129,7 +162,7 @@ function App() {
               <div className="bg-slate-800 rounded-lg p-6 border border-slate-700">
                   <IndicatorPane 
                     name="cRSI" 
-                    data={formatDataForChart(crsiData.crsi)}
+                    data={formatDataForChart(crsiData.timestamps, crsiData.crsi)}
                     displayType="line"
                     color={crsiData.metadata.color_schemes.line}
                     scaleRanges={crsiData.metadata.scale_ranges}

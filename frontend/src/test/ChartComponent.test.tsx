@@ -1,9 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import ChartComponent from '../components/ChartComponent'
-import { getCandles } from '../api/candles'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-vi.mock('../api/candles')
 
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn().mockReturnValue({
@@ -20,69 +17,66 @@ vi.mock('lightweight-charts', () => ({
     remove: vi.fn(),
   }),
   ColorType: { Solid: 'solid' },
+  CandlestickSeries: vi.fn(),
+  LineSeries: vi.fn(),
 }))
 
 describe('ChartComponent', () => {
+
   beforeEach(() => {
+
     vi.clearAllMocks()
+
   })
 
-  it('fetches candles on mount', async () => {
+
+
+  it('renders and initializes chart', async () => {
+
     const mockCandles = [
-      { timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
+
+      { id: 1, ticker: 'IBM', timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
+
     ]
-    vi.mocked(getCandles).mockResolvedValueOnce(mockCandles)
 
-    render(<ChartComponent symbol="IBM" />)
 
-        await waitFor(() => {
 
-          expect(getCandles).toHaveBeenCalledWith('IBM')
-
-        })
-
-        
-
-        expect(screen.getByTestId('chart-container')).toBeDefined()
-
-      })
+    render(<ChartComponent symbol="IBM" candles={mockCandles} />)
 
     
 
-      it('renders overlay indicators when provided', async () => {
+    expect(screen.getByTestId('chart-container')).toBeDefined()
 
-        const mockCandles = [
+  })
 
-          { timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
 
-        ]
 
-        vi.mocked(getCandles).mockResolvedValueOnce(mockCandles)
+  it('renders overlay indicators when provided', async () => {
 
-    
+    const mockCandles = [
 
-        const mockOverlay = {
+      { id: 1, ticker: 'IBM', timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
 
-            data: [{ time: '2023-10-27', value: 102 }],
+    ]
 
-            color: '#FF9800'
 
-        }
 
-    
+    const mockOverlay = {
 
-        render(<ChartComponent symbol="IBM" overlays={[mockOverlay]} />)
+        data: [{ time: '2023-10-27', value: 102 }],
 
-    
+        color: '#FF9800'
 
-        await waitFor(() => {
+    }
 
-            expect(getCandles).toHaveBeenCalledWith('IBM')
 
-        })
 
-      })
+    render(<ChartComponent symbol="IBM" candles={mockCandles} overlays={[mockOverlay]} />)
 
-    })
+  })
+
+})
+
+
 
     

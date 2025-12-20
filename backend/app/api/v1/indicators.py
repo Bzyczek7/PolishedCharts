@@ -48,6 +48,7 @@ async def get_indicator(
 
     # 4. Calculate Indicator
     indicator_name = indicator_name.lower()
+    timestamps = df["timestamp"].tolist()
     
     if indicator_name == "tdfi":
         df_result = indicators.calculate_tdfi(df)
@@ -57,6 +58,7 @@ async def get_indicator(
             scale_ranges={"min": -1, "max": 1}
         )
         return TDFIOutput(
+            timestamps=timestamps,
             tdfi=df_result["TDFI"].replace({np.nan: None}).tolist(),
             tdfi_signal=df_result["TDFI_Signal"].replace({np.nan: None}).tolist(),
             metadata=metadata
@@ -70,6 +72,7 @@ async def get_indicator(
             scale_ranges={"min": 0, "max": 100}
         )
         return cRSIOutput(
+            timestamps=timestamps,
             crsi=df_result["cRSI"].replace({np.nan: None}).tolist(),
             upper_band=df_result["cRSI_UpperBand"].replace({np.nan: None}).tolist(),
             lower_band=df_result["cRSI_LowerBand"].replace({np.nan: None}).tolist(),
@@ -84,6 +87,7 @@ async def get_indicator(
             scale_ranges=None
         )
         return ADXVMAOutput(
+            timestamps=timestamps,
             adxvma=df_result["ADXVMA"].replace({np.nan: None}).tolist(),
             metadata=metadata
         )

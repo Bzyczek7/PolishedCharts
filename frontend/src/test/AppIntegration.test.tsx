@@ -32,6 +32,9 @@ vi.mock('lightweight-charts', () => ({
     }),
   }),
   ColorType: { Solid: 'solid' },
+  CandlestickSeries: vi.fn(),
+  LineSeries: vi.fn(),
+  HistogramSeries: vi.fn(),
 }))
 
 describe('App Integration', () => {
@@ -42,19 +45,19 @@ describe('App Integration', () => {
 
   it('renders layout manager', async () => {
     vi.mocked(getCandles).mockResolvedValueOnce([])
-    vi.mocked(getTDFI).mockResolvedValueOnce({ tdfi: [], tdfi_signal: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getcRSI).mockResolvedValueOnce({ crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getADXVMA).mockResolvedValueOnce({ adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
+    vi.mocked(getTDFI).mockResolvedValueOnce({ timestamps: [], tdfi: [], tdfi_signal: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
+    vi.mocked(getcRSI).mockResolvedValueOnce({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
+    vi.mocked(getADXVMA).mockResolvedValueOnce({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
     
     render(<App />)
     expect(screen.getByText('Layouts')).toBeDefined()
   })
 
   it('toggles an indicator', async () => {
-    vi.mocked(getCandles).mockResolvedValue([])
-    vi.mocked(getTDFI).mockResolvedValue({ tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getcRSI).mockResolvedValue({ crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getADXVMA).mockResolvedValue({ adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
+    vi.mocked(getCandles).mockResolvedValue([{ id: 1, ticker: 'IBM', timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }])
+    vi.mocked(getTDFI).mockResolvedValue({ timestamps: ['2023-10-27T00:00:00'], tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
+    vi.mocked(getcRSI).mockResolvedValue({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
+    vi.mocked(getADXVMA).mockResolvedValue({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
 
     render(<App />)
     

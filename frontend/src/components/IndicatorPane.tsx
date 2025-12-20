@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType } from 'lightweight-charts'
+import { createChart, ColorType, LineSeries, HistogramSeries } from 'lightweight-charts'
 import type { ISeriesApi } from 'lightweight-charts'
 
 interface IndicatorPaneProps {
@@ -54,9 +54,13 @@ const IndicatorPane = ({
         })
     }
 
-    const series = displayType === 'line' 
-        ? chart.addLineSeries({ color: color, lineWidth: 2 })
-        : chart.addHistogramSeries({ color: color })
+    const series = chart.addSeries(
+        displayType === 'line' ? LineSeries : HistogramSeries, 
+        {
+            color: color,
+            lineWidth: 2,
+        }
+    )
     
     seriesRef.current = series
     series.setData(data)

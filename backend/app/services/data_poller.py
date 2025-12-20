@@ -30,9 +30,11 @@ class DataPoller:
         self.alert_engine = alert_engine
         self.indicator_cache: Dict[str, Dict[str, Any]] = {} # ticker -> indicator_data
         self.rate_limit_sleep = rate_limit_sleep
+        self._stop_event = asyncio.Event()
 
     async def start(self):
         self.is_running = True
+        self._stop_event.clear()
         logger.info("Starting DataPoller...")
         while self.is_running:
             for ticker in self.symbols:
@@ -84,13 +86,25 @@ class DataPoller:
                     logger.error(f"Error fetching data for {ticker}: {e}")
                 
                 # Simple rate limit handling: wait a bit between symbols if needed
-                await asyncio.sleep(self.rate_limit_sleep)
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=self.rate_limit_sleep)
+                    break # Stop if event is set
+                except asyncio.TimeoutError:
+                    pass
+
+            if not self.is_running:
+                break
 
             # Wait for next interval
-            await asyncio.sleep(self.interval)
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=self.interval)
+                break # Stop if event is set
+            except asyncio.TimeoutError:
+                pass
 
     def stop(self):
         self.is_running = False
+        self._stop_event.set()
         logger.info("Stopping DataPoller...")
 
     async def _save_candles_to_db(self, ticker: str, candles_data: List[dict]) -> int:

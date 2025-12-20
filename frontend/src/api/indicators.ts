@@ -10,12 +10,14 @@ export interface IndicatorMetadata {
 }
 
 export interface TDFIOutput {
+  timestamps: string[]
   tdfi: (number | null)[]
   tdfi_signal: (number | null)[]
   metadata: IndicatorMetadata
 }
 
 export interface cRSIOutput {
+  timestamps: string[]
   crsi: (number | null)[]
   upper_band: (number | null)[]
   lower_band: (number | null)[]
@@ -23,6 +25,7 @@ export interface cRSIOutput {
 }
 
 export interface ADXVMAOutput {
+  timestamps: string[]
   adxvma: (number | null)[]
   metadata: IndicatorMetadata
 }

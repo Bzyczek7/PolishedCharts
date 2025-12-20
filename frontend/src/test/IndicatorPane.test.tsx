@@ -20,6 +20,8 @@ vi.mock('lightweight-charts', () => ({
     }),
   }),
   ColorType: { Solid: 'solid' },
+  LineSeries: vi.fn(),
+  HistogramSeries: vi.fn(),
 }))
 
 describe('IndicatorPane', () => {

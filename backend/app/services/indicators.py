@@ -30,9 +30,13 @@ def calculate_tdfi(
     result = number.pow(pow_val) # Simplified from loop
 
     tdf = divma * result
-    ntdf = tdf / tdf.abs().rolling(window=lookback * 3).max()
     
-    df['TDFI'] = ntdf.fillna(0) # Fill NaNs with 0 to handle initial calculations
+    # Avoid division by zero and handle very small values
+    rolling_max = tdf.abs().rolling(window=lookback * 3, min_periods=1).max()
+    ntdf = tdf / rolling_max
+    ntdf = ntdf.fillna(0).clip(-1, 1) # Ensure within -1 to 1 range
+    
+    df['TDFI'] = ntdf
     df['TDFI_Signal'] = np.where(df['TDFI'] > filter_high, 1, np.where(df['TDFI'] < filter_low, -1, 0))
 
     return df
@@ -78,16 +82,24 @@ def calculate_crsi(
 
     df['cRSI'] = crsi
 
-    # Dynamic bands calculation
-    lmax = crsi.rolling(window=cyclicmemory).max()
-    lmin = crsi.rolling(window=cyclicmemory).min()
-    mstep = (lmax - lmin) / 100
-    aperc = leveling / 100
+    # Dynamic bands calculation using percentiles
+    upper_band = pd.Series(index=df.index, dtype=float)
+    lower_band = pd.Series(index=df.index, dtype=float)
+    
+    aperc = leveling / 100.0
+    
+    for i in range(len(df)):
+        if i < cyclicmemory:
+            upper_band.iloc[i] = np.nan
+            lower_band.iloc[i] = np.nan
+        else:
+            window = crsi.iloc[i-cyclicmemory+1:i+1]
+            # Standard cRSI leveling uses percentiles
+            upper_band.iloc[i] = window.quantile(1 - aperc)
+            lower_band.iloc[i] = window.quantile(aperc)
 
-    # This part is complex to vectorize perfectly, but we can approximate
-    # For now, let's use a simpler band calculation
-    df['cRSI_UpperBand'] = lmax
-    df['cRSI_LowerBand'] = lmin
+    df['cRSI_UpperBand'] = upper_band
+    df['cRSI_LowerBand'] = lower_band
 
     return df
 
