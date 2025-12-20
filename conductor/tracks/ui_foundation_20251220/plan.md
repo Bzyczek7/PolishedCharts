@@ -6,8 +6,8 @@
 - [x] Task: Create the main responsive layout shell with a collapsible right sidebar component structure to pass rendering tests (Green Phase). f9c08ff
 - [~] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase).
 - [x] Task: Implement sidebar collapse/expand logic with `Ctrl+B` shortcut and 300ms transitions (Green Phase). d45ee65
-- [ ] Task: Write failing tests for localStorage persistence of sidebar state (Red Phase).
-- [ ] Task: Implement localStorage persistence for sidebar state (width, collapsed state, active tab) (Green Phase).
+- [x] Task: Write failing tests for localStorage persistence of sidebar state (Red Phase). b58aaff
+- [x] Task: Implement localStorage persistence for sidebar state (width, collapsed state, active tab) (Green Phase). b58aaff
 - [ ] Task: Conductor - User Manual Verification 'Layout Shell & Sidebar Foundation' (Protocol in workflow.md)
 
 ## Phase 2: Top Toolbar & Command Palettes
