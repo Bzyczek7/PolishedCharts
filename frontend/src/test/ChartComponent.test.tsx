@@ -14,7 +14,8 @@ vi.mock('lightweight-charts', () => ({
     remove: vi.fn(),
   }),
   ColorType: { Solid: 'solid' },
-  CandlestickSeries: vi.fn(), // Make sure CandlestickSeries is mocked as a function
+  CandlestickSeries: vi.fn(),
+  LineSeries: vi.fn(),
 }))
 
 describe('ChartComponent', () => {
@@ -30,10 +31,54 @@ describe('ChartComponent', () => {
 
     render(<ChartComponent symbol="IBM" />)
 
-    await waitFor(() => {
-      expect(getCandles).toHaveBeenCalledWith('IBM')
-    })
+        await waitFor(() => {
+
+          expect(getCandles).toHaveBeenCalledWith('IBM')
+
+        })
+
+        
+
+        expect(screen.getByTestId('chart-container')).toBeDefined()
+
+      })
+
     
-    expect(screen.getByTestId('chart-container')).toBeDefined()
-  })
-})
+
+      it('renders overlay indicators when provided', async () => {
+
+        const mockCandles = [
+
+          { timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }
+
+        ]
+
+        vi.mocked(getCandles).mockResolvedValueOnce(mockCandles)
+
+    
+
+        const mockOverlay = {
+
+            data: [{ time: '2023-10-27', value: 102 }],
+
+            color: '#FF9800'
+
+        }
+
+    
+
+        render(<ChartComponent symbol="IBM" overlays={[mockOverlay]} />)
+
+    
+
+        await waitFor(() => {
+
+            expect(getCandles).toHaveBeenCalledWith('IBM')
+
+        })
+
+      })
+
+    })
+
+    

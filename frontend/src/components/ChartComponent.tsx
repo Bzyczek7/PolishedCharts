@@ -1,14 +1,20 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries, LineSeries } from 'lightweight-charts'
 import { getCandles } from '../api/candles'
+
+interface OverlayIndicator {
+    data: { time: string; value: number }[]
+    color: string
+}
 
 interface ChartComponentProps {
   symbol: string
+  overlays?: OverlayIndicator[]
 }
 
-const ChartComponent = ({ symbol }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const seriesRef = useRef<any>(null) // Retain 'any' for now to avoid additional type complexity
+  const seriesRef = useRef<any>(null)
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -35,6 +41,15 @@ const ChartComponent = ({ symbol }: ChartComponentProps) => {
     })
     
     seriesRef.current = candlestickSeries
+
+    // Render Overlays
+    overlays.forEach(overlay => {
+        const lineSeries = chart.addSeries(LineSeries, {
+            color: overlay.color,
+            lineWidth: 2,
+        })
+        lineSeries.setData(overlay.data)
+    })
 
     const handleResize = () => {
       chart.applyOptions({ width: chartContainerRef.current?.clientWidth })
