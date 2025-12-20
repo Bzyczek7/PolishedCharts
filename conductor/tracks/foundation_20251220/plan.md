@@ -1,7 +1,7 @@
 # Plan: Foundation & Core Alerting Infrastructure
 
 ## Phase 1: Project Initialization & Backend Setup
-- [ ] Task: Initialize project structure (monorepo or separate folders) and Docker Compose configuration for PostgreSQL and Redis.
+- [~] Task: Initialize project structure (monorepo or separate folders) and Docker Compose configuration for PostgreSQL and Redis.
 - [ ] Task: Set up FastAPI application skeleton with Pydantic settings management and database connection logic (SQLAlchemy/AsyncPG).
 - [ ] Task: Define initial database models (`User`, `Alert`, `Symbol`, `Candle`) and run migrations (Alembic).
 - [ ] Task: Conductor - User Manual Verification 'Project Initialization & Backend Setup' (Protocol in workflow.md)
