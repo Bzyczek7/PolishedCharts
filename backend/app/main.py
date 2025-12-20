@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.api import api_router
 from app.services.data_poller import DataPoller
@@ -8,38 +8,49 @@ from app.services.alpha_vantage import AlphaVantageService
 from app.db.session import AsyncSessionLocal
 import asyncio
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup
-    print("Starting up...")
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+)
+
+@app.on_event("startup")
+async def startup_event():
+    print("Starting up and initializing poller...")
     av_service = AlphaVantageService(api_key=settings.ALPHA_VANTAGE_API_KEY)
     engine = AlertEngine(db_session_factory=AsyncSessionLocal)
     
-    # We will poll for 'IBM' as a default for now
     app.state.poller = DataPoller(
         alpha_vantage_service=av_service,
         symbols=["IBM"],
         db_session_factory=AsyncSessionLocal,
         alert_engine=engine,
-        interval=3600 # Poll every hour
+        interval=3600
     )
-    # Run the poller in the background
     app.state.poller_task = asyncio.create_task(app.state.poller.start())
-    
-    yield
-    
-    # Shutdown
-    print("Shutting down...")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("Shutting down poller...")
     if app.state.poller:
         app.state.poller.stop()
     if app.state.poller_task:
         await app.state.poller_task
 
-
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    lifespan=lifespan
+# Set all CORS enabled origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# ... (rest of the file remains the same)
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+@app.get("/")
+def root():
+    return {"message": "Welcome to TradingAlert API"}

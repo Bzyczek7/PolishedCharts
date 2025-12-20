@@ -45,14 +45,25 @@ const ChartComponent = ({ symbol }: ChartComponentProps) => {
     const fetchData = async () => {
       try {
         const data = await getCandles(symbol)
+        
         const formattedData = data.map(c => ({
-          time: c.timestamp.split('T')[0], // Lightweight charts needs date string YYYY-MM-DD
+          time: c.timestamp.split('T')[0], // YYYY-MM-DD
           open: c.open,
           high: c.high,
           low: c.low,
           close: c.close,
-        }))
-        candlestickSeries.setData(formattedData)
+        }));
+
+        // Sort by time to be safe
+        const sortedData = formattedData.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+        
+        // Filter out duplicates
+        const uniqueData = sortedData.filter((item, index, arr) => 
+          index === 0 || item.time !== arr[index - 1].time
+        );
+        
+        candlestickSeries.setData(uniqueData);
+
       } catch (error) {
         console.error('Error fetching chart data:', error)
       }
