@@ -71,7 +71,7 @@
   - [x] Subtask: Implement indicator caching (in-memory or Redis for MVP).
   - [x] Subtask: Update `AlertEngine` to read cached indicator values during evaluation.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: End-to-end test: Verify full flow from frontend layout selection to backend alert triggering for a new indicator.
-  - [ ] Subtask: Write failing E2E test.
-  - [ ] Subtask: Run E2E test and verify.
+- [x] Task: End-to-end test: Verify full flow from frontend layout selection to backend alert triggering for a new indicator. 55387bd
+  - [x] Subtask: Write failing E2E test.
+  - [x] Subtask: Run E2E test and verify.
 - [ ] Task: Conductor - User Manual Verification 'Enhanced Alert Evaluation & End-to-End Testing' (Protocol in workflow.md)
