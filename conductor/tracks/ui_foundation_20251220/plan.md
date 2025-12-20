@@ -1,14 +1,14 @@
 # Plan: TradingView-style UI/UX Foundation
 
-## Phase 1: Layout Shell & Sidebar Foundation
+## Phase 1: Layout Shell & Sidebar Foundation [checkpoint: b2f6431]
 - [x] Task: Install and configure Shadcn/UI and required dependencies (Radix UI, Lucide React, cmdk for Command). 2f60ede
-- [~] Task: Write failing tests for sidebar rendering and initial collapsed/expanded state (Red Phase).
+- [x] Task: Write failing tests for sidebar rendering and initial collapsed/expanded state (Red Phase). b2f6431
 - [x] Task: Create the main responsive layout shell with a collapsible right sidebar component structure to pass rendering tests (Green Phase). f9c08ff
-- [~] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase).
+- [x] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase). b2f6431
 - [x] Task: Implement sidebar collapse/expand logic with `Ctrl+B` shortcut and 300ms transitions (Green Phase). d45ee65
-- [x] Task: Write failing tests for localStorage persistence of sidebar state (Red Phase). b58aaff
+- [x] Task: Write failing tests for localStorage persistence of sidebar state (Red Phase). b2f6431
 - [x] Task: Implement localStorage persistence for sidebar state (width, collapsed state, active tab) (Green Phase). b58aaff
-- [ ] Task: Conductor - User Manual Verification 'Layout Shell & Sidebar Foundation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Layout Shell & Sidebar Foundation' (Protocol in workflow.md)
 
 ## Phase 2: Top Toolbar & Command Palettes
 - [ ] Task: Write failing tests for Top Toolbar component rendering (Red Phase).
