@@ -7,13 +7,14 @@ vi.mock('../api/candles')
 
 vi.mock('lightweight-charts', () => ({
   createChart: vi.fn().mockReturnValue({
-    addCandlestickSeries: vi.fn().mockReturnValue({
+    addSeries: vi.fn().mockReturnValue({
       setData: vi.fn(),
     }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
   }),
   ColorType: { Solid: 'solid' },
+  CandlestickSeries: vi.fn(), // Make sure CandlestickSeries is mocked as a function
 }))
 
 describe('ChartComponent', () => {
