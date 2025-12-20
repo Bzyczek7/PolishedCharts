@@ -22,5 +22,5 @@
 - [x] Task: Implement the "Create Alert" API endpoint (`POST /api/alerts`) and corresponding frontend form. b0dfc88
 - [x] Task: Implement the Alert Engine logic: a service that evaluates active alerts against the latest market data. 6b1d3cb
 - [x] Task: Connect the engine to the data poller: when new data arrives, trigger the evaluation logic. c1a2beb
-- [~] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change.
+- [x] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change. 57b80de
 - [ ] Task: Conductor - User Manual Verification 'Basic Alert Engine & End-to-End Test' (Protocol in workflow.md)
