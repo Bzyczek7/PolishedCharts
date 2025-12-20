@@ -36,10 +36,10 @@
   - [x] Subtask: Write failing tests for `IndicatorPane` component.
   - [x] Subtask: Implement `IndicatorPane` to render `lightweight-charts` series in a dedicated pane.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Enhance `ChartComponent` to integrate overlay indicators (ADXVMA).
-  - [ ] Subtask: Write failing tests for `ChartComponent`'s overlay integration.
-  - [ ] Subtask: Implement ADXVMA overlay rendering in `ChartComponent`.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Enhance `ChartComponent` to integrate overlay indicators (ADXVMA). 32777cc
+  - [x] Subtask: Write failing tests for `ChartComponent`'s overlay integration.
+  - [x] Subtask: Implement ADXVMA overlay rendering in `ChartComponent`.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Implement `LayoutManager` component with saving/loading functionality.
   - [ ] Subtask: Define data structure for layouts (active indicators, parameters, chart style).
   - [ ] Subtask: Write failing tests for `LayoutManager`.
