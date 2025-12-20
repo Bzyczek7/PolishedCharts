@@ -18,9 +18,9 @@
   - [x] Subtask: Export sample data from TradingView for TDFI, cRSI, ADXVMA on known symbols (e.g., IBM, AAPL).
   - [x] Subtask: Create golden dataset tests comparing our calculations to TradingView outputs.
   - [x] Subtask: Document any acceptable tolerance ranges for floating-point differences.
-- [ ] Task: Define Pydantic models for indicator output schema (main series, auxiliary series, metadata).
-  - [ ] Subtask: Create `backend/app/schemas/indicator.py`.
-  - [ ] Subtask: Define `TDFIOutput`, `cRSIOutput`, `ADXVMAOutput` models.
+- [x] Task: Define Pydantic models for indicator output schema (main series, auxiliary series, metadata). 9ab0270
+  - [x] Subtask: Create `backend/app/schemas/indicator.py`.
+  - [x] Subtask: Define `TDFIOutput`, `cRSIOutput`, `ADXVMAOutput` models.
 - [ ] Task: Create new API endpoints (e.g., `GET /api/v1/indicators/{symbol}/{indicator_name}`) to serve calculated indicator data based on the defined schemas.
   - [ ] Subtask: Write failing tests for indicator API endpoints.
   - [ ] Subtask: Implement indicator API endpoints.
