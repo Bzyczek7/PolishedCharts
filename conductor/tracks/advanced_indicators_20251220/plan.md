@@ -40,11 +40,11 @@
   - [x] Subtask: Write failing tests for `ChartComponent`'s overlay integration.
   - [x] Subtask: Implement ADXVMA overlay rendering in `ChartComponent`.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Implement `LayoutManager` component with saving/loading functionality.
-  - [ ] Subtask: Define data structure for layouts (active indicators, parameters, chart style).
-  - [ ] Subtask: Write failing tests for `LayoutManager`.
-  - [ ] Subtask: Implement `LayoutManager` component with UI for saving/loading layouts.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Implement `LayoutManager` component with saving/loading functionality. 9ebdfc8
+  - [x] Subtask: Define data structure for layouts (active indicators, parameters, chart style).
+  - [x] Subtask: Write failing tests for `LayoutManager`.
+  - [x] Subtask: Implement `LayoutManager` component with UI for saving/loading layouts.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Implement layout persistence (localStorage for MVP, database schema for future).
   - [ ] Subtask: Create localStorage service for saving/loading layouts.
   - [ ] Subtask: Write failing tests for persistence.
