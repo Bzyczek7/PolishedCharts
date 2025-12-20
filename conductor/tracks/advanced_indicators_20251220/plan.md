@@ -45,11 +45,11 @@
   - [x] Subtask: Write failing tests for `LayoutManager`.
   - [x] Subtask: Implement `LayoutManager` component with UI for saving/loading layouts.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Implement layout persistence (localStorage for MVP, database schema for future).
-  - [ ] Subtask: Create localStorage service for saving/loading layouts.
-  - [ ] Subtask: Write failing tests for persistence.
-  - [ ] Subtask: Implement persistence logic.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Implement layout persistence (localStorage for MVP, database schema for future). 9b6a9ec
+  - [x] Subtask: Create localStorage service for saving/loading layouts.
+  - [x] Subtask: Write failing tests for persistence.
+  - [x] Subtask: Implement persistence logic.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Integrate `LayoutManager` and indicator toggles into the main application UI.
   - [ ] Subtask: Write failing tests for UI integration.
   - [ ] Subtask: Implement UI integration.
