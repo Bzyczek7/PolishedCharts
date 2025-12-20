@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from app.services.indicators import calculate_tdfi, calculate_crsi # Added calculate_crsi
+from app.services.indicators import calculate_tdfi, calculate_crsi, calculate_adxvma # Added calculate_adxvma
 
 def test_calculate_tdfi_basic():
     # Example data (replace with realistic values for a proper test)
@@ -19,10 +19,6 @@ def test_calculate_tdfi_basic():
     assert not tdfi_data['TDFI'].isnull().all()
     assert not tdfi_data['TDFI_Signal'].isnull().all()
     
-    # Placeholder for more specific value checks once implementation is done
-    # e.g., assert tdfi_data['TDFI'].iloc[-1] == pytest.approx(expected_value)
-    # assert tdfi_data['TDFI_Signal'].iloc[-1] == pytest.approx(expected_signal_value)
-
 def test_calculate_crsi_basic():
     # Example data for cRSI (longer series to allow calculations to fill)
     data = pd.DataFrame({
@@ -42,3 +38,16 @@ def test_calculate_crsi_basic():
     assert 'cRSI_UpperBand' in crsi_data.columns
     assert 'cRSI_LowerBand' in crsi_data.columns
     assert not crsi_data['cRSI'].isnull().all()
+
+def test_calculate_adxvma_basic():
+    # Example data for ADXVMA
+    data = pd.DataFrame({
+        'high': [103, 105, 107, 106, 108, 111, 112, 111, 114, 117],
+        'low': [99, 101, 103, 102, 104, 106, 108, 107, 110, 113],
+        'close': [102, 104, 106, 104, 107, 109, 111, 110, 113, 116]
+    })
+    
+    adxvma_data = calculate_adxvma(data)
+    
+    assert 'ADXVMA' in adxvma_data.columns
+    assert not adxvma_data['ADXVMA'].isnull().all()

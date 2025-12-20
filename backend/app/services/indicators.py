@@ -115,6 +115,8 @@ def calculate_crsi(
     df['RSI'] = rsi
 
     # Component 2: Up/Down Streaks RSI
+    # This involves calculating consecutive up/down days and then taking an RSI of that.
+    # Simplified for now: just use a direct RSI of changes, not true streaks.
     df['change'] = df['close'].diff()
     df.loc[df['change'] > 0, 'streak_direction'] = 1
     df.loc[df['change'] < 0, 'streak_direction'] = -1
@@ -135,6 +137,8 @@ def calculate_crsi(
     df['RSI_Streak'] = rsi_streak
     
     # Component 3: Rate of Change Ranking
+    # This is more complex and often uses percentile ranks of the Rate of Change.
+    # We will use a simple ROC for now.
     df['ROC'] = ((df['close'] - df['close'].shift(1)) / df['close'].shift(1)) * 100
     df['ROC_Rank'] = df['ROC'].rank(pct=True) * 100 # Simple percentile rank approximation
 
@@ -148,11 +152,97 @@ def calculate_crsi(
     df['cRSI_LowerBand'] = df['cRSI'].rolling(window=rsi_period).mean() - df['cRSI'].rolling(window=rsi_period).std() * 2
 
     # Fill NaN values that result from initial calculations
-    df['cRSI'] = df['cRSI'].fillna(method='bfill')
-    df['cRSI_UpperBand'] = df['cRSI_UpperBand'].fillna(method='bfill')
-    df['cRSI_LowerBand'] = df['cRSI_LowerBand'].fillna(method='bfill')
+    df['cRSI'] = df['cRSI'].fillna(method='bfill').fillna(method='ffill')
+    df['cRSI_UpperBand'] = df['cRSI_UpperBand'].fillna(method='bfill').fillna(method='ffill')
+    df['cRSI_LowerBand'] = df['cRSI_LowerBand'].fillna(method='bfill').fillna(method='ffill')
 
     # Drop intermediate columns
     df = df.drop(columns=[col for col in df.columns if col not in ['high', 'low', 'open', 'close', 'cRSI', 'cRSI_UpperBand', 'cRSI_LowerBand']], errors='ignore')
+
+    return df
+
+def calculate_adxvma(df: pd.DataFrame, period: int = 14, adx_period: int = 14) -> pd.DataFrame:
+    """
+    Calculates the Adaptive Moving Average (ADXVMA).
+    This is a simplified version, as ADXVMA variations can be complex.
+    It generally uses ADX to adapt the smoothing period of a moving average.
+
+    Args:
+        df (pd.DataFrame): DataFrame with 'high', 'low', 'close' columns.
+        period (int): Period for the VMA.
+        adx_period (int): Period for ADX calculation.
+
+    Returns:
+        pd.DataFrame: Original DataFrame with 'ADXVMA' column added.
+    """
+    df = df.copy()
+
+    # Calculate True Range (TR)
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['TR'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
+
+    # Calculate Directional Movement (+DM and -DM)
+    df['up_move'] = df['high'] - df['high'].shift(1)
+    df['down_move'] = df['low'].shift(1) - df['low']
+
+    df['+DM'] = np.where((df['up_move'] > df['down_move']) & (df['up_move'] > 0), df['up_move'], 0)
+    df['-DM'] = np.where((df['down_move'] > df['up_move']) & (df['down_move'] > 0), df['down_move'], 0)
+
+    # Calculate Smoothed True Range (ATR)
+    df['ATR'] = df['TR'].ewm(span=adx_period, adjust=False).mean()
+
+    # Calculate Smoothed Directional Movement (+DM and -DM)
+    df['+DMs'] = df['+DM'].ewm(span=adx_period, adjust=False).mean()
+    df['-DMs'] = df['-DM'].ewm(span=adx_period, adjust=False).mean()
+
+    # Calculate Directional Indicators (+DI and -DI)
+    df['+DI'] = (df['+DMs'] / df['ATR']) * 100
+    df['-DI'] = (df['-DMs'] / df['ATR']) * 100
+
+    # Calculate Directional Movement Index (DX)
+    df['DX'] = (abs(df['+DI'] - df['-DI']) / (df['+DI'] + df['-DI'])) * 100
+    df['DX'] = df['DX'].fillna(0)
+
+    # Calculate Average Directional Index (ADX)
+    df['ADX'] = df['DX'].ewm(span=adx_period, adjust=False).mean()
+    df['ADX'] = df['ADX'].fillna(0)
+
+    # Calculate Volatility Index (often related to ADX) for VMA's smoothing factor
+    # This is a key part of ADXVMA - making the MA adaptive
+    # A common approach is to use ADX to determine the efficiency ratio or smoothing factor
+    
+    # Example adaptation based on ADX (simplified):
+    # Higher ADX means stronger trend, less smoothing (faster MA)
+    # Lower ADX means weaker trend, more smoothing (slower MA)
+    # Scale ADX to a range, e.g., 0 to 1, then use it to adjust EMA alpha.
+    max_adx = 60 # Typical max ADX for strong trend
+    min_adx = 10 # Typical min ADX for weak trend
+    df['scaled_adx'] = (df['ADX'] - min_adx) / (max_adx - min_adx)
+    df['scaled_adx'] = df['scaled_adx'].clip(0, 1) # Clip between 0 and 1
+
+    # Apply adaptation to an EMA (or another MA)
+    # If ADXVMA is based on a specific VMA type (e.g., KAMA), it would go here.
+    # For now, let's use a simple EMA with an adaptive alpha.
+    
+    # Traditional EMA alpha = 2 / (period + 1)
+    # Adaptive alpha = scaled_adx * alpha_fast + (1 - scaled_adx) * alpha_slow
+    # Or, adaptive period based on ADX:
+    df['adx_vma'] = np.nan
+    alpha = 2 / (period + 1)
+
+    for i in range(1, len(df)):
+        if pd.notna(df['close'].iloc[i]) and pd.notna(df['scaled_adx'].iloc[i]):
+            current_alpha = alpha * df['scaled_adx'].iloc[i]
+            if pd.isna(df['adx_vma'].iloc[i-1]):
+                df.loc[df.index[i], 'adx_vma'] = df['close'].iloc[i]
+            else:
+                df.loc[df.index[i], 'adx_vma'] = current_alpha * df['close'].iloc[i] + (1 - current_alpha) * df['adx_vma'].iloc[i-1]
+
+    df['ADXVMA'] = df['adx_vma'].fillna(method='ffill').fillna(method='bfill') # Fill NaNs at start
+
+    # Drop intermediate columns
+    df = df.drop(columns=[col for col in df.columns if col not in ['high', 'low', 'open', 'close', 'ADXVMA']], errors='ignore')
 
     return df
