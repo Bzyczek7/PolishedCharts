@@ -6,11 +6,11 @@
 - [x] Task: Define initial database models (`User`, `Alert`, `Symbol`, `Candle`) and run migrations (Alembic). 0d04547
 - [x] Task: Conductor - User Manual Verification 'Project Initialization & Backend Setup' (Protocol in workflow.md) 2a37977
 
-## Phase 2: Market Data Integration (Alpha Vantage)
+## Phase 2: Market Data Integration (Alpha Vantage) [checkpoint: e17e263]
 - [x] Task: Create a service/module to fetch daily/intraday OHLCV data from Alpha Vantage API. 763d7c2
 - [x] Task: Implement a background scheduler (or simple loop) to poll Alpha Vantage for updates (respecting rate limits). 93bcd07
 - [x] Task: Create an API endpoint (`GET /api/candles/{symbol}`) to serve stored candle data to the frontend. bd1eec0
-- [ ] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md) e17e263
 
 ## Phase 3: Frontend Scaffold & Charting
 - [ ] Task: Initialize React application using Vite with TypeScript and Tailwind CSS.
