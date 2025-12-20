@@ -21,6 +21,6 @@
 ## Phase 4: Basic Alert Engine & End-to-End Test
 - [x] Task: Implement the "Create Alert" API endpoint (`POST /api/alerts`) and corresponding frontend form. b0dfc88
 - [x] Task: Implement the Alert Engine logic: a service that evaluates active alerts against the latest market data. 6b1d3cb
-- [ ] Task: Connect the engine to the data poller: when new data arrives, trigger the evaluation logic.
+- [~] Task: Connect the engine to the data poller: when new data arrives, trigger the evaluation logic.
 - [ ] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change.
 - [ ] Task: Conductor - User Manual Verification 'Basic Alert Engine & End-to-End Test' (Protocol in workflow.md)
