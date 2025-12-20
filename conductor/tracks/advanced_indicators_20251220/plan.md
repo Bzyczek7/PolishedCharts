@@ -1,6 +1,6 @@
 # Plan: Advanced Indicator Support and Alerting
 
-## Phase 1: Backend Indicator Calculation & Schema
+## Phase 1: Backend Indicator Calculation & Schema [checkpoint: 097bbb1]
 - [x] Task: Research and select Python libraries for TDFI, cRSI, and ADXVMA calculation (e.g., `ta-lib`, `pandas_ta`, or custom implementation). cb8a3be
 - [x] Task: Implement TDFI calculation function within `backend/app/services/indicators.py`. 2c98784
   - [x] Subtask: Write failing tests for TDFI calculation (Red Phase).
@@ -25,7 +25,7 @@
   - [x] Subtask: Write failing tests for indicator API endpoints.
   - [x] Subtask: Implement indicator API endpoints.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Conductor - User Manual Verification 'Backend Indicator Calculation & Schema' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Backend Indicator Calculation & Schema' (Protocol in workflow.md)
 
 ## Phase 2: Frontend Indicator Display & Layout System
 - [ ] Task: Create `frontend/src/api/indicators.ts` for API calls to fetch indicator data.
