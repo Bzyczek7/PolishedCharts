@@ -50,10 +50,10 @@
   - [x] Subtask: Write failing tests for persistence.
   - [x] Subtask: Implement persistence logic.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Integrate `LayoutManager` and indicator toggles into the main application UI.
-  - [ ] Subtask: Write failing tests for UI integration.
-  - [ ] Subtask: Implement UI integration.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Integrate `LayoutManager` and indicator toggles into the main application UI. 166c137
+  - [x] Subtask: Write failing tests for UI integration.
+  - [x] Subtask: Implement UI integration.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Conductor - User Manual Verification 'Frontend Indicator Display & Layout System' (Protocol in workflow.md)
 
 ## Phase 3: Enhanced Alert Evaluation & End-to-End Testing
