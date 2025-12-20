@@ -7,16 +7,16 @@ class IndicatorMetadata(BaseModel):
     scale_ranges: Optional[Dict[str, Any]] = None
 
 class TDFIOutput(BaseModel):
-    tdfi: List[float]
-    tdfi_signal: List[int]
+    tdfi: List[Optional[float]]
+    tdfi_signal: List[Optional[int]]
     metadata: IndicatorMetadata
 
 class cRSIOutput(BaseModel):
-    crsi: List[float]
-    upper_band: List[float]
-    lower_band: List[float]
+    crsi: List[Optional[float]]
+    upper_band: List[Optional[float]]
+    lower_band: List[Optional[float]]
     metadata: IndicatorMetadata
 
 class ADXVMAOutput(BaseModel):
-    adxvma: List[float]
+    adxvma: List[Optional[float]]
     metadata: IndicatorMetadata
