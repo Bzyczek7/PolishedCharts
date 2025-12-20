@@ -6,10 +6,10 @@
   - [x] Subtask: Write failing tests for TDFI calculation (Red Phase).
   - [x] Subtask: Implement TDFI calculation logic (Green Phase).
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Implement cRSI calculation function within `backend/app/services/indicators.py`.
-  - [ ] Subtask: Write failing tests for cRSI calculation (Red Phase).
-  - [ ] Subtask: Implement cRSI calculation logic (Green Phase).
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Implement cRSI calculation function within `backend/app/services/indicators.py`. 69719ad
+  - [x] Subtask: Write failing tests for cRSI calculation (Red Phase).
+  - [x] Subtask: Implement cRSI calculation logic (Green Phase).
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Implement ADXVMA calculation function within `backend/app/services/indicators.py`.
   - [ ] Subtask: Write failing tests for ADXVMA calculation (Red Phase).
   - [ ] Subtask: Implement ADXVMA calculation logic (Green Phase).
