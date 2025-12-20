@@ -32,10 +32,10 @@
   - [x] Subtask: Write failing tests for indicator API client.
   - [x] Subtask: Implement indicator API client.
   - [x] Subtask: Verify test coverage and refactor.
-- [ ] Task: Develop a generic `IndicatorPane` component for oscillators (cRSI, TDFI).
-  - [ ] Subtask: Write failing tests for `IndicatorPane` component.
-  - [ ] Subtask: Implement `IndicatorPane` to render `lightweight-charts` series in a dedicated pane.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Develop a generic `IndicatorPane` component for oscillators (cRSI, TDFI). 1ef3fb4
+  - [x] Subtask: Write failing tests for `IndicatorPane` component.
+  - [x] Subtask: Implement `IndicatorPane` to render `lightweight-charts` series in a dedicated pane.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Enhance `ChartComponent` to integrate overlay indicators (ADXVMA).
   - [ ] Subtask: Write failing tests for `ChartComponent`'s overlay integration.
   - [ ] Subtask: Implement ADXVMA overlay rendering in `ChartComponent`.
