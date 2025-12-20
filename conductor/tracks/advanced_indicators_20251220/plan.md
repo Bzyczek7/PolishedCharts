@@ -1,0 +1,77 @@
+# Plan: Advanced Indicator Support and Alerting
+
+## Phase 1: Backend Indicator Calculation & Schema
+- [~] Task: Research and select Python libraries for TDFI, cRSI, and ADXVMA calculation (e.g., `ta-lib`, `pandas_ta`, or custom implementation).
+- [ ] Task: Implement TDFI calculation function within `backend/app/services/indicators.py`.
+  - [ ] Subtask: Write failing tests for TDFI calculation (Red Phase).
+  - [ ] Subtask: Implement TDFI calculation logic (Green Phase).
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Implement cRSI calculation function within `backend/app/services/indicators.py`.
+  - [ ] Subtask: Write failing tests for cRSI calculation (Red Phase).
+  - [ ] Subtask: Implement cRSI calculation logic (Green Phase).
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Implement ADXVMA calculation function within `backend/app/services/indicators.py`.
+  - [ ] Subtask: Write failing tests for ADXVMA calculation (Red Phase).
+  - [ ] Subtask: Implement ADXVMA calculation logic (Green Phase).
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Validate indicator calculations against TradingView reference data.
+  - [ ] Subtask: Export sample data from TradingView for TDFI, cRSI, ADXVMA on known symbols (e.g., IBM, AAPL).
+  - [ ] Subtask: Create golden dataset tests comparing our calculations to TradingView outputs.
+  - [ ] Subtask: Document any acceptable tolerance ranges for floating-point differences.
+- [ ] Task: Define Pydantic models for indicator output schema (main series, auxiliary series, metadata).
+  - [ ] Subtask: Create `backend/app/schemas/indicator.py`.
+  - [ ] Subtask: Define `TDFIOutput`, `cRSIOutput`, `ADXVMAOutput` models.
+- [ ] Task: Create new API endpoints (e.g., `GET /api/v1/indicators/{symbol}/{indicator_name}`) to serve calculated indicator data based on the defined schemas.
+  - [ ] Subtask: Write failing tests for indicator API endpoints.
+  - [ ] Subtask: Implement indicator API endpoints.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Conductor - User Manual Verification 'Backend Indicator Calculation & Schema' (Protocol in workflow.md)
+
+## Phase 2: Frontend Indicator Display & Layout System
+- [ ] Task: Create `frontend/src/api/indicators.ts` for API calls to fetch indicator data.
+  - [ ] Subtask: Write failing tests for indicator API client.
+  - [ ] Subtask: Implement indicator API client.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Develop a generic `IndicatorPane` component for oscillators (cRSI, TDFI).
+  - [ ] Subtask: Write failing tests for `IndicatorPane` component.
+  - [ ] Subtask: Implement `IndicatorPane` to render `lightweight-charts` series in a dedicated pane.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Enhance `ChartComponent` to integrate overlay indicators (ADXVMA).
+  - [ ] Subtask: Write failing tests for `ChartComponent`'s overlay integration.
+  - [ ] Subtask: Implement ADXVMA overlay rendering in `ChartComponent`.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Implement `LayoutManager` component with saving/loading functionality.
+  - [ ] Subtask: Define data structure for layouts (active indicators, parameters, chart style).
+  - [ ] Subtask: Write failing tests for `LayoutManager`.
+  - [ ] Subtask: Implement `LayoutManager` component with UI for saving/loading layouts.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Implement layout persistence (localStorage for MVP, database schema for future).
+  - [ ] Subtask: Create localStorage service for saving/loading layouts.
+  - [ ] Subtask: Write failing tests for persistence.
+  - [ ] Subtask: Implement persistence logic.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Integrate `LayoutManager` and indicator toggles into the main application UI.
+  - [ ] Subtask: Write failing tests for UI integration.
+  - [ ] Subtask: Implement UI integration.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Conductor - User Manual Verification 'Frontend Indicator Display & Layout System' (Protocol in workflow.md)
+
+## Phase 3: Enhanced Alert Evaluation & End-to-End Testing
+- [ ] Task: Update `AlertEngine` to support cRSI band-cross alert condition.
+  - [ ] Subtask: Write failing tests for cRSI band-cross evaluation.
+  - [ ] Subtask: Implement cRSI band-cross logic in `AlertEngine`.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Integrate new alert conditions into the `AlertForm` on the frontend.
+  - [ ] Subtask: Write failing tests for `AlertForm` new conditions.
+  - [ ] Subtask: Implement UI for new alert conditions.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: Update `DataPoller` to compute and cache indicator values alongside OHLCV data.
+  - [ ] Subtask: Modify `DataPoller` to call indicator calculation functions after fetching new candles.
+  - [ ] Subtask: Write failing tests for indicator computation in polling loop.
+  - [ ] Subtask: Implement indicator caching (in-memory or Redis for MVP).
+  - [ ] Subtask: Update `AlertEngine` to read cached indicator values during evaluation.
+  - [ ] Subtask: Verify test coverage and refactor.
+- [ ] Task: End-to-end test: Verify full flow from frontend layout selection to backend alert triggering for a new indicator.
+  - [ ] Subtask: Write failing E2E test.
+  - [ ] Subtask: Run E2E test and verify.
+- [ ] Task: Conductor - User Manual Verification 'Enhanced Alert Evaluation & End-to-End Testing' (Protocol in workflow.md)
