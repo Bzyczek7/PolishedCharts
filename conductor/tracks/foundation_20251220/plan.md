@@ -12,11 +12,11 @@
 - [x] Task: Create an API endpoint (`GET /api/candles/{symbol}`) to serve stored candle data to the frontend. bd1eec0
 - [x] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md) e17e263
 
-## Phase 3: Frontend Scaffold & Charting
+## Phase 3: Frontend Scaffold & Charting [checkpoint: a19f57e]
 - [x] Task: Initialize React application using Vite with TypeScript and Tailwind CSS. c1aa31c
 - [x] Task: Implement a basic API client (axios/fetch) to communicate with the FastAPI backend. 55bf6be
 - [x] Task: Create a `ChartComponent` using `lightweight-charts` that fetches and displays candle data for a hardcoded symbol (e.g., "IBM"). 9959977
-- [ ] Task: Conductor - User Manual Verification 'Frontend Scaffold & Charting' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Frontend Scaffold & Charting' (Protocol in workflow.md) a19f57e
 
 ## Phase 4: Basic Alert Engine & End-to-End Test
 - [ ] Task: Implement the "Create Alert" API endpoint (`POST /api/alerts`) and corresponding frontend form.
