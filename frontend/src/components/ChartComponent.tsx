@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType, ISeriesApi } from 'lightweight-charts'
+import { createChart, ColorType, CandlestickSeries } from 'lightweight-charts'
 import { getCandles } from '../api/candles'
 
 interface ChartComponentProps {
@@ -8,7 +8,7 @@ interface ChartComponentProps {
 
 const ChartComponent = ({ symbol }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null)
+  const seriesRef = useRef<any>(null) // Retain 'any' for now to avoid additional type complexity
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -26,7 +26,7 @@ const ChartComponent = ({ symbol }: ChartComponentProps) => {
       height: 400,
     })
 
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
         downColor: '#ef4444',
         borderVisible: false,
