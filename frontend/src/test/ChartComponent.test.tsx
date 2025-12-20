@@ -10,12 +10,16 @@ vi.mock('lightweight-charts', () => ({
     addSeries: vi.fn().mockReturnValue({
       setData: vi.fn(),
     }),
+    addCandlestickSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
+    addLineSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
   }),
   ColorType: { Solid: 'solid' },
-  CandlestickSeries: vi.fn(),
-  LineSeries: vi.fn(),
 }))
 
 describe('ChartComponent', () => {

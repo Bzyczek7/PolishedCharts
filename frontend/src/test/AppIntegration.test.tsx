@@ -16,6 +16,15 @@ vi.mock('lightweight-charts', () => ({
     addSeries: vi.fn().mockReturnValue({
       setData: vi.fn(),
     }),
+    addCandlestickSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
+    addLineSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
+    addHistogramSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
     priceScale: vi.fn().mockReturnValue({
@@ -23,9 +32,6 @@ vi.mock('lightweight-charts', () => ({
     }),
   }),
   ColorType: { Solid: 'solid' },
-  CandlestickSeries: vi.fn(),
-  LineSeries: vi.fn(),
-  HistogramSeries: vi.fn(),
 }))
 
 describe('App Integration', () => {

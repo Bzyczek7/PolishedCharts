@@ -11,11 +11,19 @@ vi.mock('lightweight-charts', () => ({
     addSeries: vi.fn().mockReturnValue({
       setData: vi.fn(),
     }),
+    addCandlestickSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
+    addLineSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
+    addHistogramSeries: vi.fn().mockReturnValue({
+        setData: vi.fn(),
+    }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
   }),
   ColorType: { Solid: 'solid' },
-  CandlestickSeries: vi.fn(), // Export CandlestickSeries as a function
 }))
 
 test('renders tradingalert heading', () => {

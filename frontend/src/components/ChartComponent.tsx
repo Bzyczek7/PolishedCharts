@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType, CandlestickSeries, LineSeries } from 'lightweight-charts'
+import { createChart, ColorType } from 'lightweight-charts'
 import { getCandles } from '../api/candles'
 
 interface OverlayIndicator {
@@ -32,7 +32,7 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
       height: 400,
     })
 
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+    const candlestickSeries = chart.addCandlestickSeries({
         upColor: '#22c55e',
         downColor: '#ef4444',
         borderVisible: false,
@@ -44,7 +44,7 @@ const ChartComponent = ({ symbol, overlays = [] }: ChartComponentProps) => {
 
     // Render Overlays
     overlays.forEach(overlay => {
-        const lineSeries = chart.addSeries(LineSeries, {
+        const lineSeries = chart.addLineSeries({
             color: overlay.color,
             lineWidth: 2,
         })
