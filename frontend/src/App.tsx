@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import Layout from './components/Layout'
+import Toolbar from './components/Toolbar'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
@@ -129,24 +130,12 @@ function App() {
         }
     >
       <div className="flex flex-col h-full w-full p-4 space-y-4">
-        <header className="flex justify-between items-center bg-slate-900/50 p-4 rounded-lg border border-slate-800">
-            <div>
-                <h1 className="text-xl font-bold tracking-tight">TradingAlert</h1>
-            </div>
-            <div className="flex gap-2">
-                {['tdfi', 'crsi', 'adxvma'].map(indicator => (
-                    <Button
-                        key={indicator}
-                        variant={activeLayout?.activeIndicators.includes(indicator) ? "default" : "secondary"}
-                        size="sm"
-                        onClick={() => toggleIndicator(indicator)}
-                        className="text-xs uppercase font-semibold"
-                    >
-                        {indicator}
-                    </Button>
-                ))}
-            </div>
-        </header>
+        <Toolbar 
+            symbol={symbol}
+            onSymbolClick={() => console.log('Symbol search')}
+            onIndicatorsClick={() => console.log('Indicators')}
+            onFullscreenToggle={() => console.log('Fullscreen')}
+        />
 
         <div className="flex-1 flex flex-col space-y-4 min-h-0">
           <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 relative min-h-0">
