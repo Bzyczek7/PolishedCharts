@@ -10,8 +10,25 @@ interface LayoutProps {
   alertsContent: React.ReactNode
 }
 
+const STORAGE_KEY = 'trading-alert-sidebar-state'
+
 const Layout = ({ children, watchlistContent, alertsContent }: LayoutProps) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved)
+            return parsed.isSidebarOpen ?? true
+        } catch (e) {
+            console.error('Failed to parse sidebar state', e)
+        }
+    }
+    return true
+  })
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ isSidebarOpen }))
+  }, [isSidebarOpen])
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
