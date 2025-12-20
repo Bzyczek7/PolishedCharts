@@ -15,12 +15,12 @@
 ## Phase 3: Frontend Scaffold & Charting [checkpoint: a19f57e]
 - [x] Task: Initialize React application using Vite with TypeScript and Tailwind CSS. c1aa31c
 - [x] Task: Implement a basic API client (axios/fetch) to communicate with the FastAPI backend. 55bf6be
-- [x] Task: Create a `ChartComponent` using `lightweight-charts` that fetches and displays candle data for a hardcoded symbol (e.g., "IBM"). 9959977
+- [x] Task: Create a `ChartComponent` using `lightweight-charts` that fetches and displays candle data for a hardcoded symbol (e.g., "IBM"). 82b96d7
 - [x] Task: Conductor - User Manual Verification 'Frontend Scaffold & Charting' (Protocol in workflow.md) a19f57e
 
 ## Phase 4: Basic Alert Engine & End-to-End Test
 - [x] Task: Implement the "Create Alert" API endpoint (`POST /api/alerts`) and corresponding frontend form. b0dfc88
 - [x] Task: Implement the Alert Engine logic: a service that evaluates active alerts against the latest market data. 6b1d3cb
 - [x] Task: Connect the engine to the data poller: when new data arrives, trigger the evaluation logic. c1a2beb
-- [ ] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change.
+- [~] Task: Verify the flow: Set an alert -> Update data (mock or real) -> Verify "ALERT TRIGGERED" log/state change.
 - [ ] Task: Conductor - User Manual Verification 'Basic Alert Engine & End-to-End Test' (Protocol in workflow.md)
