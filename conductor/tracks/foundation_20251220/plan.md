@@ -7,7 +7,7 @@
 - [x] Task: Conductor - User Manual Verification 'Project Initialization & Backend Setup' (Protocol in workflow.md) 2a37977
 
 ## Phase 2: Market Data Integration (Alpha Vantage)
-- [ ] Task: Create a service/module to fetch daily/intraday OHLCV data from Alpha Vantage API.
+- [~] Task: Create a service/module to fetch daily/intraday OHLCV data from Alpha Vantage API.
 - [ ] Task: Implement a background scheduler (or simple loop) to poll Alpha Vantage for updates (respecting rate limits).
 - [ ] Task: Create an API endpoint (`GET /api/candles/{symbol}`) to serve stored candle data to the frontend.
 - [ ] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md)
