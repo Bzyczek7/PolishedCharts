@@ -1,4 +1,4 @@
-import { Layout } from '../components/LayoutManager'
+import type { Layout } from '../components/LayoutManager'
 
 const STORAGE_KEY = 'trading_alert_layouts'
 
