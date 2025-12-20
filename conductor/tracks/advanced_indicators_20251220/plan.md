@@ -56,7 +56,7 @@
   - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Conductor - User Manual Verification 'Frontend Indicator Display & Layout System' (Protocol in workflow.md)
 
-## Phase 3: Enhanced Alert Evaluation & End-to-End Testing
+## Phase 3: Enhanced Alert Evaluation & End-to-End Testing [checkpoint: e49cfdb]
 - [x] Task: Update `AlertEngine` to support cRSI band-cross alert condition. 012c0a2
   - [x] Subtask: Write failing tests for cRSI band-cross evaluation.
   - [x] Subtask: Implement cRSI band-cross logic in `AlertEngine`.
