@@ -8,7 +8,7 @@
 
 ## Phase 2: Market Data Integration (Alpha Vantage)
 - [x] Task: Create a service/module to fetch daily/intraday OHLCV data from Alpha Vantage API. 763d7c2
-- [~] Task: Implement a background scheduler (or simple loop) to poll Alpha Vantage for updates (respecting rate limits).
+- [x] Task: Implement a background scheduler (or simple loop) to poll Alpha Vantage for updates (respecting rate limits). 93bcd07
 - [ ] Task: Create an API endpoint (`GET /api/candles/{symbol}`) to serve stored candle data to the frontend.
 - [ ] Task: Conductor - User Manual Verification 'Market Data Integration (Alpha Vantage)' (Protocol in workflow.md)
 
