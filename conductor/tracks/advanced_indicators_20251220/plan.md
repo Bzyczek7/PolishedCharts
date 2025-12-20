@@ -21,10 +21,10 @@
 - [x] Task: Define Pydantic models for indicator output schema (main series, auxiliary series, metadata). 9ab0270
   - [x] Subtask: Create `backend/app/schemas/indicator.py`.
   - [x] Subtask: Define `TDFIOutput`, `cRSIOutput`, `ADXVMAOutput` models.
-- [ ] Task: Create new API endpoints (e.g., `GET /api/v1/indicators/{symbol}/{indicator_name}`) to serve calculated indicator data based on the defined schemas.
-  - [ ] Subtask: Write failing tests for indicator API endpoints.
-  - [ ] Subtask: Implement indicator API endpoints.
-  - [ ] Subtask: Verify test coverage and refactor.
+- [x] Task: Create new API endpoints (e.g., `GET /api/v1/indicators/{symbol}/{indicator_name}`) to serve calculated indicator data based on the defined schemas. 5fb2d51
+  - [x] Subtask: Write failing tests for indicator API endpoints.
+  - [x] Subtask: Implement indicator API endpoints.
+  - [x] Subtask: Verify test coverage and refactor.
 - [ ] Task: Conductor - User Manual Verification 'Backend Indicator Calculation & Schema' (Protocol in workflow.md)
 
 ## Phase 2: Frontend Indicator Display & Layout System
