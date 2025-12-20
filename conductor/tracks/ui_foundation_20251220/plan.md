@@ -1,7 +1,7 @@
 # Plan: TradingView-style UI/UX Foundation
 
 ## Phase 1: Layout Shell & Sidebar Foundation
-- [~] Task: Install and configure Shadcn/UI and required dependencies (Radix UI, Lucide React, cmdk for Command).
+- [x] Task: Install and configure Shadcn/UI and required dependencies (Radix UI, Lucide React, cmdk for Command). 2f60ede
 - [ ] Task: Write failing tests for sidebar rendering and initial collapsed/expanded state (Red Phase).
 - [ ] Task: Create the main responsive layout shell with a collapsible right sidebar component structure to pass rendering tests (Green Phase).
 - [ ] Task: Write failing tests for sidebar state transitions and keyboard shortcuts (Red Phase).
