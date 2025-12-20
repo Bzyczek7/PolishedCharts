@@ -2,7 +2,7 @@
 
 ## Phase 1: Project Initialization & Backend Setup
 - [x] Task: Initialize project structure (monorepo or separate folders) and Docker Compose configuration for PostgreSQL and Redis. be8ddd5
-- [~] Task: Set up FastAPI application skeleton with Pydantic settings management and database connection logic (SQLAlchemy/AsyncPG).
+- [x] Task: Set up FastAPI application skeleton with Pydantic settings management and database connection logic (SQLAlchemy/AsyncPG). 520f93d
 - [ ] Task: Define initial database models (`User`, `Alert`, `Symbol`, `Candle`) and run migrations (Alembic).
 - [ ] Task: Conductor - User Manual Verification 'Project Initialization & Backend Setup' (Protocol in workflow.md)
 
