@@ -13,6 +13,17 @@ interface LayoutProps {
 const Layout = ({ children, watchlistContent, alertsContent }: LayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        setIsSidebarOpen((prev) => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   return (
     <div className="flex h-screen w-full bg-slate-950 text-slate-50 overflow-hidden">
       {/* Main Content Area */}
@@ -61,6 +72,7 @@ const Layout = ({ children, watchlistContent, alertsContent }: LayoutProps) => {
                     size="icon" 
                     onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                     className="text-slate-400 hover:text-white"
+                    data-testid="sidebar-toggle"
                 >
                     {isSidebarOpen ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
                 </Button>
