@@ -1,23 +1,33 @@
 import asyncio
 import logging
-from typing import List, Callable, Any
+import pandas as pd
+from typing import List, Callable, Any, Dict
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.symbol import Symbol
 from app.models.candle import Candle
 from app.services.alpha_vantage import AlphaVantageService
 from app.services.alert_engine import AlertEngine
+from app.services import indicators
 
 logger = logging.getLogger(__name__)
 
 class DataPoller:
-    def __init__(self, alpha_vantage_service: AlphaVantageService, symbols: List[str], interval: int = 3600, db_session_factory: Callable[[], Any] = None, alert_engine: AlertEngine = None):
+    def __init__(
+        self, 
+        alpha_vantage_service: AlphaVantageService, 
+        symbols: List[str], 
+        interval: int = 3600, 
+        db_session_factory: Callable[[], Any] = None, 
+        alert_engine: AlertEngine = None
+    ):
         self.av_service = alpha_vantage_service
         self.symbols = symbols
         self.interval = interval # Seconds
         self.is_running = False
         self.db_session_factory = db_session_factory
         self.alert_engine = alert_engine
+        self.indicator_cache: Dict[str, Dict[str, Any]] = {} # ticker -> indicator_data
 
     async def start(self):
         self.is_running = True
@@ -35,8 +45,36 @@ class DataPoller:
                         symbol_id = await self._save_candles_to_db(ticker, candles)
                     
                     if self.alert_engine and candles and symbol_id:
+                        # 1. Calculate Indicators
+                        df = pd.DataFrame(candles)
+                        df_crsi = indicators.calculate_crsi(df)
+                        
+                        latest_crsi = df_crsi.iloc[-1]
+                        prev_crsi = df_crsi.iloc[-2] if len(df_crsi) > 1 else None
+                        
+                        indicator_data = {
+                            "crsi": latest_crsi["cRSI"],
+                            "crsi_upper": latest_crsi["cRSI_UpperBand"],
+                            "crsi_lower": latest_crsi["cRSI_LowerBand"],
+                        }
+                        
+                        if prev_crsi is not None:
+                            indicator_data.update({
+                                "prev_crsi": prev_crsi["cRSI"],
+                                "prev_crsi_upper": prev_crsi["cRSI_UpperBand"],
+                                "prev_crsi_lower": prev_crsi["cRSI_LowerBand"],
+                            })
+                        
+                        # 2. Cache Indicators
+                        self.indicator_cache[ticker] = indicator_data
+                        
+                        # 3. Evaluate Alerts
                         latest_close = candles[-1]["close"]
-                        await self.alert_engine.evaluate_symbol_alerts(symbol_id, latest_close)
+                        await self.alert_engine.evaluate_symbol_alerts(
+                            symbol_id, 
+                            latest_close, 
+                            indicator_data=indicator_data
+                        )
 
                 except Exception as e:
                     logger.error(f"Error fetching data for {ticker}: {e}")

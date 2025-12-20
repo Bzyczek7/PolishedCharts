@@ -116,7 +116,46 @@ async def test_poller_triggers_alert_engine():
         
 
         assert mock_engine.evaluate_symbol_alerts.called
+        # The call now includes indicator_data
+        args, kwargs = mock_engine.evaluate_symbol_alerts.call_args
+        assert args[0] == 1
+        assert args[1] == 155.0
+        assert "indicator_data" in kwargs
 
-        mock_engine.evaluate_symbol_alerts.assert_called_with(1, 155.0)
+@pytest.mark.asyncio
+async def test_poller_calculates_indicators():
+    mock_service = AsyncMock()
+    # Provide enough data for cRSI (need at least 2 rows for cross, and more for smoothing)
+    mock_service.fetch_daily_candles.return_value = [
+        {"date": f"2023-10-{i:02d}", "open": 100+i, "high": 110+i, "low": 90+i, "close": 105+i, "volume": 1000}
+        for i in range(1, 50)
+    ]
+    
+    mock_engine = AsyncMock()
+    mock_factory = MagicMock()
+
+    poller = DataPoller(
+        alpha_vantage_service=mock_service, 
+        symbols=["IBM"], 
+        interval=0.1,
+        db_session_factory=mock_factory,
+        alert_engine=mock_engine
+    )
+    
+    with patch.object(poller, '_save_candles_to_db', new_callable=AsyncMock) as mock_save:
+        mock_save.return_value = 1
+        
+        task = asyncio.create_task(poller.start())
+        await asyncio.sleep(0.15)
+        poller.stop()
+        await task
+        
+        # Check if evaluate_symbol_alerts was called with indicator_data
+        args, kwargs = mock_engine.evaluate_symbol_alerts.call_args
+        assert "indicator_data" in kwargs
+        assert "crsi" in kwargs["indicator_data"]
+        assert "crsi_upper" in kwargs["indicator_data"]
+        assert "crsi_lower" in kwargs["indicator_data"]
+        assert "prev_crsi" in kwargs["indicator_data"]
 
 
