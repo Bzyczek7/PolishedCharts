@@ -55,21 +55,21 @@
 - [x] Task: Implement keyboard navigation for Watchlist (Green Phase). 6e28e8b
 - [x] Task: Conductor - User Manual Verification 'Watchlist Management & Real-time Visuals'
 
-## Phase 4: Alerts Monitoring & Chart Interaction [checkpoint: 6c7391e]
+## Phase 4: Alerts Monitoring & Chart Interaction [checkpoint: 331edb6]
 - [x] Task: Write failing tests for Alerts list component with status filtering and search (Red Phase). b2f6431
-- [x] Task: Create the Alerts list component with status filtering (Active, Triggered, etc.) and search (Green Phase). ccd8c9d
-- [x] Task: Write failing tests for Alerts empty state display (Red Phase). ccd8c9d
-- [x] Task: Implement "No alerts yet" empty state with CTA button (Green Phase). ccd8c9d
-- [x] Task: Write failing tests for expandable alert rows and statistics display (Red Phase). b2f6431
-- [x] Task: Implement expandable alert rows showing trigger history and status statistics (Green Phase). 735b3c1
-- [x] Task: Write failing tests for alert-to-chart linking and timestamp synchronization (Red Phase). ccd8c9d
-- [x] Task: Implement "Linking" logic: clicking an alert updates the chart symbol and timestamp (Green Phase). ccd8c9d
-- [x] Task: Write failing tests for inline management actions (Mute, Reset, Edit, Delete) (Red Phase). ccd8c9d
-- [x] Task: Implement inline management quick-action buttons (Green Phase). ccd8c9d
-- [x] Task: Write failing tests for notification badges and pulse animations (Red Phase). ccd8c9d
-- [x] Task: Add notification badges to sidebar icons and pulse animations for new triggers (Green Phase). 554dd4d
-- [x] Task: Write failing tests for Alert keyboard shortcuts (M, E, Del) (Red Phase). 6c7391e
-- [x] Task: Implement keyboard shortcuts for alert management (Green Phase). 6c7391e
+- [x] Task: Create the Alerts list component with status filtering (Active, Triggered, etc.) and search (Green Phase). 331edb6
+- [x] Task: Write failing tests for Alerts empty state display (Red Phase). 331edb6
+- [x] Task: Implement "No alerts yet" empty state with CTA button (Green Phase). 331edb6
+- [x] Task: Write failing tests for expandable alert rows and statistics display (Red Phase). 331edb6
+- [x] Task: Implement expandable alert rows showing trigger history and status statistics (Green Phase). 331edb6
+- [x] Task: Write failing tests for alert-to-chart linking and timestamp synchronization (Red Phase). 331edb6
+- [x] Task: Implement "Linking" logic: clicking an alert updates the chart symbol and timestamp (Green Phase). 331edb6
+- [x] Task: Write failing tests for inline management actions (Mute, Reset, Edit, Delete) (Red Phase). 331edb6
+- [x] Task: Implement inline management quick-action buttons (Green Phase). 331edb6
+- [x] Task: Write failing tests for notification badges and pulse animations (Red Phase). 331edb6
+- [x] Task: Add notification badges to sidebar icons and pulse animations for new triggers (Green Phase). 331edb6
+- [x] Task: Write failing tests for Alert keyboard shortcuts (M, E, Del) (Red Phase). 331edb6
+- [x] Task: Implement keyboard shortcuts for alert management (Green Phase). 331edb6
 - [x] Task: Conductor - User Manual Verification 'Alerts Monitoring & Chart Interaction'
 
 ## Phase 5: Chart Refinement & Fullscreen API
