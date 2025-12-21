@@ -30,7 +30,7 @@ const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps)
         horzLines: { color: '#1e293b' },
       },
       width: chartContainerRef.current.clientWidth,
-      height: 400,
+      height: chartContainerRef.current.clientHeight || 400,
     })
 
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
@@ -53,10 +53,16 @@ const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps)
     })
 
     const handleResize = () => {
-      chart.applyOptions({ width: chartContainerRef.current?.clientWidth })
+      if (chartContainerRef.current) {
+        chart.applyOptions({ 
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight
+        })
+      }
     }
 
-    window.addEventListener('resize', handleResize)
+    const resizeObserver = new ResizeObserver(handleResize)
+    resizeObserver.observe(chartContainerRef.current)
 
     if (candles.length > 0) {
         const formattedData = candles.map(c => ({
@@ -79,7 +85,7 @@ const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps)
     }
 
     return () => {
-      window.removeEventListener('resize', handleResize)
+      resizeObserver.disconnect()
       chart.remove()
     }
   }, [symbol, candles, overlays])

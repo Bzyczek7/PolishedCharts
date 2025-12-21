@@ -37,6 +37,36 @@ if (!global.PointerEvent) {
     global.PointerEvent = PointerEvent;
 }
 
+// Mock lightweight-charts
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn().mockReturnValue({
+    addSeries: vi.fn().mockReturnValue({
+      setData: vi.fn(),
+      createPriceLine: vi.fn(),
+      applyOptions: vi.fn(),
+    }),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+    timeScale: vi.fn().mockReturnValue({
+      fitContent: vi.fn(),
+    }),
+    priceScale: vi.fn().mockReturnValue({
+      applyOptions: vi.fn(),
+    }),
+  }),
+  ColorType: { Solid: 'solid' },
+  LineSeries: 'LineSeries',
+  CandlestickSeries: 'CandlestickSeries',
+  HistogramSeries: 'HistogramSeries',
+  LineStyle: {
+    Solid: 0,
+    Dashed: 1,
+    Dotted: 2,
+    LargeDashed: 3,
+    SparseDotted: 4,
+  },
+}));
+
 // Mock Radix UI Portal
 vi.mock('@radix-ui/react-portal', () => ({
   Root: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),

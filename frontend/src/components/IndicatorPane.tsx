@@ -1,12 +1,22 @@
 import { useEffect, useRef } from 'react'
-import { createChart, ColorType, LineSeries, HistogramSeries } from 'lightweight-charts'
-import type { ISeriesApi } from 'lightweight-charts'
+import { createChart, ColorType, LineSeries, HistogramSeries, LineStyle } from 'lightweight-charts'
+
+interface IndicatorSeries {
+    data: any[]
+    color: string
+    displayType: 'line' | 'histogram'
+    lineWidth?: number
+}
 
 interface IndicatorPaneProps {
   name: string
-  data: any[]
-  displayType: 'line' | 'histogram'
-  color: string
+  mainSeries: IndicatorSeries
+  additionalSeries?: IndicatorSeries[]
+  priceLines?: {
+    value: number
+    color: string
+    label?: string
+  }[]
   height?: number
   scaleRanges?: {
     min: number
@@ -16,14 +26,13 @@ interface IndicatorPaneProps {
 
 const IndicatorPane = ({ 
   name, 
-  data, 
-  displayType, 
-  color, 
+  mainSeries,
+  additionalSeries = [],
+  priceLines = [],
   height = 150,
   scaleRanges
 }: IndicatorPaneProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
-  const seriesRef = useRef<ISeriesApi<any> | null>(null)
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -40,7 +49,7 @@ const IndicatorPane = ({
       width: chartContainerRef.current.clientWidth,
       height: height,
       timeScale: {
-        visible: false, // Hide time scale as it's synced with the main chart (or would be)
+        visible: false,
       },
     })
 
@@ -55,27 +64,55 @@ const IndicatorPane = ({
     }
 
     const series = chart.addSeries(
-        displayType === 'line' ? LineSeries : HistogramSeries, 
+        mainSeries.displayType === 'line' ? LineSeries : HistogramSeries, 
         {
-            color: color,
-            lineWidth: 2,
+            color: mainSeries.color,
+            lineWidth: mainSeries.lineWidth ?? 2,
         }
     )
-    
-    seriesRef.current = series
-    series.setData(data)
+    series.setData(mainSeries.data)
+
+    // Add additional series (like bands)
+    additionalSeries.forEach(s => {
+        const addedSeries = chart.addSeries(
+            s.displayType === 'line' ? LineSeries : HistogramSeries,
+            {
+                color: s.color,
+                lineWidth: s.lineWidth ?? 1,
+            }
+        )
+        addedSeries.setData(s.data)
+    })
+
+    // Add fixed price lines
+    priceLines.forEach(pl => {
+        series.createPriceLine({
+            price: pl.value,
+            color: pl.color,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: pl.label ?? '',
+        })
+    })
 
     const handleResize = () => {
-      chart.applyOptions({ width: chartContainerRef.current?.clientWidth })
+      if (chartContainerRef.current) {
+        chart.applyOptions({ 
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight
+        })
+      }
     }
 
-    window.addEventListener('resize', handleResize)
+    const resizeObserver = new ResizeObserver(handleResize)
+    resizeObserver.observe(chartContainerRef.current)
 
     return () => {
-      window.removeEventListener('resize', handleResize)
+      resizeObserver.disconnect()
       chart.remove()
     }
-  }, [name, data, displayType, color, height, scaleRanges])
+  }, [name, mainSeries, additionalSeries, priceLines, height, scaleRanges])
 
   return (
     <div className="mt-4">
