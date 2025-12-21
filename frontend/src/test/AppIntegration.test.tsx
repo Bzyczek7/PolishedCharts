@@ -57,8 +57,8 @@ describe('App Integration', () => {
     const alertsTab = screen.getByRole('tab', { name: /Alerts/i })
     await user.click(alertsTab)
     
-    await waitFor(() => {
-        expect(screen.getByText('Layouts')).toBeDefined()
+    await waitFor(async () => {
+        expect(await screen.findByText('Layouts')).toBeDefined()
     })
   })
 
@@ -76,12 +76,10 @@ describe('App Integration', () => {
     await user.click(alertsTab)
     
     // Wait for content
-    await waitFor(() => {
-        expect(screen.getByPlaceholderText('Layout name')).toBeDefined()
-    })
+    const input = await screen.findByPlaceholderText('Layout name')
+    expect(input).toBeDefined()
 
     // Create a layout first
-    const input = screen.getByPlaceholderText('Layout name')
     const saveButton = screen.getByText('Save')
     await user.type(input, 'Test')
     await user.click(saveButton)

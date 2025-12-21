@@ -37,21 +37,21 @@
  (Protocol in workflow.md)
 
 ## Phase 3: Watchlist Management & Real-time Visuals
-- [ ] Task: Write failing tests for Watchlist container rendering and "+ Add Symbol" button (Red Phase).
-- [ ] Task: Implement the Watchlist container with "+ Add Symbol" integration (Green Phase).
-- [ ] Task: Write failing tests for Watchlist empty state display (Red Phase).
-- [ ] Task: Implement "Add your first symbol" empty state (Green Phase).
-- [ ] Task: Write failing tests for Watchlist Item component with price flash animations (Red Phase).
-- [ ] Task: Develop Watchlist Item component with price flash animations (Green/Red) and connection status dots (Green Phase).
-- [ ] Task: Write failing tests for Drag-and-Drop reordering and localStorage persistence (Red Phase).
-- [ ] Task: Integrate Drag-and-Drop reordering for the watchlist with `localStorage` persistence (Green Phase).
-- [ ] Task: Write failing tests for Right-click Context Menu actions (Red Phase).
-- [ ] Task: Implement the Right-click Context Menu for Watchlist items (Green Phase).
-- [ ] Task: Write failing tests for Batch Selection mode and bulk removal (Red Phase).
-- [ ] Task: Add Batch Selection mode and bulk removal functionality (Green Phase).
-- [ ] Task: Write failing tests for sorting functionality (Symbol, Price %, Volume) (Red Phase).
-- [ ] Task: Implement sorting logic and verify tests pass (Green Phase).
-- [ ] Task: Write failing tests for Watchlist keyboard navigation (Arrow keys, Enter, Delete) (Red Phase).
+- [x] Task: Write failing tests for Watchlist container rendering and "+ Add Symbol" button (Red Phase). b2f6431
+- [x] Task: Implement the Watchlist container with "+ Add Symbol" integration (Green Phase). ac8fe3f
+- [x] Task: Write failing tests for Watchlist empty state display (Red Phase). ac8fe3f
+- [x] Task: Implement "Add your first symbol" empty state (Green Phase). ac8fe3f
+- [x] Task: Write failing tests for Watchlist Item component with price flash animations (Red Phase). ac8fe3f
+- [x] Task: Develop Watchlist Item component with price flash animations (Green/Red) and connection status dots (Green Phase). ac8fe3f
+- [x] Task: Write failing tests for Drag-and-Drop reordering and localStorage persistence (Red Phase). ac8fe3f
+- [x] Task: Integrate Drag-and-Drop reordering for the watchlist with `localStorage` persistence (Green Phase). ac8fe3f
+- [x] Task: Write failing tests for Right-click Context Menu actions (Red Phase). ac8fe3f
+- [x] Task: Implement the Right-click Context Menu for Watchlist items (Green Phase). ac8fe3f
+- [x] Task: Write failing tests for Batch Selection mode and bulk removal (Red Phase). ac8fe3f
+- [x] Task: Add Batch Selection mode and bulk removal functionality (Green Phase). 808ec77
+- [x] Task: Write failing tests for sorting functionality (Symbol, Price %, Volume) (Red Phase). 808ec77
+- [x] Task: Implement sorting logic and verify tests pass (Green Phase). 3ccc87a
+- [~] Task: Write failing tests for Watchlist keyboard navigation (Arrow keys, Enter, Delete) (Red Phase).
 - [ ] Task: Implement keyboard navigation for Watchlist (Green Phase).
 - [ ] Task: Conductor - User Manual Verification 'Watchlist Management & Real-time Visuals' (Protocol in workflow.md)
 

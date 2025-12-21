@@ -17,7 +17,8 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  DragEndEvent
+  TouchSensor,
+  type DragEndEvent
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -83,7 +84,7 @@ const WatchlistItem = ({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 1 : 0,
+    zIndex: isDragging ? 10 : 0,
     position: 'relative' as const,
     opacity: isDragging ? 0.5 : 1
   }
@@ -107,12 +108,21 @@ const WatchlistItem = ({
         <TableRow 
             ref={setNodeRef}
             style={style}
+            tabIndex={0}
             className={cn(
-                "border-slate-800 hover:bg-slate-800/50 cursor-pointer group transition-colors duration-500",
+                "border-slate-800 hover:bg-slate-800/50 cursor-pointer group transition-colors duration-500 focus:outline-none focus:bg-slate-800/70",
                 isDragging && "bg-slate-800/80",
                 isSelected && "bg-blue-500/10 hover:bg-blue-500/20"
             )}
             onClick={() => selectionMode ? onSelectChange(item.symbol, !isSelected) : onSelect(item.symbol)}
+            onKeyDown={(e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    onRemove(item.symbol)
+                }
+                if (e.key === 'Enter' && !selectionMode) {
+                    onSelect(item.symbol)
+                }
+            }}
         >
           <TableCell className="w-8 p-0 pl-2">
             <div className="flex items-center gap-2">
@@ -181,6 +191,12 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
             distance: 8,
         },
     }),
+    useSensor(TouchSensor, {
+        activationConstraint: {
+            delay: 250,
+            tolerance: 5,
+        },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
@@ -192,7 +208,9 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
     if (over && active.id !== over.id) {
       const oldIndex = items.findIndex((i) => i.symbol === active.id)
       const newIndex = items.findIndex((i) => i.symbol === over.id)
-      onReorder(arrayMove(items, oldIndex, newIndex))
+      if (onReorder) {
+        onReorder(arrayMove(items, oldIndex, newIndex))
+      }
       setSortField(null)
       setSortOrder(null)
     }

@@ -10,8 +10,7 @@ import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
 import type { Layout as LayoutType } from './components/LayoutManager'
 import IndicatorPane from './components/IndicatorPane'
-import { Button } from './components/ui/button'
-import { loadLayouts, saveLayouts } from './services/layoutService'
+import { loadLayouts, saveLayouts, loadWatchlist, saveWatchlist } from './services/layoutService'
 import { getCandles } from './api/candles'
 import type { Candle } from './api/candles'
 import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
@@ -21,16 +20,48 @@ function App() {
   const [symbol, setSymbol] = useState('IBM')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
-  const [watchlist, setWatchlist] = useState([
-    { symbol: 'IBM', price: 145.20, change: 1.50, changePercent: 1.04 }
-  ])
+  const [watchlist, setWatchlist] = useState(() => {
+    const symbols = loadWatchlist()
+    return symbols.map(s => {
+        // Deterministic-ish random values based on symbol string for initial load
+        const charSum = s.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const basePrice = 100 + (charSum % 200);
+        const change = (charSum % 10) - 5;
+        const changePercent = (change / basePrice) * 100;
+        
+        return {
+            symbol: s,
+            price: basePrice,
+            change: change,
+            changePercent: changePercent
+        }
+    })
+  })
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
+
+  const handleSymbolSelect = (newSymbol: string) => {
+    setSymbol(newSymbol)
+    setWatchlist(prev => {
+        if (prev.some(item => item.symbol === newSymbol)) return prev
+        // Add new mock item for the watchlist
+        return [...prev, {
+            symbol: newSymbol,
+            price: 150.00 + (Math.random() * 50),
+            change: (Math.random() * 4) - 2,
+            changePercent: (Math.random() * 2) - 1
+        }]
+    })
+  }
   
   const [candles, setCandles] = useState<Candle[]>([])
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
+
+  useEffect(() => {
+    saveWatchlist(watchlist.map(item => item.symbol))
+  }, [watchlist])
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -67,29 +98,17 @@ function App() {
     const fetchData = async () => {
         try {
             const [candleData, tdfi, crsi, adxvma] = await Promise.all([
-                getCandles(symbol).catch(err => {
-                    console.warn(`Failed to fetch candles for ${symbol}:`, err.message);
-                    return [];
-                }),
-                getTDFI(symbol).catch(err => {
-                    console.warn(`Failed to fetch TDFI for ${symbol}:`, err.message);
-                    return null;
-                }),
-                getcRSI(symbol).catch(err => {
-                    console.warn(`Failed to fetch cRSI for ${symbol}:`, err.message);
-                    return null;
-                }),
-                getADXVMA(symbol).catch(err => {
-                    console.warn(`Failed to fetch ADXVMA for ${symbol}:`, err.message);
-                    return null;
-                })
+                getCandles(symbol).catch(() => []),
+                getTDFI(symbol).catch(() => null),
+                getcRSI(symbol).catch(() => null),
+                getADXVMA(symbol).catch(() => null)
             ])
             setCandles(candleData)
             setTdfiData(tdfi)
             setCrsiData(crsi)
             setAdxvmaData(adxvma)
         } catch (e) {
-            console.error('Unexpected error in fetchData', e)
+            console.error('Failed to fetch data', e)
         }
     }
     fetchData()
@@ -133,11 +152,19 @@ function App() {
     }
   }
 
-  const formatDataForChart = (timestamps: string[], values: (number | null)[]) => {
-    const formatted = values.map((v, i) => ({
-        time: Math.floor(new Date(timestamps[i]).getTime() / 1000) as any,
-        value: v ?? 0
-    }))
+  const formatDataForChart = (timestamps: string[] | undefined, values: (number | null)[] | undefined) => {
+    if (!timestamps || !values || timestamps.length === 0) return []
+    
+    const formatted = values.map((v, i) => {
+        const ts = timestamps[i];
+        if (!ts) return null;
+        const time = Math.floor(new Date(ts).getTime() / 1000);
+        if (isNaN(time)) return null;
+        return {
+            time: time as any,
+            value: v ?? 0
+        };
+    }).filter((item): item is { time: any; value: number } => item !== null);
     
     const sorted = formatted.sort((a, b) => a.time - b.time)
     return sorted.filter((item, index, arr) => 
@@ -179,7 +206,7 @@ function App() {
         <SymbolSearch 
             open={isSearchOpen} 
             onOpenChange={setIsSearchOpen} 
-            onSelect={setSymbol} 
+            onSelect={handleSymbolSelect} 
         />
 
         <IndicatorSearch 
@@ -193,14 +220,14 @@ function App() {
             <ChartComponent 
                 symbol={symbol} 
                 candles={candles}
-                overlays={activeLayout?.activeIndicators.includes('adxvma') && adxvmaData ? [
+                overlays={activeLayout?.activeIndicators?.includes('adxvma') && adxvmaData ? [
                     { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
                 ] : []}
             />
           </div>
           
           <div className="flex flex-col gap-4 overflow-auto pb-4 max-h-[40%] shrink-0">
-            {activeLayout?.activeIndicators.includes('tdfi') && tdfiData && (
+            {activeLayout?.activeIndicators?.includes('tdfi') && tdfiData && (
                 <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
                     <IndicatorPane 
                         name="TDFI" 
@@ -212,7 +239,7 @@ function App() {
                 </div>
             )}
 
-            {activeLayout?.activeIndicators.includes('crsi') && crsiData && (
+            {activeLayout?.activeIndicators?.includes('crsi') && crsiData && (
                 <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
                     <IndicatorPane 
                         name="cRSI" 
