@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Toolbar from './components/Toolbar'
 import SymbolSearch from './components/SymbolSearch'
 import IndicatorSearch from './components/IndicatorSearch'
+import Watchlist from './components/Watchlist'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
@@ -20,6 +21,9 @@ function App() {
   const [symbol, setSymbol] = useState('IBM')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
+  const [watchlist, setWatchlist] = useState([
+    { symbol: 'IBM', price: 145.20, change: 1.50, changePercent: 1.04 }
+  ])
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   
@@ -144,9 +148,12 @@ function App() {
   return (
     <Layout
         watchlistContent={
-            <div className="space-y-4">
-                <p className="text-slate-400 text-sm">Watchlist symbols will appear here.</p>
-            </div>
+            <Watchlist 
+                items={watchlist}
+                onAddClick={() => setIsSearchOpen(true)}
+                onRemove={(s) => setWatchlist(prev => prev.filter(item => item.symbol !== s))}
+                onSelect={setSymbol}
+            />
         }
         alertsContent={
             <div className="space-y-8">
