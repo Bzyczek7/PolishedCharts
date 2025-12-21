@@ -78,8 +78,8 @@
 - [x] Task: Write failing tests for Fullscreen Toggle functionality (Red Phase). 7132355
 - [x] Task: Implement Fullscreen Toggle using the browser Fullscreen API (Green Phase). 7132355
 - [x] Task: Implement advanced indicator visualizations (signal lines, reference bands) and handle null data points correctly (Green Phase). 7132355
-- [ ] Task: Write failing tests for hover tooltips on watchlist items (Red Phase).
-- [ ] Task: Finalize visual palette (high-contrast dark mode) and add hover tooltips for all data points (Green Phase).
-- [ ] Task: Verify overall test coverage meets >80% requirement.
-- [ ] Task: Run full integration test suite across all phases.
-- [ ] Task: Conductor - User Manual Verification 'Chart Refinement & Fullscreen API' (Protocol in workflow.md)
+- [x] Task: Write failing tests for hover tooltips on watchlist items (Red Phase). 7132355
+- [x] Task: Finalize visual palette (high-contrast dark mode) and add hover tooltips for all data points (Green Phase). 7132355
+- [x] Task: Verify overall test coverage meets >80% requirement. 7132355
+- [x] Task: Run full integration test suite across all phases. 7132355
+- [x] Task: Conductor - User Manual Verification 'Chart Refinement & Fullscreen API' (Protocol in workflow.md)
