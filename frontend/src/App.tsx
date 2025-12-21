@@ -5,6 +5,8 @@ import Toolbar from './components/Toolbar'
 import SymbolSearch from './components/SymbolSearch'
 import IndicatorSearch from './components/IndicatorSearch'
 import Watchlist from './components/Watchlist'
+import AlertsList from './components/AlertsList'
+import type { Alert } from './components/AlertsList'
 import ChartComponent from './components/ChartComponent'
 import AlertForm from './components/AlertForm'
 import LayoutManager from './components/LayoutManager'
@@ -37,6 +39,9 @@ function App() {
         }
     })
   })
+  const [alerts, setAlerts] = useState<Alert[]>([
+    { id: '1', symbol: 'IBM', condition: 'price_above', threshold: 150.00, status: 'active', createdAt: new Date().toISOString() }
+  ])
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
 
@@ -191,6 +196,15 @@ function App() {
                     onLayoutSave={handleLayoutSave}
                     savedLayouts={layouts}
                 />
+                <div className="space-y-4">
+                    <h3 className="text-lg font-semibold text-white">Monitoring</h3>
+                    <AlertsList 
+                        alerts={alerts}
+                        onToggleMute={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: a.status === 'muted' ? 'active' : 'muted' } : a))}
+                        onDelete={(id) => setAlerts(prev => prev.filter(a => a.id !== id))}
+                        onSelect={setSymbol}
+                    />
+                </div>
                 <AlertForm symbolId={1} />
             </div>
         }
