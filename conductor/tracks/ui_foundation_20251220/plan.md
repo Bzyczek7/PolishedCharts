@@ -11,15 +11,15 @@
 - [x] Task: Conductor - User Manual Verification 'Layout Shell & Sidebar Foundation' (Protocol in workflow.md)
 
 ## Phase 2: Top Toolbar & Command Palettes
-- [ ] Task: Write failing tests for Top Toolbar component rendering (Red Phase).
-- [ ] Task: Create the Top Toolbar component with placeholders for all selectors (Green Phase).
-- [ ] Task: Write failing tests for Symbol Search Command Palette trigger and modal opening (Red Phase).
-- [ ] Task: Implement Symbol Search Command Palette (`Ctrl+K`) using Shadcn `Command` component (Green Phase).
-- [ ] Task: Write failing tests for fuzzy search filtering and keyboard navigation (Red Phase).
-- [ ] Task: Implement fuzzy search logic with mock symbol data and keyboard navigation (Green Phase).
-- [ ] Task: Write failing tests for Indicators Command Palette trigger and categorization (Red Phase).
-- [ ] Task: Implement Indicators Selector Command Palette (`Ctrl+I`) with categorization (Green Phase).
-- [ ] Task: Write failing tests for Timeframe selector state and Chart Style dropdown (Red Phase).
+- [x] Task: Write failing tests for Top Toolbar component rendering (Red Phase). b2f6431
+- [x] Task: Create the Top Toolbar component with placeholders for all selectors (Green Phase). 42d2ab8
+- [x] Task: Write failing tests for Symbol Search Command Palette trigger and modal opening (Red Phase). b2f6431
+- [x] Task: Implement Symbol Search Command Palette (`Ctrl+K`) using Shadcn `Command` component (Green Phase). 0b16a59
+- [x] Task: Write failing tests for fuzzy search filtering and keyboard navigation (Red Phase). 0b16a59
+- [x] Task: Implement fuzzy search logic with mock symbol data and keyboard navigation (Green Phase). 0b16a59
+- [x] Task: Write failing tests for Indicators Command Palette trigger and categorization (Red Phase). b2f6431
+- [x] Task: Implement Indicators Selector Command Palette (`Ctrl+I`) with categorization (Green Phase). 5bbb7e8
+- [~] Task: Write failing tests for Timeframe selector state and Chart Style dropdown (Red Phase).
 - [ ] Task: Implement Timeframe and Chart Style selectors (Dropdowns) (Green Phase).
 - [ ] Task: Conductor - User Manual Verification 'Top Toolbar & Command Palettes' (Protocol in workflow.md)
 

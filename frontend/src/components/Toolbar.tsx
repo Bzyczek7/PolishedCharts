@@ -28,6 +28,12 @@ const Toolbar = ({
         data-testid="top-toolbar"
         className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg w-full h-12"
     >
+      <div className="flex items-center px-3 mr-2">
+        <span className="text-sm font-bold tracking-tighter text-blue-500">TradingAlert</span>
+      </div>
+
+      <Separator orientation="vertical" className="mx-1 h-6 bg-slate-800" />
+
       {/* Symbol Search Trigger */}
       <Button 
         variant="ghost" 
@@ -70,13 +76,13 @@ const Toolbar = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="bg-slate-900 border-slate-800 text-slate-300">
-          <DropdownMenuItem className="hover:bg-slate-800">
+          <DropdownMenuItem className="hover:bg-slate-800" data-testid="chart-style-item-candles">
             <TrendingUp className="mr-2 h-4 w-4" /> Candlesticks
           </DropdownMenuItem>
-          <DropdownMenuItem className="hover:bg-slate-800">
+          <DropdownMenuItem className="hover:bg-slate-800" data-testid="chart-style-item-line">
             <BarChart3 className="mr-2 h-4 w-4" /> Line
           </DropdownMenuItem>
-          <DropdownMenuItem className="hover:bg-slate-800">
+          <DropdownMenuItem className="hover:bg-slate-800" data-testid="chart-style-item-heikin">
             <Waves className="mr-2 h-4 w-4" /> Heikin-Ashi
           </DropdownMenuItem>
         </DropdownMenuContent>

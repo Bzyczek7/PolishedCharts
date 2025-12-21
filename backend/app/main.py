@@ -21,7 +21,7 @@ async def startup_event():
     
     app.state.poller = DataPoller(
         alpha_vantage_service=av_service,
-        symbols=["IBM"],
+        symbols=["IBM", "AAPL", "BTC/USD", "TSLA", "MSFT", "GOOGL", "AMZN", "NVDA"],
         db_session_factory=AsyncSessionLocal,
         alert_engine=engine,
         interval=3600

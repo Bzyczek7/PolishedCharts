@@ -86,8 +86,11 @@ describe('App Integration', () => {
     await user.type(input, 'Test')
     await user.click(saveButton)
 
-    const tdfiButton = screen.getByRole('button', { name: /tdfi/i })
-    await user.click(tdfiButton)
+    const indicatorsButton = screen.getByRole('button', { name: /Indicators/i })
+    await user.click(indicatorsButton)
+    
+    const tdfiOption = await screen.findByText('TDFI')
+    await user.click(tdfiOption)
     
     await waitFor(() => {
         expect(screen.getByTestId('indicator-pane-TDFI')).toBeDefined()

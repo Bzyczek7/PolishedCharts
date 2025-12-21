@@ -63,17 +63,29 @@ function App() {
     const fetchData = async () => {
         try {
             const [candleData, tdfi, crsi, adxvma] = await Promise.all([
-                getCandles(symbol),
-                getTDFI(symbol),
-                getcRSI(symbol),
-                getADXVMA(symbol)
+                getCandles(symbol).catch(err => {
+                    console.warn(`Failed to fetch candles for ${symbol}:`, err.message);
+                    return [];
+                }),
+                getTDFI(symbol).catch(err => {
+                    console.warn(`Failed to fetch TDFI for ${symbol}:`, err.message);
+                    return null;
+                }),
+                getcRSI(symbol).catch(err => {
+                    console.warn(`Failed to fetch cRSI for ${symbol}:`, err.message);
+                    return null;
+                }),
+                getADXVMA(symbol).catch(err => {
+                    console.warn(`Failed to fetch ADXVMA for ${symbol}:`, err.message);
+                    return null;
+                })
             ])
             setCandles(candleData)
             setTdfiData(tdfi)
             setCrsiData(crsi)
             setAdxvmaData(adxvma)
         } catch (e) {
-            console.error('Failed to fetch data', e)
+            console.error('Unexpected error in fetchData', e)
         }
     }
     fetchData()

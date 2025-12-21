@@ -21,6 +21,13 @@ vi.mock('lightweight-charts', () => ({
 }))
 
 test('renders tradingalert heading', () => {
+
   render(<App />)
-  expect(screen.getByText(/TradingAlert/i)).toBeDefined()
+
+  expect(screen.queryAllByText(/TradingAlert/i).length).toBeGreaterThan(0)
+
 })
+
+
+
+
