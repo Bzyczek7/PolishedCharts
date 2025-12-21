@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react"
-import { Plus, Trash2, GripVertical, Search, Bell, Check } from "lucide-react"
+import { Plus, Trash2, GripVertical, Search, Bell, Check, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -49,6 +49,9 @@ interface WatchlistProps {
   onSelect: (symbol: string) => void
   onReorder: (items: WatchlistItemData[]) => void
 }
+
+type SortField = 'symbol' | 'price' | 'changePercent'
+type SortOrder = 'asc' | 'desc' | null
 
 const WatchlistItem = ({ 
     item, 
@@ -169,6 +172,8 @@ const WatchlistItem = ({
 const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: WatchlistProps) => {
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([])
   const [selectionMode, setSelectionMode] = useState(false)
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortOrder, setSortOrder] = useState<SortOrder>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -188,6 +193,8 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
       const oldIndex = items.findIndex((i) => i.symbol === active.id)
       const newIndex = items.findIndex((i) => i.symbol === over.id)
       onReorder(arrayMove(items, oldIndex, newIndex))
+      setSortField(null)
+      setSortOrder(null)
     }
   }
 
@@ -210,6 +217,35 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
     onRemove(selectedSymbols)
     setSelectedSymbols([])
     setSelectionMode(false)
+  }
+
+  const toggleSort = (field: SortField) => {
+    let newOrder: SortOrder = 'asc'
+    if (sortField === field) {
+        if (sortOrder === 'asc') newOrder = 'desc'
+        else if (sortOrder === 'desc') newOrder = null
+    }
+    
+    setSortField(newOrder ? field : null)
+    setSortOrder(newOrder)
+
+    if (newOrder) {
+        const sorted = [...items].sort((a, b) => {
+            const valA = a[field]
+            const valB = b[field]
+            if (valA < valB) return newOrder === 'asc' ? -1 : 1
+            if (valA > valB) return newOrder === 'asc' ? 1 : -1
+            return 0
+        })
+        onReorder(sorted)
+    }
+  }
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return <ArrowUpDown className="ml-1 h-3 w-3 opacity-0 group-hover:opacity-50" />
+    if (sortOrder === 'asc') return <ChevronUp className="ml-1 h-3 w-3 text-blue-400" />
+    if (sortOrder === 'desc') return <ChevronDown className="ml-1 h-3 w-3 text-blue-400" />
+    return <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />
   }
 
   return (
@@ -281,9 +317,30 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
               <TableHeader className="hover:bg-transparent">
                 <TableRow className="border-slate-800 hover:bg-transparent">
                   <TableHead className={cn("w-8", selectionMode && "w-16")}></TableHead>
-                  <TableHead className="text-xs font-medium text-slate-500">Symbol</TableHead>
-                  <TableHead className="text-right text-xs font-medium text-slate-500">Last</TableHead>
-                  <TableHead className="text-right text-xs font-medium text-slate-500">Chg%</TableHead>
+                  <TableHead 
+                    className="text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-300 group transition-colors"
+                    onClick={() => toggleSort('symbol')}
+                  >
+                    <div className="flex items-center">
+                        Symbol <SortIcon field="symbol" />
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="text-right text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-300 group transition-colors"
+                    onClick={() => toggleSort('price')}
+                  >
+                    <div className="flex items-center justify-end">
+                        Last <SortIcon field="price" />
+                    </div>
+                  </TableHead>
+                  <TableHead 
+                    className="text-right text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-300 group transition-colors"
+                    onClick={() => toggleSort('changePercent')}
+                  >
+                    <div className="flex items-center justify-end">
+                        Chg% <SortIcon field="changePercent" />
+                    </div>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
