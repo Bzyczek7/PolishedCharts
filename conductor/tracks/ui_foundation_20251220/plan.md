@@ -55,7 +55,7 @@
 - [x] Task: Implement keyboard navigation for Watchlist (Green Phase). 6e28e8b
 - [x] Task: Conductor - User Manual Verification 'Watchlist Management & Real-time Visuals'
 
-## Phase 4: Alerts Monitoring & Chart Interaction
+## Phase 4: Alerts Monitoring & Chart Interaction [checkpoint: 6c7391e]
 - [x] Task: Write failing tests for Alerts list component with status filtering and search (Red Phase). b2f6431
 - [x] Task: Create the Alerts list component with status filtering (Active, Triggered, etc.) and search (Green Phase). ccd8c9d
 - [x] Task: Write failing tests for Alerts empty state display (Red Phase). ccd8c9d
@@ -68,9 +68,9 @@
 - [x] Task: Implement inline management quick-action buttons (Green Phase). ccd8c9d
 - [x] Task: Write failing tests for notification badges and pulse animations (Red Phase). ccd8c9d
 - [x] Task: Add notification badges to sidebar icons and pulse animations for new triggers (Green Phase). 554dd4d
-- [~] Task: Write failing tests for Alert keyboard shortcuts (M, E, Del) (Red Phase).
-- [ ] Task: Implement keyboard shortcuts for alert management (Green Phase).
-- [ ] Task: Conductor - User Manual Verification 'Alerts Monitoring & Chart Interaction' (Protocol in workflow.md)
+- [x] Task: Write failing tests for Alert keyboard shortcuts (M, E, Del) (Red Phase). 6c7391e
+- [x] Task: Implement keyboard shortcuts for alert management (Green Phase). 6c7391e
+- [x] Task: Conductor - User Manual Verification 'Alerts Monitoring & Chart Interaction'
 
 ## Phase 5: Chart Refinement & Fullscreen API
 - [ ] Task: Write failing tests for ChartComponent responsiveness to sidebar width changes (Red Phase).
