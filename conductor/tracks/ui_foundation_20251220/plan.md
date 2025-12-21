@@ -10,18 +10,31 @@
 - [x] Task: Implement localStorage persistence for sidebar state (width, collapsed state, active tab) (Green Phase). b58aaff
 - [x] Task: Conductor - User Manual Verification 'Layout Shell & Sidebar Foundation' (Protocol in workflow.md)
 
-## Phase 2: Top Toolbar & Command Palettes
+## Phase 2: Top Toolbar & Command Palettes [checkpoint: 80fdf97]
+
 - [x] Task: Write failing tests for Top Toolbar component rendering (Red Phase). b2f6431
+
 - [x] Task: Create the Top Toolbar component with placeholders for all selectors (Green Phase). 42d2ab8
+
 - [x] Task: Write failing tests for Symbol Search Command Palette trigger and modal opening (Red Phase). b2f6431
+
 - [x] Task: Implement Symbol Search Command Palette (`Ctrl+K`) using Shadcn `Command` component (Green Phase). 0b16a59
+
 - [x] Task: Write failing tests for fuzzy search filtering and keyboard navigation (Red Phase). 0b16a59
+
 - [x] Task: Implement fuzzy search logic with mock symbol data and keyboard navigation (Green Phase). 0b16a59
+
 - [x] Task: Write failing tests for Indicators Command Palette trigger and categorization (Red Phase). b2f6431
+
 - [x] Task: Implement Indicators Selector Command Palette (`Ctrl+I`) with categorization (Green Phase). 5bbb7e8
-- [~] Task: Write failing tests for Timeframe selector state and Chart Style dropdown (Red Phase).
-- [ ] Task: Implement Timeframe and Chart Style selectors (Dropdowns) (Green Phase).
-- [ ] Task: Conductor - User Manual Verification 'Top Toolbar & Command Palettes' (Protocol in workflow.md)
+
+- [x] Task: Write failing tests for Timeframe selector state and Chart Style dropdown (Red Phase). 80fdf97
+
+- [x] Task: Implement Timeframe and Chart Style selectors (Dropdowns) (Green Phase). 80fdf97
+
+- [x] Task: Conductor - User Manual Verification 'Top Toolbar & Command Palettes'
+
+ (Protocol in workflow.md)
 
 ## Phase 3: Watchlist Management & Real-time Visuals
 - [ ] Task: Write failing tests for Watchlist container rendering and "+ Add Symbol" button (Red Phase).
