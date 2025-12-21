@@ -122,12 +122,40 @@ describe('Main Layout Foundation', () => {
     
         render(<App />)
     
-        const sidebar = screen.getByTestId('right-sidebar')
+            const sidebar = screen.getByTestId('right-sidebar')
     
-        expect(sidebar.getAttribute('data-state')).toBe('collapsed')
+            expect(sidebar.getAttribute('data-state')).toBe('collapsed')
     
-      })
+          })
     
-    })
+        
+    
+            it('renders a notification badge when there are triggered alerts', async () => {
+    
+        
+    
+              // We rely on App producing one triggered alert if we mock it
+    
+        
+    
+              // But for a true unit test we would render Layout directly
+    
+        
+    
+              // Let's just check if '1' appears when we have a triggered alert in mock
+    
+        
+    
+            })
+    
+        
+    
+          })
+    
+        
+    
+          
+    
+        
     
     

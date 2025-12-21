@@ -10,17 +10,9 @@ describe('AlertForm', () => {
     vi.clearAllMocks()
   })
 
-  it('submits correctly', async () => {
-    vi.mocked(createAlert).mockResolvedValueOnce({
-      id: 1,
-      symbol_id: 1,
-      condition: 'price_above',
-      threshold: 150,
-      is_active: true,
-      created_at: '2023-10-27T12:00:00'
-    })
-
-    render(<AlertForm symbolId={1} />)
+  test('submits correctly', async () => {
+    vi.mocked(createAlert).mockResolvedValueOnce({ id: 1, symbol_id: 1, condition: 'price_above', threshold: 150, is_active: true } as any)
+    render(<AlertForm symbol="IBM" />)
 
     fireEvent.change(screen.getByLabelText(/Threshold Price/i), { target: { value: '150' } })
     fireEvent.click(screen.getByRole('button', { name: /Create Alert/i }))
@@ -46,7 +38,7 @@ describe('AlertForm', () => {
       created_at: '2023-10-27T12:00:00'
     })
 
-    render(<AlertForm symbolId={1} />)
+    render(<AlertForm symbol="IBM" />)
 
     fireEvent.change(screen.getByLabelText(/Condition/i), { target: { value: 'crsi_band_cross' } })
     fireEvent.click(screen.getByRole('button', { name: /Create Alert/i }))
@@ -63,7 +55,7 @@ describe('AlertForm', () => {
   it('handles submission error', async () => {
     vi.mocked(createAlert).mockRejectedValueOnce(new Error('API Error'))
     
-    render(<AlertForm symbolId={1} />)
+    render(<AlertForm symbol="IBM" />)
     
     fireEvent.change(screen.getByLabelText(/Threshold Price/i), { target: { value: '100' } })
     fireEvent.click(screen.getByRole('button', { name: /Create Alert/i }))

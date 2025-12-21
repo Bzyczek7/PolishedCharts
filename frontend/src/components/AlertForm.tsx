@@ -2,11 +2,11 @@ import React, { useState } from 'react'
 import { createAlert } from '../api/alerts'
 
 interface AlertFormProps {
-  symbolId: number
-  onAlertCreated?: () => void
+  symbol: string
+  onAlertCreated?: (alert: any) => void
 }
 
-const AlertForm = ({ symbolId, onAlertCreated }: AlertFormProps) => {
+const AlertForm = ({ symbol, onAlertCreated }: AlertFormProps) => {
   const [condition, setCondition] = useState('price_above')
   const [threshold, setThreshold] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -17,15 +17,29 @@ const AlertForm = ({ symbolId, onAlertCreated }: AlertFormProps) => {
     setIsSubmitting(true)
     setMessage('')
 
+    const thresholdVal = condition === 'crsi_band_cross' ? 0 : parseFloat(threshold);
+
     try {
-      await createAlert({
-        symbol_id: symbolId,
+      // In a real app we'd wait for API response with ID
+      // For now we'll simulate the created alert object
+      const newAlert = {
+        id: Math.random().toString(36).substr(2, 9),
+        symbol: symbol,
         condition,
-        threshold: condition === 'crsi_band_cross' ? 0 : parseFloat(threshold),
+        threshold: thresholdVal,
+        status: 'active',
+        createdAt: new Date().toISOString()
+      };
+
+      await createAlert({
+        symbol_id: 1, // Mock ID for backend
+        condition,
+        threshold: thresholdVal,
       })
+      
       setMessage('Alert created successfully!')
       setThreshold('')
-      if (onAlertCreated) onAlertCreated()
+      if (onAlertCreated) onAlertCreated(newAlert)
     } catch (error) {
       console.error('Error creating alert:', error)
       setMessage('Failed to create alert.')

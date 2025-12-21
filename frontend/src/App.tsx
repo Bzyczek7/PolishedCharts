@@ -206,9 +206,13 @@ function App() {
                         onToggleMute={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: a.status === 'muted' ? 'active' : 'muted' } : a))}
                         onDelete={(id) => setAlerts(prev => prev.filter(a => a.id !== id))}
                         onSelect={setSymbol}
+                        onTriggerDemo={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'triggered' } : a))}
                     />
                 </div>
-                <AlertForm symbolId={1} />
+                <AlertForm 
+                    symbol={symbol} 
+                    onAlertCreated={(newAlert) => setAlerts(prev => [newAlert, ...prev])} 
+                />
             </div>
         }
     >
