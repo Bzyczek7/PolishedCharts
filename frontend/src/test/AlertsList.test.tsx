@@ -67,4 +67,69 @@ describe('Alerts List Rendering and Filtering', () => {
     
     expect(onToggleMute).toHaveBeenCalledWith('1')
   })
+
+  it('calls onDelete when Delete key is pressed', async () => {
+    const onDelete = vi.fn()
+    render(<AlertsList alerts={mockAlerts} onToggleMute={vi.fn()} onDelete={onDelete} onSelect={vi.fn()} />)
+    
+    const alertItem = screen.getByText('IBM').closest('div[tabindex="0"]')!
+    fireEvent.keyDown(alertItem, { key: 'Delete' })
+    
+    expect(onDelete).toHaveBeenCalledWith('1')
+  })
+
+  it('calls onSelect when Enter key is pressed', async () => {
+    const onSelect = vi.fn()
+    render(<AlertsList alerts={mockAlerts} onToggleMute={vi.fn()} onDelete={vi.fn()} onSelect={onSelect} />)
+    
+    const alertItem = screen.getByText('IBM').closest('div[tabindex="0"]')!
+    fireEvent.keyDown(alertItem, { key: 'Enter' })
+    
+    expect(onSelect).toHaveBeenCalledWith('IBM')
+  })
+
+  it('filters alerts by search text', async () => {
+    render(<AlertsList alerts={mockAlerts} onToggleMute={vi.fn()} onDelete={vi.fn()} onSelect={vi.fn()} />)
+    
+    const searchInput = screen.getByPlaceholderText(/Filter alerts.../i)
+    fireEvent.change(searchInput, { target: { value: 'AAPL' } })
+    
+    expect(screen.queryByText('IBM')).toBeNull()
+    expect(screen.getByText('AAPL')).toBeDefined()
+  })
+
+  it('expands an alert row when clicked and shows history/statistics', async () => {
+    const mockAlertsWithHistory: any[] = [
+      { 
+        id: '1', 
+        symbol: 'IBM', 
+        condition: 'price_above', 
+        threshold: 150, 
+        status: 'active', 
+        createdAt: new Date().toISOString(),
+        history: [
+            { timestamp: new Date().toISOString(), price: 151 }
+        ],
+        statistics: {
+            triggerCount24h: 5,
+            lastTriggered: new Date().toISOString()
+        }
+      }
+    ]
+    
+    render(<AlertsList alerts={mockAlertsWithHistory} onToggleMute={vi.fn()} onDelete={vi.fn()} onSelect={vi.fn()} />)
+    
+    const alertItem = screen.getByText('IBM').closest('div[tabindex="0"]')!
+    
+    // Initially history should not be visible
+    expect(screen.queryByText(/Trigger History/i)).toBeNull()
+    
+    // Click to expand
+    fireEvent.click(alertItem)
+    
+    // Now history and statistics should be visible
+    expect(screen.getByText(/Trigger History/i)).toBeDefined()
+    expect(screen.getByText(/Trigger count \(24h\)/i)).toBeDefined()
+    expect(screen.getByText('5')).toBeDefined()
+  })
 })

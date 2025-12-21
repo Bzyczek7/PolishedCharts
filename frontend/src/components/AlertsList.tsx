@@ -18,6 +18,11 @@ export interface Alert {
   threshold: number
   status: 'active' | 'triggered' | 'muted'
   createdAt: string
+  history?: { timestamp: string; price: number }[]
+  statistics?: {
+    triggerCount24h: number
+    lastTriggered?: string
+  }
 }
 
 interface AlertsListProps {
@@ -31,6 +36,7 @@ interface AlertsListProps {
 const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }: AlertsListProps) => {
   const [filter, setFilter] = useState<'all' | 'active' | 'triggered'>('all')
   const [search, setSearch] = useState('')
+  const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null)
 
   const filteredAlerts = alerts.filter(alert => {
     const matchesFilter = filter === 'all' || alert.status === filter
@@ -84,6 +90,7 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
               <ContextMenuTrigger asChild>
                 <div 
                   tabIndex={0}
+                  onClick={() => setExpandedAlertId(expandedAlertId === alert.id ? null : alert.id)}
                   onKeyDown={(e) => {
                     if (e.key.toLowerCase() === 'm') {
                         onToggleMute(alert.id)
@@ -95,7 +102,10 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                         onSelect(alert.symbol)
                     }
                   }}
-                  className="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3 group hover:border-slate-700 transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                  className={cn(
+                    "bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3 group hover:border-slate-700 transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer",
+                    expandedAlertId === alert.id && "border-blue-500/50 bg-slate-900/80"
+                  )}
                 >
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -139,6 +149,42 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                       </Button>
                     </div>
                   </div>
+                  
+                  {expandedAlertId === alert.id && (
+                    <div className="pt-2 border-t border-slate-800/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                      {alert.statistics && (
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div className="bg-slate-950/50 p-1.5 rounded border border-slate-800/50">
+                            <p className="text-slate-500 uppercase font-semibold mb-0.5">Trigger count (24h)</p>
+                            <p className="text-slate-300">{alert.statistics.triggerCount24h}</p>
+                          </div>
+                          <div className="bg-slate-950/50 p-1.5 rounded border border-slate-800/50">
+                            <p className="text-slate-500 uppercase font-semibold mb-0.5">Last triggered</p>
+                            <p className="text-slate-300">
+                              {alert.statistics.lastTriggered 
+                                ? new Date(alert.statistics.lastTriggered).toLocaleTimeString() 
+                                : 'Never'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {alert.history && alert.history.length > 0 && (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] text-slate-500 uppercase font-semibold">Trigger History</p>
+                          <div className="space-y-1 max-h-24 overflow-auto pr-1">
+                            {alert.history.map((h, i) => (
+                              <div key={i} className="flex justify-between text-[10px] py-1 border-b border-slate-800/30 last:border-0">
+                                <span className="text-slate-400">{new Date(h.timestamp).toLocaleString()}</span>
+                                <span className="text-slate-200 font-mono">${h.price}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="text-[10px] text-slate-600 flex justify-between items-center">
                     <span>Created {new Date(alert.createdAt).toLocaleDateString()}</span>
                   </div>
