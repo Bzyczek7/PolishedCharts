@@ -60,7 +60,7 @@ const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 
           isSidebarOpen ? "w-[350px]" : "w-[56px]"
         }`}
       >
-        <Tabs defaultValue="watchlist" className="flex flex-col w-full h-full">
+        <Tabs defaultValue="watchlist" className="flex flex-row w-full h-full">
           {/* Sidebar Navigation (Icon Strip) */}
           <div className="flex flex-col items-center py-4 border-r border-slate-800 w-[56px] shrink-0">
             <TabsList className="flex flex-col h-auto bg-transparent gap-4">
@@ -105,13 +105,15 @@ const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 
           {/* Sidebar Content */}
           {isSidebarOpen && (
             <div className="flex-1 flex flex-col min-w-0">
-              <TabsContent value="watchlist" className="flex-1 m-0 p-4 overflow-auto">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">Watchlist</h2>
-                {watchlistContent}
+              <TabsContent value="watchlist" className="flex-1 m-0 p-4 min-h-0 overflow-hidden">
+                <div className="h-full w-full flex flex-col items-stretch justify-start">
+                    {watchlistContent}
+                </div>
               </TabsContent>
-              <TabsContent value="alerts" className="flex-1 m-0 p-4 overflow-auto">
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4">Alerts</h2>
-                {alertsContent}
+              <TabsContent value="alerts" className="flex-1 m-0 p-4 min-h-0 overflow-hidden">
+                <div className="h-full w-full flex flex-col items-stretch justify-start">
+                    {alertsContent}
+                </div>
               </TabsContent>
             </div>
           )}

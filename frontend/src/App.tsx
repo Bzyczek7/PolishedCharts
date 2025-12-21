@@ -7,12 +7,11 @@ import IndicatorSearch from './components/IndicatorSearch'
 import Watchlist from './components/Watchlist'
 import AlertsList from './components/AlertsList'
 import type { Alert } from './components/AlertsList'
+import AlertsView from './components/AlertsView'
 import ChartComponent from './components/ChartComponent'
-import AlertForm from './components/AlertForm'
-import LayoutManager from './components/LayoutManager'
-import type { Layout as LayoutType } from './components/LayoutManager'
+import type { Layout as LayoutType } from './components/Toolbar'
 import IndicatorPane from './components/IndicatorPane'
-import { loadLayouts, saveLayouts, loadWatchlist, saveWatchlist } from './services/layoutService'
+import { loadLayouts, saveLayouts, loadWatchlist, saveWatchlist, loadAlerts, saveAlerts } from './services/layoutService'
 import { getCandles } from './api/candles'
 import type { Candle } from './api/candles'
 import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
@@ -39,9 +38,7 @@ function App() {
         }
     })
   })
-  const [alerts, setAlerts] = useState<Alert[]>([
-    { id: '1', symbol: 'IBM', condition: 'price_above', threshold: 150.00, status: 'active', createdAt: new Date().toISOString() }
-  ])
+  const [alerts, setAlerts] = useState<Alert[]>(() => loadAlerts())
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
 
@@ -67,6 +64,10 @@ function App() {
   useEffect(() => {
     saveWatchlist(watchlist.map(item => item.symbol))
   }, [watchlist])
+
+  useEffect(() => {
+    saveAlerts(alerts)
+  }, [alerts])
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -161,13 +162,14 @@ function App() {
     if (!timestamps || !values || timestamps.length === 0) return []
     
     const formatted = values.map((v, i) => {
+        if (v === null || v === undefined) return null;
         const ts = timestamps[i];
         if (!ts) return null;
         const time = Math.floor(new Date(ts).getTime() / 1000);
         if (isNaN(time)) return null;
         return {
             time: time as any,
-            value: v ?? 0
+            value: v
         };
     }).filter((item): item is { time: any; value: number } => item !== null);
     
@@ -178,6 +180,18 @@ function App() {
   }
 
   const triggeredCount = alerts.filter(a => a.status === 'triggered').length
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+  }
 
   return (
     <Layout
@@ -192,28 +206,15 @@ function App() {
             />
         }
         alertsContent={
-            <div className="space-y-8">
-                <LayoutManager 
-                    activeLayout={activeLayout}
-                    onLayoutSelect={setActiveLayout}
-                    onLayoutSave={handleLayoutSave}
-                    savedLayouts={layouts}
-                />
-                <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Monitoring</h3>
-                    <AlertsList 
-                        alerts={alerts}
-                        onToggleMute={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: a.status === 'muted' ? 'active' : 'muted' } : a))}
-                        onDelete={(id) => setAlerts(prev => prev.filter(a => a.id !== id))}
-                        onSelect={setSymbol}
-                        onTriggerDemo={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'triggered' } : a))}
-                    />
-                </div>
-                <AlertForm 
-                    symbol={symbol} 
-                    onAlertCreated={(newAlert) => setAlerts(prev => [newAlert, ...prev])} 
-                />
-            </div>
+            <AlertsView
+                alerts={alerts}
+                symbol={symbol}
+                onToggleMute={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: a.status === 'muted' ? 'active' : 'muted' } : a))}
+                onDelete={(id) => setAlerts(prev => prev.filter(a => a.id !== id))}
+                onSelect={setSymbol}
+                onTriggerDemo={(id) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, status: 'triggered' } : a))}
+                onAlertCreated={(newAlert) => setAlerts(prev => [...prev, newAlert])}
+            />
         }
     >
       <div className="flex flex-col h-full w-full p-4 space-y-4">
@@ -221,7 +222,11 @@ function App() {
             symbol={symbol}
             onSymbolClick={() => setIsSearchOpen(true)}
             onIndicatorsClick={() => setIsIndicatorsOpen(true)}
-            onFullscreenToggle={() => console.log('Fullscreen')}
+            onFullscreenToggle={toggleFullscreen}
+            activeLayout={activeLayout}
+            savedLayouts={layouts}
+            onLayoutSelect={setActiveLayout}
+            onLayoutSave={handleLayoutSave}
         />
 
         <SymbolSearch 
@@ -252,9 +257,23 @@ function App() {
                 <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
                     <IndicatorPane 
                         name="TDFI" 
-                        data={formatDataForChart(tdfiData.timestamps, tdfiData.tdfi)}
-                        displayType="line"
-                        color={tdfiData.metadata.color_schemes.line}
+                        mainSeries={{
+                            data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
+                            displayType: "histogram",
+                            color: tdfiData.metadata.color_schemes.line
+                        }}
+                        additionalSeries={[
+                            {
+                                data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi_signal),
+                                displayType: "line",
+                                color: "#f1f5f9", // Neutral signal color
+                                lineWidth: 1
+                            }
+                        ]}
+                        priceLines={[
+                            { value: 0.05, color: "#ef4444", label: "Upper" },
+                            { value: -0.05, color: "#22c55e", label: "Lower" }
+                        ]}
                         scaleRanges={tdfiData.metadata.scale_ranges}
                     />
                 </div>
@@ -264,9 +283,29 @@ function App() {
                 <div className="bg-slate-900 rounded-lg p-4 border border-slate-800">
                     <IndicatorPane 
                         name="cRSI" 
-                        data={formatDataForChart(crsiData.timestamps, crsiData.crsi)}
-                        displayType="line"
-                        color={crsiData.metadata.color_schemes.line}
+                        mainSeries={{
+                            data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
+                            displayType: "line",
+                            color: crsiData.metadata.color_schemes.line
+                        }}
+                        additionalSeries={[
+                            {
+                                data: formatDataForChart(crsiData.timestamps, crsiData.upper_band),
+                                displayType: "line",
+                                color: "#ef4444",
+                                lineWidth: 1
+                            },
+                            {
+                                data: formatDataForChart(crsiData.timestamps, crsiData.lower_band),
+                                displayType: "line",
+                                color: "#22c55e",
+                                lineWidth: 1
+                            }
+                        ]}
+                        priceLines={[
+                            { value: 70, color: "#475569", label: "70" },
+                            { value: 30, color: "#475569", label: "30" }
+                        ]}
                         scaleRanges={crsiData.metadata.scale_ranges}
                     />
                 </div>

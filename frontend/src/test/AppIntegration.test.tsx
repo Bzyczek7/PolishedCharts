@@ -16,82 +16,76 @@ vi.mock('lightweight-charts', () => ({
   createChart: vi.fn().mockReturnValue({
     addSeries: vi.fn().mockReturnValue({
       setData: vi.fn(),
-    }),
-    addCandlestickSeries: vi.fn().mockReturnValue({
-        setData: vi.fn(),
-    }),
-    addLineSeries: vi.fn().mockReturnValue({
-        setData: vi.fn(),
-    }),
-    addHistogramSeries: vi.fn().mockReturnValue({
-        setData: vi.fn(),
+      createPriceLine: vi.fn(),
+      applyOptions: vi.fn(),
     }),
     applyOptions: vi.fn(),
     remove: vi.fn(),
+    timeScale: vi.fn().mockReturnValue({
+      fitContent: vi.fn(),
+    }),
     priceScale: vi.fn().mockReturnValue({
-        applyOptions: vi.fn(),
+      applyOptions: vi.fn(),
     }),
   }),
   ColorType: { Solid: 'solid' },
-  CandlestickSeries: vi.fn(),
-  LineSeries: vi.fn(),
-  HistogramSeries: vi.fn(),
+  LineSeries: 'LineSeries',
+  CandlestickSeries: 'CandlestickSeries',
+  HistogramSeries: 'HistogramSeries',
+  LineStyle: {
+    Solid: 0,
+    Dashed: 1,
+    Dotted: 2,
+    LargeDashed: 3,
+    SparseDotted: 4,
+  },
 }))
 
 describe('App Integration', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    localStorage.clear()
-  })
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.mocked(getCandles).mockResolvedValue([]);
+    vi.mocked(getTDFI).mockResolvedValue({ timestamps: ['2023-10-27T00:00:00'], tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } });
+    vi.mocked(getcRSI).mockResolvedValue({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } });
+    vi.mocked(getADXVMA).mockResolvedValue({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } });
+  });
 
-  it('renders layout manager', async () => {
-    const user = userEvent.setup()
-    vi.mocked(getCandles).mockResolvedValueOnce([])
-    vi.mocked(getTDFI).mockResolvedValueOnce({ timestamps: [], tdfi: [], tdfi_signal: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getcRSI).mockResolvedValueOnce({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getADXVMA).mockResolvedValueOnce({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
-    
-    render(<App />)
-    
-    // Switch to Alerts tab where LayoutManager is located
-    const alertsTab = screen.getByRole('tab', { name: /Alerts/i })
-    await user.click(alertsTab)
-    
-    await waitFor(async () => {
-        expect(await screen.findByText('Layouts')).toBeDefined()
-    })
-  })
+  it('successfully saves a new layout via the toolbar', async () => {
+    const user = userEvent.setup();
+    render(<App />);
 
-  it('toggles an indicator', async () => {
-    const user = userEvent.setup()
-    vi.mocked(getCandles).mockResolvedValue([{ id: 1, ticker: 'IBM', timestamp: '2023-10-27T00:00:00', open: 100, high: 110, low: 90, close: 105, volume: 1000 }])
-    vi.mocked(getTDFI).mockResolvedValue({ timestamps: ['2023-10-27T00:00:00'], tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getcRSI).mockResolvedValue({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } })
-    vi.mocked(getADXVMA).mockResolvedValue({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } })
+    // Open the layouts dropdown from the toolbar
+    const layoutButton = await screen.findByRole('button', { name: /Default Layout/i });
+    await user.click(layoutButton);
 
-    render(<App />)
-    
-    // Switch to Alerts tab
-    const alertsTab = screen.getByRole('tab', { name: /Alerts/i })
-    await user.click(alertsTab)
-    
-    // Wait for content
-    const input = await screen.findByPlaceholderText('Layout name')
-    expect(input).toBeDefined()
+    // Find the input field, type a new layout name, and save
+    const layoutNameInput = await screen.findByPlaceholderText('New layout name');
+    await user.type(layoutNameInput, 'My New Layout');
 
-    // Create a layout first
-    const saveButton = screen.getByText('Save')
-    await user.type(input, 'Test')
-    await user.click(saveButton)
+    const saveButton = await screen.findByRole('button', { name: /Save Layout/i });
+    await user.click(saveButton);
 
-    const indicatorsButton = screen.getByRole('button', { name: /Indicators/i })
-    await user.click(indicatorsButton)
-    
-    const tdfiOption = await screen.findByText('TDFI')
-    await user.click(tdfiOption)
-    
+    // The button in the toolbar should now show the new layout name
     await waitFor(() => {
-        expect(screen.getByTestId('indicator-pane-TDFI')).toBeDefined()
-    })
-  })
-})
+        expect(screen.getByRole('button', { name: /My New Layout/i })).toBeDefined();
+    }, { timeout: 3000 });
+  });
+
+  it('toggles an indicator and sees the change', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    
+    // Open indicator search
+    const indicatorsButton = screen.getByRole('button', { name: /Indicators/i });
+    await user.click(indicatorsButton);
+
+    // Select TDFI
+    const tdfiItem = await screen.findByText('TDFI');
+    await user.click(tdfiItem);
+
+    // Indicator pane should now be visible
+    expect(await screen.findByText(/TDFI/)).toBeDefined();
+    expect(screen.getByTestId('indicator-pane-TDFI')).toBeDefined()
+  });
+});
