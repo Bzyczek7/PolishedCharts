@@ -8,11 +8,12 @@ interface LayoutProps {
   children: React.ReactNode
   watchlistContent: React.ReactNode
   alertsContent: React.ReactNode
+  alertsBadgeCount?: number
 }
 
 const STORAGE_KEY = 'trading-alert-sidebar-state'
 
-const Layout = ({ children, watchlistContent, alertsContent }: LayoutProps) => {
+const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 0 }: LayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -74,11 +75,16 @@ const Layout = ({ children, watchlistContent, alertsContent }: LayoutProps) => {
               </TabsTrigger>
               <TabsTrigger 
                 value="alerts" 
-                className="p-2 data-[state=active]:bg-slate-800 data-[state=active]:text-blue-400"
+                className="p-2 data-[state=active]:bg-slate-800 data-[state=active]:text-blue-400 relative"
                 title="Alerts"
                 aria-label="Alerts"
               >
                 <Bell className="h-5 w-5" />
+                {alertsBadgeCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] font-bold text-white ring-2 ring-slate-900 animate-in zoom-in duration-300">
+                        {alertsBadgeCount > 9 ? '9+' : alertsBadgeCount}
+                    </span>
+                )}
                 <span className="sr-only">Alerts</span>
               </TabsTrigger>
             </TabsList>

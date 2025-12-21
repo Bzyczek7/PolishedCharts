@@ -177,8 +177,11 @@ function App() {
     )
   }
 
+  const triggeredCount = alerts.filter(a => a.status === 'triggered').length
+
   return (
     <Layout
+        alertsBadgeCount={triggeredCount}
         watchlistContent={
             <Watchlist 
                 items={watchlist}
