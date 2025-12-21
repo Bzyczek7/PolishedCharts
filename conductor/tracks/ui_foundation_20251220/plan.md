@@ -36,7 +36,7 @@
 
  (Protocol in workflow.md)
 
-## Phase 3: Watchlist Management & Real-time Visuals
+## Phase 3: Watchlist Management & Real-time Visuals [checkpoint: 6e28e8b]
 - [x] Task: Write failing tests for Watchlist container rendering and "+ Add Symbol" button (Red Phase). b2f6431
 - [x] Task: Implement the Watchlist container with "+ Add Symbol" integration (Green Phase). ac8fe3f
 - [x] Task: Write failing tests for Watchlist empty state display (Red Phase). ac8fe3f
@@ -51,9 +51,9 @@
 - [x] Task: Add Batch Selection mode and bulk removal functionality (Green Phase). 808ec77
 - [x] Task: Write failing tests for sorting functionality (Symbol, Price %, Volume) (Red Phase). 808ec77
 - [x] Task: Implement sorting logic and verify tests pass (Green Phase). 3ccc87a
-- [~] Task: Write failing tests for Watchlist keyboard navigation (Arrow keys, Enter, Delete) (Red Phase).
-- [ ] Task: Implement keyboard navigation for Watchlist (Green Phase).
-- [ ] Task: Conductor - User Manual Verification 'Watchlist Management & Real-time Visuals' (Protocol in workflow.md)
+- [x] Task: Write failing tests for Watchlist keyboard navigation (Arrow keys, Enter, Delete) (Red Phase). 6e28e8b
+- [x] Task: Implement keyboard navigation for Watchlist (Green Phase). 6e28e8b
+- [x] Task: Conductor - User Manual Verification 'Watchlist Management & Real-time Visuals'
 
 ## Phase 4: Alerts Monitoring & Chart Interaction
 - [ ] Task: Write failing tests for Alerts list component with status filtering and search (Red Phase).
