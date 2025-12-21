@@ -72,11 +72,12 @@
 - [x] Task: Implement keyboard shortcuts for alert management (Green Phase). 331edb6
 - [x] Task: Conductor - User Manual Verification 'Alerts Monitoring & Chart Interaction'
 
-## Phase 5: Chart Refinement & Fullscreen API
-- [~] Task: Write failing tests for ChartComponent responsiveness to sidebar width changes (Red Phase).
-- [ ] Task: Enhance `ChartComponent` to respond to sidebar width changes and occupy maximum space (Green Phase).
-- [ ] Task: Write failing tests for Fullscreen Toggle functionality (Red Phase).
-- [ ] Task: Implement Fullscreen Toggle using the browser Fullscreen API (Green Phase).
+## Phase 5: Chart Refinement & Fullscreen API [checkpoint: 7132355]
+- [x] Task: Write failing tests for ChartComponent responsiveness to sidebar width changes (Red Phase). 7132355
+- [x] Task: Enhance `ChartComponent` to respond to sidebar width changes and occupy maximum space (Green Phase). 7132355
+- [x] Task: Write failing tests for Fullscreen Toggle functionality (Red Phase). 7132355
+- [x] Task: Implement Fullscreen Toggle using the browser Fullscreen API (Green Phase). 7132355
+- [x] Task: Implement advanced indicator visualizations (signal lines, reference bands) and handle null data points correctly (Green Phase). 7132355
 - [ ] Task: Write failing tests for hover tooltips on watchlist items (Red Phase).
 - [ ] Task: Finalize visual palette (high-contrast dark mode) and add hover tooltips for all data points (Green Phase).
 - [ ] Task: Verify overall test coverage meets >80% requirement.
