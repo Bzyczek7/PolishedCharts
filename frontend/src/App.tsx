@@ -151,8 +151,9 @@ function App() {
             <Watchlist 
                 items={watchlist}
                 onAddClick={() => setIsSearchOpen(true)}
-                onRemove={(s) => setWatchlist(prev => prev.filter(item => item.symbol !== s))}
+                onRemove={(symbols) => setWatchlist(prev => prev.filter(item => !symbols.includes(item.symbol)))}
                 onSelect={setSymbol}
+                onReorder={setWatchlist}
             />
         }
         alertsContent={
