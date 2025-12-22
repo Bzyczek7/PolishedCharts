@@ -21,6 +21,7 @@ def test_get_candles_endpoint():
     mock_candle = MagicMock()
     mock_candle.id = 1
     mock_candle.symbol_id = 1
+    mock_candle.interval = "1d"
     mock_candle.open = 100.0
     mock_candle.high = 110.0
     mock_candle.low = 90.0
@@ -39,7 +40,7 @@ def test_get_candles_endpoint():
 
     app.dependency_overrides[get_db] = override_get_db
     
-    response = client.get("/api/v1/candles/IBM")
+    response = client.get("/api/v1/candles/IBM?interval=1h&from=2023-10-20T00:00:00")
     
     # Clean up
     app.dependency_overrides = {}
@@ -49,3 +50,4 @@ def test_get_candles_endpoint():
     assert len(data) == 1
     assert data[0]["close"] == 105.0
     assert data[0]["ticker"] == "IBM"
+    assert data[0]["interval"] == "1d" # From mock
