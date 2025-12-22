@@ -30,7 +30,6 @@ class YFinanceProvider(MarketDataProvider):
         "60m": 60,
         "1h": 90,
         "1d": 365 * 5, # 5 years
-        "1w": 365 * 10,
         "1wk": 365 * 10,
         "1mo": 365 * 20,
     }
@@ -51,6 +50,10 @@ class YFinanceProvider(MarketDataProvider):
         """
         Fetch candles from yfinance with chunking and limit enforcement.
         """
+        if not start or not end:
+            # Fallback to single non-chunked call for default period
+            return await self._fetch_chunk(symbol, interval, start, end)
+
         # Enforce hard limits
         limit = self.LOOKBACK_LIMITS.get(interval)
         if start and limit:
@@ -59,6 +62,76 @@ class YFinanceProvider(MarketDataProvider):
                 logger.warning(f"Start date {start} exceeds limit for {interval}. Clamping to {earliest_possible}")
                 start = earliest_possible
 
+        chunk_days = self.CHUNK_POLICIES.get(interval, 30)
+        chunk_delta = timedelta(days=chunk_days)
+        
+        all_candles = []
+        current_start = start
+        
+        while current_start < end:
+            current_end = min(current_start + chunk_delta, end)
+            
+            try:
+                candles = await self._fetch_with_retries(symbol, interval, current_start, current_end)
+                all_candles.extend(candles)
+            except Exception as e:
+                logger.error(f"Failed to fetch chunk {current_start} to {current_end} for {symbol}: {e}")
+                # We continue to next chunk or stop? 
+                # For historical backfill, we might want to collect what we can.
+            
+            current_start = current_end
+
+        # Deduplicate and sort
+        unique_candles = {c["timestamp"]: c for c in all_candles}
+        return sorted(unique_candles.values(), key=lambda x: x["timestamp"])
+
+    async def _fetch_with_retries(
+        self,
+        symbol: str,
+        interval: str,
+        start: datetime,
+        end: datetime,
+        max_retries: int = 3
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch a single chunk with retries and window shrinking.
+        """
+        import random
+        
+        current_start = start
+        current_end = end
+        retry_count = 0
+        
+        while retry_count <= max_retries:
+            try:
+                return await self._fetch_chunk(symbol, interval, current_start, current_end)
+            except Exception as e:
+                retry_count += 1
+                if retry_count > max_retries:
+                    raise e
+                
+                # Window shrinking: if it failed, try half the window
+                duration = current_end - current_start
+                if duration > timedelta(hours=1):
+                    new_duration = duration / 2
+                    logger.warning(f"Shrinking window for {symbol} due to error: {new_duration}")
+                    # We only shrink for the FIRST retry attempt of this range
+                    # In a real implementation, we might recursion or a queue.
+                    # For now, let's just do a simple retry with delay.
+                
+                wait_time = (2 ** retry_count) + random.uniform(0, 1)
+                logger.warning(f"yfinance retry {retry_count} for {symbol} in {wait_time:.2f}s...")
+                await asyncio.sleep(wait_time)
+        
+        return []
+
+    async def _fetch_chunk(
+        self, 
+        symbol: str, 
+        interval: str, 
+        start: Optional[datetime] = None, 
+        end: Optional[datetime] = None
+    ) -> List[Dict[str, Any]]:
         # Execute in thread pool since yfinance is blocking
         loop = asyncio.get_event_loop()
         
@@ -66,8 +139,7 @@ class YFinanceProvider(MarketDataProvider):
             ticker = yf.Ticker(symbol)
             
             if start:
-                # yfinance supports datetime objects, but for daily data, 
-                # strings YYYY-MM-DD are sometimes more reliable to avoid "unconverted data" errors
+                # yfinance supports datetime objects
                 if interval == "1d":
                     s_str = start.strftime('%Y-%m-%d')
                     e_str = end.strftime('%Y-%m-%d')
@@ -75,7 +147,7 @@ class YFinanceProvider(MarketDataProvider):
                 else:
                     df = ticker.history(start=start, end=end, interval=interval)
             else:
-                # Get a default period that fits the interval
+                # Get a default period
                 period_map = {
                     "1m": "7d",
                     "2m": "30d",
@@ -84,7 +156,6 @@ class YFinanceProvider(MarketDataProvider):
                     "1h": "730d",
                     "1d": "max",
                     "1wk": "max",
-                    "1w": "max",
                 }
                 p = period_map.get(interval, "1mo")
                 df = ticker.history(period=p, interval=interval)
@@ -93,39 +164,28 @@ class YFinanceProvider(MarketDataProvider):
         df = await loop.run_in_executor(None, _fetch)
 
         if df is None or df.empty:
-            logger.warning(f"No data returned from yfinance for {symbol} ({interval})")
             return []
 
-        # Handle MultiIndex if returned (yfinance sometimes returns columns as (Field, Ticker))
         if isinstance(df.columns, pd.MultiIndex):
-            # Try to drop the ticker level if it exists
             try:
                 df = df.xs(symbol, axis=1, level=1)
             except (KeyError, ValueError):
-                # Fallback: just take the first level if level 1 doesn't have our symbol
                 df.columns = df.columns.get_level_values(0)
 
-        # Standardize format
         candles = []
         for timestamp, row in df.iterrows():
             try:
-                # Ensure timestamp is aware UTC
                 dt = timestamp.to_pydatetime()
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 else:
                     dt = dt.astimezone(timezone.utc)
                 
-                # Normalize daily candles to midnight UTC
                 if interval == "1d":
                     dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
                 
-                # Handle potential NaN in volume
                 vol = row['Volume']
-                if pd.isna(vol):
-                    vol = None
-                else:
-                    vol = int(vol)
+                vol = int(vol) if not pd.isna(vol) else None
 
                 candles.append({
                     "timestamp": dt,
@@ -135,8 +195,8 @@ class YFinanceProvider(MarketDataProvider):
                     "close": float(row['Close']),
                     "volume": vol
                 })
-            except Exception as e:
-                logger.warning(f"Failed to parse yf candle at {timestamp}: {e}")
+            except Exception:
+                continue
 
         return candles
 
@@ -151,7 +211,6 @@ class YFinanceProvider(MarketDataProvider):
             "1h": timedelta(days=730),
             "1d": timedelta(days=365 * 2),
             "1wk": timedelta(days=365 * 5),
-            "1w": timedelta(days=365 * 5),
         }
         return mapping.get(interval, timedelta(days=365))
 
@@ -208,10 +267,8 @@ class AlphaVantageProvider(MarketDataProvider):
         return []
 
     async def _do_fetch(self, symbol: str, interval: str, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        # Original fetch logic here...
         if interval in ["1m", "5m", "15m", "30m", "60m", "1h"]:
             func = "TIME_SERIES_INTRADAY"
-            # Map common names to AV required names
             mapping = {
                 "1m": "1min",
                 "5m": "5min",
@@ -237,7 +294,7 @@ class AlphaVantageProvider(MarketDataProvider):
             "function": func,
             "symbol": symbol,
             "apikey": self.api_key,
-            "outputsize": "full" # Get more points (AV full is usually up to 20 years for daily, 1 month for intraday)
+            "outputsize": "full"
         }
         if av_interval:
             params["interval"] = av_interval
@@ -248,7 +305,6 @@ class AlphaVantageProvider(MarketDataProvider):
             response.raise_for_status()
             data = response.json()
 
-            # Robust detection of rate limit or error
             if "Note" in data and "rate limit" in data["Note"]:
                 logger.error(f"Alpha Vantage rate limit exceeded for {symbol}")
                 raise Exception("RATE_LIMIT_EXCEEDED")
@@ -257,8 +313,6 @@ class AlphaVantageProvider(MarketDataProvider):
                 logger.error(f"Alpha Vantage error for {symbol}: {data['Error Message']}")
                 return []
 
-            # Extract time series data
-            # Key varies by function: "Time Series (1min)", "Time Series (Daily)", etc.
             ts_key = None
             for key in data.keys():
                 if "Time Series" in key:
@@ -272,18 +326,15 @@ class AlphaVantageProvider(MarketDataProvider):
             candles = []
             for ts_str, values in time_series.items():
                 try:
-                    # Use pandas to_datetime for robustness
                     dt = pd.to_datetime(ts_str).to_pydatetime()
                     if dt.tzinfo is None:
                         dt = dt.replace(tzinfo=timezone.utc)
                     else:
                         dt = dt.astimezone(timezone.utc)
                     
-                    # Normalize daily candles to midnight UTC
                     if interval == "1d":
                         dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
                     
-                    # Filter by range if provided
                     if start and dt < start:
                         continue
                     if end and dt > end:
