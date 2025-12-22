@@ -13,9 +13,9 @@
 - [x] Task: Implement `YFinanceProvider` with per-interval chunking and explicit handling for interval-specific lookback limits. ca92b98
 - [x] Task: Implement `AlphaVantageProvider` with configurable rate limits and "Rate Exceeded" detection. 027ceef
 - [x] Task: Write failing tests for the Missing Middle stitching logic, verifying the orchestrator fills holes without redundant re-fetches (Red Phase). adf9c36
-- [ ] Task: Add Provider Truth integration tests to validate that intraday limits are enforced per-interval (e.g., 1m lookback < 1h lookback) (Red Phase).
+- [x] Task: Add Provider Truth integration tests to validate that intraday limits are enforced per-interval (e.g., 1m lookback < 1h lookback) (Red Phase). 64c0346
 - [x] Task: Implement the `DataOrchestrator` to coordinate multi-segment fetching and deduplicated merging. adf9c36
-- [ ] Task: Update Frontend: Add timeframe selection state and update `getCandles()` for interval/range-based requests.
+- [x] Task: Update Frontend: Add timeframe selection state and update `getCandles()` for interval/range-based requests. da8416a
 - [x] Task: Implement exponential backoff and retry scheduling for providers (Green Phase). adf9c36
 - [ ] Task: Conductor - User Manual Verification 'Orchestration & UI Wiring' (Protocol in workflow.md)
 
