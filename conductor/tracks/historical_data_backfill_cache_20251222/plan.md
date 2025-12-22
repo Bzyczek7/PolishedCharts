@@ -10,7 +10,7 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Persistence Layer & API Stubs' (Protocol in workflow.md) 7cd28c9
 
 ## Phase 2: yfinance Orchestrator & Dynamic Gap Filling
-- [ ] Task: Create a central configuration for canonical intervals (mapping 60m to 1h) and best-effort lookback caps
+- [x] Task: Create a central configuration for canonical intervals (mapping 60m to 1h) and best-effort lookback caps c93e8c0
 - [ ] Task: Implement venue-aware gap detection logic (Equities vs. Crypto rules)
 - [ ] Task: Write Unit Tests for Gap Detection: verify missing bars are detected for 1h and weekends are ignored for equities
 - [ ] Task: Implement yfinance downloader with chunked request windows and adaptive retry fallbacks (window shrinking)
