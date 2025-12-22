@@ -17,6 +17,7 @@ import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
 import type { ADXVMAOutput, cRSIOutput, TDFIOutput } from './api/indicators'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { formatDataForChart } from './lib/chartUtils'
+import { splitSeriesByThresholds } from './lib/indicatorTransform'
 
 function App() {
   const [symbol, setSymbol] = useState('IBM')
@@ -226,15 +227,59 @@ function App() {
 
   const tdfiPaneProps = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('tdfi') || !tdfiData) return null
+    
+    const rawData = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi);
+    
+    if (tdfiData.metadata.color_mode === 'threshold' && tdfiData.metadata.thresholds) {
+        const { above, neutral, below } = splitSeriesByThresholds(rawData, {
+            high: tdfiData.metadata.thresholds.high,
+            low: tdfiData.metadata.thresholds.low
+        });
+
+        return {
+            mainSeries: {
+                data: neutral,
+                displayType: 'line' as const,
+                color: tdfiData.metadata.color_schemes.neutral || "#94a3b8"
+            },
+            additionalSeries: [
+                {
+                    data: above,
+                    displayType: 'line' as const,
+                    color: tdfiData.metadata.color_schemes.above || "#22c55e",
+                    lineWidth: 2
+                },
+                {
+                    data: below,
+                    displayType: 'line' as const,
+                    color: tdfiData.metadata.color_schemes.below || "#ef4444",
+                    lineWidth: 2
+                },
+                ...(tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
+                    data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
+                    displayType: (s.display_type as any) || "line",
+                    color: s.line_color,
+                    lineWidth: s.line_width
+                })) || [])
+            ],
+            priceLines: tdfiData.metadata.reference_levels?.map(rl => ({
+                value: rl.value,
+                color: rl.line_color,
+                label: rl.line_label
+            })),
+            scaleRanges: tdfiData.metadata.scale_ranges
+        }
+    }
+
     return {
         mainSeries: {
-            data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
+            data: rawData,
             displayType: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.display_type || "histogram" as const,
             color: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.line_color || tdfiData.metadata.color_schemes.line
         },
         additionalSeries: tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
             data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
-            displayType: s.display_type || "line" as const,
+            displayType: (s.display_type as any) || "line",
             color: s.line_color,
             lineWidth: s.line_width
         })),
@@ -249,15 +294,59 @@ function App() {
 
   const crsiPaneProps = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('crsi') || !crsiData) return null
+    
+    const rawData = formatDataForChart(crsiData.timestamps, crsiData.crsi);
+
+    if (crsiData.metadata.color_mode === 'threshold' && crsiData.metadata.thresholds) {
+        const { above, neutral, below } = splitSeriesByThresholds(rawData, {
+            high: crsiData.metadata.thresholds.high,
+            low: crsiData.metadata.thresholds.low
+        });
+
+        return {
+            mainSeries: {
+                data: neutral,
+                displayType: 'line' as const,
+                color: crsiData.metadata.color_schemes.neutral || "#4CAF50"
+            },
+            additionalSeries: [
+                {
+                    data: above,
+                    displayType: 'line' as const,
+                    color: crsiData.metadata.color_schemes.above || "#ef4444",
+                    lineWidth: 2
+                },
+                {
+                    data: below,
+                    displayType: 'line' as const,
+                    color: crsiData.metadata.color_schemes.below || "#22c55e",
+                    lineWidth: 2
+                },
+                ...(crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
+                    data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
+                    displayType: (s.display_type as any) || "line",
+                    color: s.line_color,
+                    lineWidth: s.line_width
+                })) || [])
+            ],
+            priceLines: crsiData.metadata.reference_levels?.map(rl => ({
+                value: rl.value,
+                color: rl.line_color,
+                label: rl.line_label
+            })),
+            scaleRanges: crsiData.metadata.scale_ranges
+        }
+    }
+
     return {
         mainSeries: {
-            data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
+            data: rawData,
             displayType: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.display_type || "line" as const,
             color: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.line_color || crsiData.metadata.color_schemes.line
         },
         additionalSeries: crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
             data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
-            displayType: s.display_type || "line" as const,
+            displayType: (s.display_type as any) || "line",
             color: s.line_color,
             lineWidth: s.line_width
         })),
