@@ -41,9 +41,6 @@ class GapDetector:
         expected = []
         current = start
         
-        # Round start to nearest interval to align with standard bars
-        # For simplicity, we just increment from start
-        
         while current <= end:
             # Venue awareness: Skip weekends for equities
             if not crypto:
@@ -51,9 +48,6 @@ class GapDetector:
                 if current.weekday() >= 5:
                     current += delta
                     continue
-                # Note: True market hours (9:30-16:00) are complex due to timezones.
-                # For daily data, skipping weekends is the main requirement.
-                # For intraday, we might eventually need exchange-specific hours.
             
             expected.append(current)
             current += delta
@@ -85,10 +79,13 @@ class GapDetector:
         for ts in existing_ts:
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
+            else:
+                ts = ts.astimezone(timezone.utc)
             existing_set.add(ts)
 
         gaps = []
         current_gap_start = None
+        current_gap_end = None
         
         for ts in expected_ts:
             if ts not in existing_set:
