@@ -20,7 +20,7 @@
 - [x] Task: Conductor - User Manual Verification 'Orchestration & UI Wiring' (Protocol in workflow.md) 074c3b7
 
 ## Phase 3: Metadata & Indicator Transforms [checkpoint: ]
-- [ ] Task: Extend backend Pydantic schemas to support `thresholds`, `color_mode`, and line styling.
+- [x] Task: Extend backend Pydantic schemas to support `thresholds`, `color_mode`, and line styling. 3a05b96
 - [ ] Task: Update TDFI service to calculate and return thresholds and regime metadata (Above/Neutral/Below colors).
 - [ ] Task: Create a reusable `indicatorTransform` utility layer in the frontend to handle multi-series splitting logic.
 - [ ] Task: Write failing tests for splitting a single TDFI series into three regime-based segments driven by thresholds (Red Phase).
