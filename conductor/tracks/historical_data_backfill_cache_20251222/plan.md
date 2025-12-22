@@ -2,7 +2,7 @@
 
 ## Phase 1: Persistence Layer & API Stubs
 - [x] Task: Create SQLAlchemy models for `Candle` (composite PK: symbol, interval, timestamp) and `BackfillJob` fbc0105
-- [ ] Task: Implement repository logic with `INSERT ... ON CONFLICT DO UPDATE` for idempotent database-level upserts
+- [x] Task: Implement repository logic with `INSERT ... ON CONFLICT DO UPDATE` for idempotent database-level upserts 2cf6031
 - [ ] Task: Write Unit Tests for Repository: verify idempotency, range read ordering, and duplicate prevention
 - [ ] Task: Implement `GET /api/v1/candles` (Local-only: returns existing DB data without gap filling)
 - [ ] Task: Implement `POST /api/v1/candles/backfill` and `/update-latest` as stubs with response schema placeholders (e.g., `{status, job_id}`)
