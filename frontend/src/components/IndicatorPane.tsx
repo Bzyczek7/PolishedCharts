@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { createChart, ColorType, LineSeries, HistogramSeries, LineStyle } from 'lightweight-charts'
 
 interface IndicatorSeries {
+    id?: string
     data: any[]
     color: string
     displayType: 'line' | 'histogram'
@@ -132,7 +133,7 @@ const IndicatorPane = ({
     mainSeriesRef.current.setData(mainSeries.data)
 
     // Handle additional series
-    const currentAdditionalKeys = new Set(additionalSeries.map((_, i) => `extra-${i}`))
+    const currentAdditionalKeys = new Set(additionalSeries.map((s, i) => s.id || `extra-${i}`))
     
     // Cleanup old additional series
     additionalSeriesRefs.current.forEach((s, key) => {
@@ -144,7 +145,7 @@ const IndicatorPane = ({
 
     // Update or add additional series
     additionalSeries.forEach((s, i) => {
-        const key = `extra-${i}`
+        const key = s.id || `extra-${i}`
         let addedSeries = additionalSeriesRefs.current.get(key)
         
         if (!addedSeries) {
@@ -166,20 +167,28 @@ const IndicatorPane = ({
     })
 
     // Handle price lines (attached to mainSeries)
-    priceLinesRef.current.forEach(pl => mainSeriesRef.current.removePriceLine(pl))
-    priceLinesRef.current = []
-
-    priceLines.forEach(pl => {
-        const line = mainSeriesRef.current.createPriceLine({
-            price: pl.value,
-            color: pl.color,
-            lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: pl.label ?? '',
+    if (mainSeriesRef.current) {
+        priceLinesRef.current.forEach(pl => {
+            try {
+                mainSeriesRef.current.removePriceLine(pl)
+            } catch (e) {
+                // Ignore if already removed
+            }
         })
-        priceLinesRef.current.push(line)
-    })
+        priceLinesRef.current = []
+
+        priceLines.forEach(pl => {
+            const line = mainSeriesRef.current.createPriceLine({
+                price: pl.value,
+                color: pl.color,
+                lineWidth: 1,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: pl.label ?? '',
+            })
+            priceLinesRef.current.push(line)
+        })
+    }
   }, [mainSeries, additionalSeries, priceLines])
 
   useEffect(() => {
@@ -195,17 +204,24 @@ const IndicatorPane = ({
     
     // Set price range
     if (mainSeriesRef.current) {
-        mainSeriesRef.current.priceScale().applyOptions({
-            autoScale: false,
-        })
-        // In v5, visiblePriceRange is not in applyOptions for series, but for priceScale?
-        // Actually, it should be:
+        // Ensure all series in this pane use the same price scale
         chartRef.current.priceScale('right').applyOptions({
-            visiblePriceRange: {
-                from: scaleRanges.min,
-                to: scaleRanges.max,
-            }
+            autoScale: true,
+            scaleMargins: {
+                top: 0.1,
+                bottom: 0.1,
+            },
         })
+
+        if (scaleRanges) {
+            chartRef.current.priceScale('right').applyOptions({
+                autoScale: false,
+                visiblePriceRange: {
+                    from: scaleRanges.min,
+                    to: scaleRanges.max,
+                }
+            })
+        }
     }
   }, [scaleRanges])
 

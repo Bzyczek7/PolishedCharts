@@ -244,18 +244,21 @@ function App() {
             },
             additionalSeries: [
                 {
+                    id: 'above',
                     data: above,
                     displayType: 'line' as const,
                     color: tdfiData.metadata.color_schemes.above || "#22c55e",
                     lineWidth: 2
                 },
                 {
+                    id: 'below',
                     data: below,
                     displayType: 'line' as const,
                     color: tdfiData.metadata.color_schemes.below || "#ef4444",
                     lineWidth: 2
                 },
                 ...(tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
+                    id: s.field,
                     data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
                     displayType: (s.display_type as any) || "line",
                     color: s.line_color,
@@ -311,18 +314,21 @@ function App() {
             },
             additionalSeries: [
                 {
+                    id: 'above',
                     data: above,
                     displayType: 'line' as const,
                     color: crsiData.metadata.color_schemes.above || "#ef4444",
                     lineWidth: 2
                 },
                 {
+                    id: 'below',
                     data: below,
                     displayType: 'line' as const,
                     color: crsiData.metadata.color_schemes.below || "#22c55e",
                     lineWidth: 2
                 },
                 ...(crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
+                    id: s.field,
                     data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
                     displayType: (s.display_type as any) || "line",
                     color: s.line_color,
