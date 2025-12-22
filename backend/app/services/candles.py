@@ -61,7 +61,7 @@ class CandleService:
             }
 
             stmt = stmt.on_conflict_do_update(
-                constraint="uq_candle_symbol_interval_timestamp",
+                index_elements=["symbol_id", "interval", "timestamp"],
                 set_=update_dict
             )
 

@@ -85,7 +85,6 @@ class DataOrchestrator:
 
         return [
             {
-                "id": c.id,
                 "timestamp": c.timestamp,
                 "open": clean_price(c.open),
                 "high": clean_price(c.high),
