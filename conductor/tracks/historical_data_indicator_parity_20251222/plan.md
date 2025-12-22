@@ -19,13 +19,13 @@
 - [x] Task: Implement exponential backoff and retry scheduling for providers (Green Phase). adf9c36
 - [x] Task: Conductor - User Manual Verification 'Orchestration & UI Wiring' (Protocol in workflow.md) 074c3b7
 
-## Phase 3: Metadata & Indicator Transforms [checkpoint: ]
+## Phase 3: Metadata & Indicator Transforms [checkpoint: 8848c69]
 - [x] Task: Extend backend Pydantic schemas to support `thresholds`, `color_mode`, and line styling. 3a05b96
 - [x] Task: Update TDFI service to calculate and return thresholds and regime metadata (Above/Neutral/Below colors). 747a2b2
 - [x] Task: Create a reusable `indicatorTransform` utility layer in the frontend to handle multi-series splitting logic. 9a1a6e9
 - [x] Task: Write failing tests for splitting a single TDFI series into three regime-based segments driven by thresholds (Red Phase). 9a1a6e9
 - [x] Task: Wire the transformation layer into `App.tsx` to prepare data for the parity renderer (Green Phase). 04a4f91
-- [ ] Task: Conductor - User Manual Verification 'Metadata & Indicator Transforms' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Metadata & Indicator Transforms' (Protocol in workflow.md) 8848c69
 
 ## Phase 4: Stable Rendering & Price Lines [checkpoint: ]
 - [ ] Task: Refactor `IndicatorPane` to use stable `seriesId` keys instead of index-based keys to prevent visual glitches.
