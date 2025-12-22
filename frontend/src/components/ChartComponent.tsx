@@ -11,10 +11,13 @@ interface ChartComponentProps {
   symbol: string
   candles: Candle[]
   overlays?: OverlayIndicator[]
+  width?: number
+  height?: number
 }
 
-const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, candles, overlays = [], width, height }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<any>(null)
   const seriesRef = useRef<any>(null)
 
   useEffect(() => {
@@ -29,10 +32,11 @@ const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps)
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: chartContainerRef.current.clientHeight || 400,
+      width: width || chartContainerRef.current.clientWidth,
+      height: height || chartContainerRef.current.clientHeight || 400,
     })
 
+    chartRef.current = chart
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
         downColor: '#ef4444',
@@ -52,43 +56,28 @@ const ChartComponent = ({ symbol, candles, overlays = [] }: ChartComponentProps)
         lineSeries.setData(overlay.data)
     })
 
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ 
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight
-        })
-      }
-    }
-
-    const resizeObserver = new ResizeObserver(handleResize)
-    resizeObserver.observe(chartContainerRef.current)
-
     if (candles.length > 0) {
         const formattedData = candles.map(c => ({
           time: Math.floor(new Date(c.timestamp).getTime() / 1000) as any,
-          open: c.open,
-          high: c.high,
-          low: c.low,
-          close: c.close,
+          open: c.open, high: c.high, low: c.low, close: c.close,
         }));
-
-        // Sort by time to be safe
         const sortedData = formattedData.sort((a, b) => a.time - b.time);
-        
-        // Filter out duplicates
         const uniqueData = sortedData.filter((item, index, arr) => 
           index === 0 || item.time !== arr[index - 1].time
         );
-        
         candlestickSeries.setData(uniqueData);
     }
 
     return () => {
-      resizeObserver.disconnect()
       chart.remove()
     }
-  }, [symbol, candles, overlays])
+  }, [symbol, candles, overlays]) // Only recreate on data/symbol changes
+
+  useEffect(() => {
+    if (chartRef.current && width && height) {
+        chartRef.current.applyOptions({ width, height })
+    }
+  }, [width, height])
 
   return (
     <div 

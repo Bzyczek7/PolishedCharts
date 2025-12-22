@@ -18,6 +18,7 @@ interface IndicatorPaneProps {
     label?: string
   }[]
   height?: number
+  width?: number
   scaleRanges?: {
     min: number
     max: number
@@ -29,10 +30,12 @@ const IndicatorPane = ({
   mainSeries,
   additionalSeries = [],
   priceLines = [],
-  height = 150,
+  height,
+  width,
   scaleRanges
 }: IndicatorPaneProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
+  const chartRef = useRef<any>(null)
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -46,13 +49,14 @@ const IndicatorPane = ({
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: height,
+      width: width || chartContainerRef.current.clientWidth,
+      height: height || 150,
       timeScale: {
         visible: false,
       },
     })
 
+    chartRef.current = chart
     if (scaleRanges) {
         chart.priceScale('right').applyOptions({
             autoScale: false,
@@ -96,32 +100,24 @@ const IndicatorPane = ({
         })
     })
 
-    const handleResize = () => {
-      if (chartContainerRef.current) {
-        chart.applyOptions({ 
-            width: chartContainerRef.current.clientWidth,
-            height: chartContainerRef.current.clientHeight
-        })
-      }
-    }
-
-    const resizeObserver = new ResizeObserver(handleResize)
-    resizeObserver.observe(chartContainerRef.current)
-
     return () => {
-      resizeObserver.disconnect()
       chart.remove()
     }
-  }, [name, mainSeries, additionalSeries, priceLines, height, scaleRanges])
+  }, [name, mainSeries, additionalSeries, priceLines, scaleRanges])
+
+  useEffect(() => {
+    if (chartRef.current && width && height) {
+        chartRef.current.applyOptions({ width, height })
+    }
+  }, [width, height])
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 h-full">
       <div className="text-xs text-slate-500 mb-1">{name}</div>
       <div 
         ref={chartContainerRef} 
         data-testid={`indicator-pane-${name}`} 
-        className="w-full"
-        style={{ height }}
+        className="w-full h-[calc(100%-20px)]"
       />
     </div>
   )
