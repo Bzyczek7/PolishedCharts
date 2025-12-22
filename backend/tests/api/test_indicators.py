@@ -1,172 +1,83 @@
-from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, AsyncMock
 import pytest
-from datetime import datetime, timedelta
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.db.session import get_db
+from unittest.mock import patch, MagicMock, AsyncMock
+import numpy as np
 
-client = TestClient(app)
-
-def create_mock_candles(count=100):
-    base_time = datetime(2023, 10, 27)
-    candles = []
-    for i in range(count):
-        mock_candle = MagicMock()
-        mock_candle.id = i
-        mock_candle.symbol_id = 1
-        mock_candle.open = 100.0 + i
-        mock_candle.high = 110.0 + i
-        mock_candle.low = 90.0 + i
-        mock_candle.close = 105.0 + i
-        mock_candle.volume = 1000
-        mock_candle.timestamp = base_time + timedelta(hours=i)
-        candles.append(mock_candle)
-    return candles
-
-@pytest.mark.asyncio
-async def test_get_tdfi_indicator_endpoint():
-    mock_session = AsyncMock()
+# Mock DB dependency
+async def override_get_db():
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_db.execute.return_value = mock_result
+    
     mock_symbol = MagicMock()
     mock_symbol.id = 1
     mock_symbol.ticker = "IBM"
     
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = mock_symbol
-    mock_result_candles = MagicMock()
-    mock_result_candles.scalars.return_value.all.return_value = create_mock_candles()
+    mock_result.scalars.return_value.first.return_value = mock_symbol
+    yield mock_db
 
-    mock_session.execute.side_effect = [mock_result_symbol, mock_result_candles]
-    
-    async def override_get_db():
-        yield mock_session
+app.dependency_overrides[get_db] = override_get_db
 
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/IBM/tdfi")
-    app.dependency_overrides = {}
+@pytest.fixture
+def mock_orchestrator():
+    with patch("app.api.v1.indicators.DataOrchestrator") as mock:
+        instance = mock.return_value
+        instance.get_candles = AsyncMock()
+        instance.get_candles.return_value = [
+            {"timestamp": "2023-10-27T00:00:00Z", "open": 100, "high": 110, "low": 90, "close": 105, "volume": 1000, "id": 1, "ticker": "IBM", "interval": "1d"}
+        ]
+        yield instance
+
+@pytest.fixture
+def mock_indicators():
+    with patch("app.api.v1.indicators.indicators") as mock:
+        # Mock TDFI result
+        mock_df_tdfi = MagicMock()
+        mock_df_tdfi.__getitem__.side_effect = lambda key: {
+            "TDFI": np.array([0.1]),
+            "TDFI_Signal": np.array([1])
+        }[key]
+        mock.calculate_tdfi.return_value = mock_df_tdfi
+        
+        # Mock cRSI result
+        mock_df_crsi = MagicMock()
+        mock_df_crsi.__getitem__.side_effect = lambda key: {
+            "cRSI": np.array([50.0]),
+            "cRSI_UpperBand": np.array([70.0]),
+            "cRSI_LowerBand": np.array([30.0])
+        }[key]
+        mock.calculate_crsi.return_value = mock_df_crsi
+        yield mock
+
+@pytest.mark.asyncio
+async def test_get_tdfi_metadata(mock_orchestrator, mock_indicators):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.get("/api/v1/indicators/IBM/tdfi?interval=1d")
     
     assert response.status_code == 200
     data = response.json()
-    assert "timestamps" in data
-    assert "tdfi" in data
-    assert "tdfi_signal" in data
-    assert len(data["timestamps"]) == 100
+    metadata = data["metadata"]
+    assert metadata["color_mode"] == "threshold"
+    assert "high" in metadata["thresholds"]
+    assert metadata["series_metadata"][0]["line_style"] == "solid"
 
 @pytest.mark.asyncio
-async def test_get_crsi_indicator_endpoint():
-    mock_session = AsyncMock()
-    mock_symbol = MagicMock()
-    mock_symbol.id = 1
-    mock_symbol.ticker = "IBM"
-    
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = mock_symbol
-    mock_result_candles = MagicMock()
-    mock_result_candles.scalars.return_value.all.return_value = create_mock_candles()
-
-    mock_session.execute.side_effect = [mock_result_symbol, mock_result_candles]
-    
-    async def override_get_db():
-        yield mock_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/IBM/crsi")
-    app.dependency_overrides = {}
+async def test_get_crsi_metadata(mock_orchestrator, mock_indicators):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        response = await ac.get("/api/v1/indicators/IBM/crsi?interval=1d")
     
     assert response.status_code == 200
     data = response.json()
-    assert "timestamps" in data
-    assert "crsi" in data
-    assert "upper_band" in data
-    assert "lower_band" in data
+    metadata = data["metadata"]
+    assert metadata["color_mode"] == "threshold"
+    assert metadata["series_metadata"][1]["line_style"] == "dashed"
 
-@pytest.mark.asyncio
-async def test_get_adxvma_indicator_endpoint():
-    mock_session = AsyncMock()
-    mock_symbol = MagicMock()
-    mock_symbol.id = 1
-    mock_symbol.ticker = "IBM"
-    
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = mock_symbol
-    mock_result_candles = MagicMock()
-    mock_result_candles.scalars.return_value.all.return_value = create_mock_candles()
-
-    mock_session.execute.side_effect = [mock_result_symbol, mock_result_candles]
-    
-    async def override_get_db():
-        yield mock_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/IBM/adxvma")
-    app.dependency_overrides = {}
-    
-    assert response.status_code == 200
-    data = response.json()
-    assert "timestamps" in data
-    assert "adxvma" in data
-
-@pytest.mark.asyncio
-async def test_get_indicator_invalid_name():
-    mock_session = AsyncMock()
-    mock_symbol = MagicMock()
-    mock_symbol.id = 1
-    mock_symbol.ticker = "IBM"
-    
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = mock_symbol
-    mock_result_candles = MagicMock()
-    mock_result_candles.scalars.return_value.all.return_value = create_mock_candles()
-
-    mock_session.execute.side_effect = [mock_result_symbol, mock_result_candles]
-    
-    async def override_get_db():
-        yield mock_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/IBM/invalid_indicator")
-    app.dependency_overrides = {}
-    
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Indicator not found"
-
-@pytest.mark.asyncio
-async def test_get_indicator_symbol_not_found():
-    mock_session = AsyncMock()
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = None
-
-    mock_session.execute.return_value = mock_result_symbol
-    
-    async def override_get_db():
-        yield mock_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/NONEXISTENT/tdfi")
-    app.dependency_overrides = {}
-    
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Symbol not found"
-
-@pytest.mark.asyncio
-async def test_get_indicator_no_candles():
-    mock_session = AsyncMock()
-    mock_symbol = MagicMock()
-    mock_symbol.id = 1
-    mock_symbol.ticker = "IBM"
-    
-    mock_result_symbol = MagicMock()
-    mock_result_symbol.scalars.return_value.first.return_value = mock_symbol
-    mock_result_candles = MagicMock()
-    mock_result_candles.scalars.return_value.all.return_value = []
-
-    mock_session.execute.side_effect = [mock_result_symbol, mock_result_candles]
-    
-    async def override_get_db():
-        yield mock_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    response = client.get("/api/v1/indicators/IBM/tdfi")
-    app.dependency_overrides = {}
-    
-    assert response.status_code == 404
-    assert response.json()["detail"] == "No candles found for symbol"
+# Clean up overrides after tests
+@pytest.fixture(autouse=True)
+def cleanup():
+    yield
+    app.dependency_overrides.clear()

@@ -111,14 +111,20 @@ async def get_indicator(
             df_result = indicators.calculate_tdfi(df)
             metadata = IndicatorMetadata(
                 display_type="pane",
-                color_schemes={"line": "#2196F3", "histogram": "#E91E63"},
+                color_schemes={
+                    "above": "#22c55e", # Green
+                    "below": "#ef4444", # Red
+                    "neutral": "#94a3b8" # Slate
+                },
+                color_mode="threshold",
+                thresholds={"high": 0.05, "low": -0.05},
                 scale_ranges={"min": -1, "max": 1},
                 series_metadata=[
                     {
                         "field": "tdfi",
                         "role": "main",
                         "label": "TDFI",
-                        "line_color": "#E91E63",
+                        "line_color": "#94a3b8", # Default color
                         "line_style": "solid",
                         "line_width": 2,
                         "display_type": "line"
@@ -140,7 +146,13 @@ async def get_indicator(
             df_result = indicators.calculate_crsi(df)
             metadata = IndicatorMetadata(
                 display_type="pane",
-                color_schemes={"line": "#4CAF50", "bands": "#81C784"},
+                color_schemes={
+                    "above": "#ef4444", # Overbought (Red)
+                    "below": "#22c55e", # Oversold (Green)
+                    "neutral": "#4CAF50" # Main color
+                },
+                color_mode="threshold",
+                thresholds={"high": 70, "low": 30},
                 scale_ranges={"min": 0, "max": 100},
                 series_metadata=[
                     {
@@ -157,7 +169,7 @@ async def get_indicator(
                         "role": "band",
                         "label": "Upper Band",
                         "line_color": "#ef4444",
-                        "line_style": "solid",
+                        "line_style": "dashed",
                         "line_width": 1,
                         "display_type": "line"
                     },
@@ -166,7 +178,7 @@ async def get_indicator(
                         "role": "band",
                         "label": "Lower Band",
                         "line_color": "#22c55e",
-                        "line_style": "solid",
+                        "line_style": "dashed",
                         "line_width": 1,
                         "display_type": "line"
                     }
@@ -189,6 +201,7 @@ async def get_indicator(
             metadata = IndicatorMetadata(
                 display_type="overlay",
                 color_schemes={"line": "#FF9800"},
+                color_mode="single",
                 scale_ranges=None,
                 series_metadata=[
                     {
