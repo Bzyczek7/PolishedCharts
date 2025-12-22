@@ -6,7 +6,7 @@
 - [x] Task: Write Unit Tests for Repository: verify idempotency, range read ordering, and duplicate prevention 71769fd
 - [x] Task: Implement `GET /api/v1/candles` (Local-only: returns existing DB data without gap filling) 59ce98a
 - [x] Task: Implement `POST /api/v1/candles/backfill` and `/update-latest` as stubs with response schema placeholders (e.g., `{status, job_id}`) 0e31895
-- [ ] Task: Write Integration Tests for API: verify basic request/response flow and local data retrieval
+- [x] Task: Write Integration Tests for API: verify basic request/response flow and local data retrieval 9de5f06
 - [ ] Task: Conductor - User Manual Verification 'Phase 1: Persistence Layer & API Stubs' (Protocol in workflow.md)
 
 ## Phase 2: yfinance Orchestrator & Dynamic Gap Filling
