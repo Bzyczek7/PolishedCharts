@@ -77,7 +77,7 @@ class DataOrchestrator:
                     try:
                         # Timeout protection: don't hang the API request for more than 10s
                         await asyncio.wait_for(
-                            self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end),
+                            self.fetch_and_save(db, symbol_id, ticker, interval, fill_start, fill_end),
                             timeout=10.0
                         )
                     except asyncio.TimeoutError:
@@ -120,38 +120,39 @@ class DataOrchestrator:
             } for c in candles
         ]
 
-    async def _fill_gap(
+    async def fetch_and_save(
         self, 
         db: AsyncSession, 
         symbol_id: int, 
         ticker: str, 
         interval: str, 
-        gap_start: datetime, 
-        gap_end: datetime
+        start: datetime, 
+        end: datetime
     ):
         """
-        Fetch missing data for a gap and save to DB.
+        Fetch data for a range and save to DB.
         """
         # Strategy: 
-        # If gap is recent (within last 24h), try Alpha Vantage first for high precision.
+        # If range is recent (within last 24h), try Alpha Vantage first for high precision.
         # Otherwise, or if AV fails/limit hit, use yfinance for history.
         
         now = datetime.now(timezone.utc)
-        use_av = (now - gap_start) < self.yf_provider._get_default_lookback(interval) # Example heuristic
+        use_av = (now - start) < self.yf_provider._get_default_lookback(interval)
         
         candles = []
         if use_av:
             try:
-                candles = await self.av_provider.fetch_candles(ticker, interval, gap_start, gap_end)
+                candles = await self.av_provider.fetch_candles(ticker, interval, start, end)
             except Exception as e:
-                logger.warning(f"Alpha Vantage failed to fill gap for {ticker}: {e}. Falling back to yfinance.")
+                logger.warning(f"Alpha Vantage failed for {ticker}: {e}. Falling back to yfinance.")
                 use_av = False
         
         if not use_av:
             try:
-                candles = await self.yf_provider.fetch_candles(ticker, interval, gap_start, gap_end)
+                candles = await self.yf_provider.fetch_candles(ticker, interval, start, end)
             except Exception as e:
-                logger.error(f"yfinance failed to fill gap for {ticker}: {e}")
+                logger.error(f"yfinance failed for {ticker}: {e}")
+                raise e
         
         if candles:
             # Prepare for upsert
