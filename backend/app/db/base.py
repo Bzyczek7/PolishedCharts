@@ -5,3 +5,4 @@ from app.models.user import User  # noqa
 from app.models.symbol import Symbol  # noqa
 from app.models.candle import Candle  # noqa
 from app.models.alert import Alert  # noqa
+from app.models.backfill_job import BackfillJob  # noqa
