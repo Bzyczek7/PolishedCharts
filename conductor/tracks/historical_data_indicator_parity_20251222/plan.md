@@ -3,7 +3,7 @@
 ## Phase 1: Data Store & API Contract [checkpoint: ]
 - [x] Task: Create SQLAlchemy migration for expanded `candles` table including `interval` column and unique constraint on `(symbol_id, interval, timestamp)`. 1a39a11
 - [x] Task: Implement `CandleService.upsert_candles` with bulk operations and locking to prevent duplicate concurrent backfills. d01aeaa
-- [ ] Task: Define Range Semantics: Establish UTC timestamps, inclusive bounds, and default window behavior (last 300 bars) for omitted `from/to`.
+- [x] Task: Define Range Semantics: Establish UTC timestamps, inclusive bounds, and default window behavior (last 300 bars) for omitted `from/to`. b3d867f
 - [ ] Task: Write failing tests for idempotent upsert and multi-segment gap detection (Head, Tail, and Middle Gaps) (Red Phase).
 - [ ] Task: Implement gap detection logic to identify missing segments, including holes between existing data points (Green Phase).
 - [ ] Task: Update Backend API: Define `GET /candles` parameters and update the endpoint to use the orchestrator.
