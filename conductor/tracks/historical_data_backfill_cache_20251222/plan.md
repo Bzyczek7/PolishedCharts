@@ -15,7 +15,7 @@
 - [x] Task: Write Unit Tests for Gap Detection: verify missing bars are detected for 1h and weekends are ignored for equities c0d0bfd
 - [x] Task: Implement yfinance downloader with chunked request windows and adaptive retry fallbacks (window shrinking) e8699ba
 - [ ] Task: Write Unit Tests for Downloader: verify chunking behavior, retries, and window shrinking on failure
-- [ ] Task: Integrate downloader into `GET /api/v1/candles` to enable transparent gap filling (up to hard cap) with timeout protection
+- [x] Task: Integrate downloader into `GET /api/v1/candles` to enable transparent gap filling (up to hard cap) with timeout protection 234394e
 - [ ] Task: Write Integration Tests for Gap Filling: verify missing bars are fetched and upserted during GET requests
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: yfinance Orchestrator & Gap Filling' (Protocol in workflow.md)
 
