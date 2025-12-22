@@ -23,7 +23,7 @@
 - [x] Task: Implement backfill worker logic using the `BackfillJob` table for coordination and error state tracking cf67524
 - [x] Task: Implement incremental update task that pulls latest candles for active symbols at a controlled cadence f30590d
 - [x] Task: Add rate-limiting and backoff decorators for all yfinance interactions to prevent IP blocks cfd6487
-- [ ] Task: Write Unit/Integration Tests for Workers: verify job state transitions and robust exception handling
+- [x] Task: Write Unit/Integration Tests for Workers: verify job state transitions and robust exception handling c35ed4f
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Background Workers & Concurrency' (Protocol in workflow.md)
 
 ## Phase 4: Frontend Integration & Stress Testing
