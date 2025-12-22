@@ -91,7 +91,13 @@ class CandleService:
         
         result = await db.execute(stmt)
         # result.all() returns rows, each row is a tuple (timestamp,)
-        existing_ts = [r[0] for r in result.all()]
+        existing_ts = []
+        for r in result.all():
+            ts = r[0]
+            if ts.tzinfo is None:
+                from datetime import timezone
+                ts = ts.replace(tzinfo=timezone.utc)
+            existing_ts.append(ts)
         
         gaps = []
         
@@ -99,7 +105,10 @@ class CandleService:
             return [(start, end)]
             
         # Check for gap at the beginning (Head)
-        if existing_ts[0] > start:
+        # Using a small buffer (half interval) to avoid precision issues
+        buffer = self._get_interval_delta(interval) / 2
+        
+        if existing_ts[0] > (start + buffer):
             # The gap ends just before the first existing timestamp
             gap_end = existing_ts[0] - self._get_interval_delta(interval)
             if gap_end >= start:
@@ -111,12 +120,13 @@ class CandleService:
             nxt = existing_ts[i+1]
             
             expected_next = curr + self._get_interval_delta(interval)
-            if nxt > expected_next:
+            # If next is significantly after expected next (more than 1.5x interval)
+            if nxt > (expected_next + buffer):
                 # There's a gap
                 gaps.append((expected_next, nxt - self._get_interval_delta(interval)))
                 
         # Check for gap at the end (Tail)
-        if existing_ts[-1] < end:
+        if existing_ts[-1] < (end - buffer):
             gap_start = existing_ts[-1] + self._get_interval_delta(interval)
             if gap_start <= end:
                 gaps.append((gap_start, end))

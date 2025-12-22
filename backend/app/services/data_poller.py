@@ -130,15 +130,16 @@ class DataPoller:
 
             new_candles = []
             for c_data in candles_data:
-                from datetime import datetime
-                c_date = datetime.strptime(c_data["date"], "%Y-%m-%d")
+                from datetime import datetime, timezone
+                c_date = datetime.strptime(c_data["date"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 
-                if latest_timestamp and c_date <= latest_timestamp.replace(tzinfo=None):
+                if latest_timestamp and c_date <= latest_timestamp:
                      continue
 
                 candle = Candle(
                     symbol_id=symbol.id,
                     timestamp=c_date,
+                    interval="1d", # DataPoller currently only fetches daily candles from AV
                     open=c_data["open"],
                     high=c_data["high"],
                     low=c_data["low"],

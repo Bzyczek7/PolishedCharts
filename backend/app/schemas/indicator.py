@@ -10,19 +10,19 @@ class IndicatorMetadata(BaseModel):
     reference_levels: Optional[List[Dict[str, Any]]] = None
 
 class TDFIOutput(BaseModel):
-    timestamps: List[datetime]
+    timestamps: List[str]
     tdfi: List[Optional[float]]
     tdfi_signal: List[Optional[int]]
     metadata: IndicatorMetadata
 
 class cRSIOutput(BaseModel):
-    timestamps: List[datetime]
+    timestamps: List[str]
     crsi: List[Optional[float]]
     upper_band: List[Optional[float]]
     lower_band: List[Optional[float]]
     metadata: IndicatorMetadata
 
 class ADXVMAOutput(BaseModel):
-    timestamps: List[datetime]
+    timestamps: List[str]
     adxvma: List[Optional[float]]
     metadata: IndicatorMetadata

@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.candles import CandleService
@@ -29,16 +29,37 @@ class DataOrchestrator:
         if not start or not end:
             # Default window if not provided
             delta = self.yf_provider._get_default_lookback(interval)
-            end = end or datetime.now()
+            end = end or datetime.now(timezone.utc)
             start = start or (end - delta)
+        
+        # Ensure start and end are aware (UTC) if they were passed as naive
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
 
         # 1. Identify Gaps
         gaps = await self.candle_service.find_gaps(db, symbol_id, interval, start, end)
         
         if gaps:
             logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
-            for gap_start, gap_end in gaps:
-                await self._fill_gap(db, symbol_id, ticker, interval, gap_start, gap_end)
+            # Optimize: Instead of filling each gap individually, 
+            # find the total range covering all gaps and fetch it once.
+            # This avoids dozens of small API calls for things like weekends.
+            all_gap_starts = [g[0] for g in gaps]
+            all_gap_ends = [g[1] for g in gaps]
+            
+            fill_start = min(all_gap_starts)
+            fill_end = max(all_gap_ends)
+            
+            # Ensure aware
+            if fill_start.tzinfo is None:
+                fill_start = fill_start.replace(tzinfo=timezone.utc)
+            if fill_end.tzinfo is None:
+                fill_end = fill_end.replace(tzinfo=timezone.utc)
+                
+            logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
+            await self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end)
 
         # 2. Fetch all from DB after filling gaps
         # We re-query the full range to ensure we have a continuous, sorted, deduplicated set.
@@ -56,15 +77,21 @@ class DataOrchestrator:
         result = await db.execute(stmt)
         candles = result.scalars().all()
         
+        import math
+        def clean_price(val):
+            if val is None or not math.isfinite(val):
+                return None
+            return float(val)
+
         return [
             {
                 "id": c.id,
                 "timestamp": c.timestamp,
-                "open": c.open,
-                "high": c.high,
-                "low": c.low,
-                "close": c.close,
-                "volume": c.volume,
+                "open": clean_price(c.open),
+                "high": clean_price(c.high),
+                "low": clean_price(c.low),
+                "close": clean_price(c.close),
+                "volume": int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else None,
                 "interval": c.interval,
                 "ticker": ticker
             } for c in candles
@@ -86,7 +113,7 @@ class DataOrchestrator:
         # If gap is recent (within last 24h), try Alpha Vantage first for high precision.
         # Otherwise, or if AV fails/limit hit, use yfinance for history.
         
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         use_av = (now - gap_start) < self.yf_provider._get_default_lookback(interval) # Example heuristic
         
         candles = []

@@ -9,22 +9,20 @@ async def test_yfinance_provider_lookback_clamping():
     
     # 1m interval has a limit of 29 days
     interval = "1m"
-    too_far_back = datetime.now() - timedelta(days=100)
+    too_far_back = datetime.now(timezone.utc) - timedelta(days=100)
     
-    # Mock yf.download to avoid real network call
-    with patch("yfinance.download") as mock_download:
-        mock_df = MagicMock()
-        mock_df.empty = True
-        mock_download.return_value = mock_df
+    # Mock yf.Ticker.history to avoid real network call
+    with patch("yfinance.Ticker.history") as mock_history:
+        mock_history.return_value = MagicMock(empty=True)
         
         await provider.fetch_candles("IBM", interval, start=too_far_back)
         
-        # Check start date passed to download
-        args, kwargs = mock_download.call_args
+        # Check start date passed to history
+        args, kwargs = mock_history.call_args
         passed_start = kwargs["start"]
         
         # Should be clamped to roughly 29 days ago
-        earliest_possible = datetime.now() - timedelta(days=29)
+        earliest_possible = datetime.now(timezone.utc) - timedelta(days=29)
         assert passed_start >= earliest_possible - timedelta(seconds=5)
 
 @pytest.mark.asyncio
@@ -33,20 +31,18 @@ async def test_yfinance_provider_lookback_clamping_1h():
     
     # 1h interval has a limit of 729 days
     interval = "1h"
-    too_far_back = datetime.now() - timedelta(days=1000)
+    too_far_back = datetime.now(timezone.utc) - timedelta(days=1000)
     
-    with patch("yfinance.download") as mock_download:
-        mock_df = MagicMock()
-        mock_df.empty = True
-        mock_download.return_value = mock_df
+    with patch("yfinance.Ticker.history") as mock_history:
+        mock_history.return_value = MagicMock(empty=True)
         
         await provider.fetch_candles("IBM", interval, start=too_far_back)
         
-        args, kwargs = mock_download.call_args
+        args, kwargs = mock_history.call_args
         passed_start = kwargs["start"]
         
         # Should be clamped to roughly 729 days ago
-        earliest_possible = datetime.now() - timedelta(days=729)
+        earliest_possible = datetime.now(timezone.utc) - timedelta(days=729)
         assert passed_start >= earliest_possible - timedelta(seconds=5)
 
 @pytest.mark.asyncio
@@ -75,15 +71,17 @@ async def test_yfinance_provider_multiindex_handling():
     import pandas as pd
     import numpy as np
     
-    ts = pd.Timestamp('2023-10-27')
+    ts = pd.Timestamp('2023-10-27', tz='UTC')
     # MultiIndex columns
     columns = pd.MultiIndex.from_tuples([
         ('Open', 'IBM'), ('High', 'IBM'), ('Low', 'IBM'), ('Close', 'IBM'), ('Volume', 'IBM')
     ])
     df = pd.DataFrame([[100.0, 110.0, 90.0, 105.0, 1000]], index=[ts], columns=columns)
     
-    with patch("yfinance.download", return_value=df):
+    with patch("yfinance.Ticker.history", return_value=df):
         candles = await provider.fetch_candles("IBM", "1d")
         assert len(candles) == 1
         assert candles[0]["close"] == 105.0
-        assert candles[0]["timestamp"] == ts.to_pydatetime()
+        # Provider normalizes 1d to midnight
+        expected_ts = ts.to_pydatetime().replace(hour=0, minute=0, second=0, microsecond=0)
+        assert candles[0]["timestamp"] == expected_ts

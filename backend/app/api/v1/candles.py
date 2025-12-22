@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from app.db.session import get_db
 from app.models.symbol import Symbol
-from app.models.candle import Candle
 from app.schemas.candle import CandleResponse
+from app.services.orchestrator import DataOrchestrator
+from app.services.candles import CandleService
+from app.services.providers import YFinanceProvider, AlphaVantageProvider
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -18,6 +21,9 @@ async def get_candles(
     to_ts: Optional[datetime] = Query(None, alias="to", description="End timestamp (UTC)"),
     db: AsyncSession = Depends(get_db)
 ):
+    # Normalize interval to lowercase
+    interval = interval.lower()
+    
     # Find Symbol
     result = await db.execute(select(Symbol).filter(Symbol.ticker == symbol.upper()))
     symbol_obj = result.scalars().first()
@@ -25,49 +31,20 @@ async def get_candles(
     if not symbol_obj:
         raise HTTPException(status_code=404, detail="Symbol not found")
     
-    # TODO: In Phase 2, use DataOrchestrator to fetch from local cache + providers
-    # For now, fetch from local DB with range support
-    
-    stmt = select(Candle).filter(
-        Candle.symbol_id == symbol_obj.id,
-        Candle.interval == interval
+    # Initialize services and orchestrator
+    candle_service = CandleService()
+    yf_provider = YFinanceProvider()
+    av_provider = AlphaVantageProvider(api_key=settings.ALPHA_VANTAGE_API_KEY)
+    orchestrator = DataOrchestrator(candle_service, yf_provider, av_provider)
+
+    # Use orchestrator to get candles
+    candles_data = await orchestrator.get_candles(
+        db=db,
+        symbol_id=symbol_obj.id,
+        ticker=symbol_obj.ticker,
+        interval=interval,
+        start=from_ts,
+        end=to_ts
     )
-    
-    if from_ts:
-        stmt = stmt.filter(Candle.timestamp >= from_ts)
-    if to_ts:
-        stmt = stmt.filter(Candle.timestamp <= to_ts)
         
-    stmt = stmt.order_by(Candle.timestamp.asc())
-    
-    # If no range provided, limit to last 300
-    if not from_ts and not to_ts:
-        # Need to subquery or sort desc then reverse to get *last* 300 in *asc* order
-        count_stmt = select(Candle).filter(
-            Candle.symbol_id == symbol_obj.id,
-            Candle.interval == interval
-        ).order_by(Candle.timestamp.desc()).limit(300)
-        
-        result = await db.execute(count_stmt)
-        candles = list(result.scalars().all())
-        candles.reverse()
-    else:
-        result = await db.execute(stmt)
-        candles = result.scalars().all()
-    
-    # Transform to schema
-    response = []
-    for c in candles:
-        response.append(CandleResponse(
-            id=c.id,
-            ticker=symbol_obj.ticker,
-            interval=c.interval,
-            timestamp=c.timestamp,
-            open=c.open,
-            high=c.high,
-            low=c.low,
-            close=c.close,
-            volume=c.volume
-        ))
-        
-    return response
+    return candles_data

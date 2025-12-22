@@ -44,17 +44,17 @@ export interface ADXVMAOutput {
   metadata: IndicatorMetadata
 }
 
-export const getTDFI = async (symbol: string): Promise<TDFIOutput> => {
-  const response = await client.get<TDFIOutput>(`/indicators/${symbol}/tdfi`)
+export const getTDFI = async (symbol: string, interval: string = '1d'): Promise<TDFIOutput> => {
+  const response = await client.get<TDFIOutput>(`/indicators/${symbol}/tdfi`, { params: { interval } })
   return response.data
 }
 
-export const getcRSI = async (symbol: string): Promise<cRSIOutput> => {
-  const response = await client.get<cRSIOutput>(`/indicators/${symbol}/crsi`)
+export const getcRSI = async (symbol: string, interval: string = '1d'): Promise<cRSIOutput> => {
+  const response = await client.get<cRSIOutput>(`/indicators/${symbol}/crsi`, { params: { interval } })
   return response.data
 }
 
-export const getADXVMA = async (symbol: string): Promise<ADXVMAOutput> => {
-  const response = await client.get<ADXVMAOutput>(`/indicators/${symbol}/adxvma`)
+export const getADXVMA = async (symbol: string, interval: string = '1d'): Promise<ADXVMAOutput> => {
+  const response = await client.get<ADXVMAOutput>(`/indicators/${symbol}/adxvma`, { params: { interval } })
   return response.data
 }

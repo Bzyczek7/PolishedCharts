@@ -2,7 +2,7 @@ import asyncio
 import logging
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
 
@@ -50,83 +50,105 @@ class YFinanceProvider(MarketDataProvider):
         """
         Fetch candles from yfinance with chunking and limit enforcement.
         """
-        if not start:
-            # Default to last 300 bars approximately if no start
-            delta = self._get_default_lookback(interval)
-            start = datetime.now() - delta
-
-        if not end:
-            end = datetime.now()
-
         # Enforce hard limits
         limit = self.LOOKBACK_LIMITS.get(interval)
-        if limit:
-            earliest_possible = datetime.now() - limit
+        if start and limit:
+            earliest_possible = datetime.now(timezone.utc) - limit
             if start < earliest_possible:
                 logger.warning(f"Start date {start} exceeds limit for {interval}. Clamping to {earliest_possible}")
                 start = earliest_possible
 
-        # If start >= end, nothing to fetch
-        if start >= end:
-            return []
-
         # Execute in thread pool since yfinance is blocking
         loop = asyncio.get_event_loop()
-        df = await loop.run_in_executor(
-            None, 
-            lambda: yf.download(
-                tickers=symbol,
-                start=start.strftime('%Y-%m-%d') if interval in ['1d', '1wk', '1mo'] else start,
-                end=end.strftime('%Y-%m-%d') if interval in ['1d', '1wk', '1mo'] else end,
-                interval=interval,
-                progress=False,
-                threads=False
-            )
-        )
+        
+        def _fetch():
+            ticker = yf.Ticker(symbol)
+            
+            if start:
+                # yfinance supports datetime objects, but for daily data, 
+                # strings YYYY-MM-DD are sometimes more reliable to avoid "unconverted data" errors
+                if interval == "1d":
+                    s_str = start.strftime('%Y-%m-%d')
+                    e_str = end.strftime('%Y-%m-%d')
+                    df = ticker.history(start=s_str, end=e_str, interval=interval)
+                else:
+                    df = ticker.history(start=start, end=end, interval=interval)
+            else:
+                # Get a default period that fits the interval
+                period_map = {
+                    "1m": "7d",
+                    "2m": "30d",
+                    "5m": "60d",
+                    "15m": "60d",
+                    "1h": "730d",
+                    "1d": "max",
+                }
+                p = period_map.get(interval, "1mo")
+                df = ticker.history(period=p, interval=interval)
+            return df
 
-        if df.empty:
+        df = await loop.run_in_executor(None, _fetch)
+
+        if df is None or df.empty:
+            logger.warning(f"No data returned from yfinance for {symbol} ({interval})")
             return []
+
+        # Handle MultiIndex if returned (yfinance sometimes returns columns as (Field, Ticker))
+        if isinstance(df.columns, pd.MultiIndex):
+            # Try to drop the ticker level if it exists
+            try:
+                df = df.xs(symbol, axis=1, level=1)
+            except (KeyError, ValueError):
+                # Fallback: just take the first level if level 1 doesn't have our symbol
+                df.columns = df.columns.get_level_values(0)
 
         # Standardize format
         candles = []
         for timestamp, row in df.iterrows():
-            # yf returns a MultiIndex if single ticker sometimes? 
-            # With latest yfinance, it's usually just columns.
-            # But let's handle the case where columns might be a MultiIndex
             try:
-                open_val = float(row['Open'])
-                high_val = float(row['High'])
-                low_val = float(row['Low'])
-                close_val = float(row['Close'])
-                volume_val = int(row['Volume'])
-            except (KeyError, TypeError):
-                # Handle MultiIndex case if it occurs
-                open_val = float(row[('Open', symbol)])
-                high_val = float(row[('High', symbol)])
-                low_val = float(row[('Low', symbol)])
-                close_val = float(row[('Close', symbol)])
-                volume_val = int(row[('Volume', symbol)])
+                # Ensure timestamp is aware UTC
+                dt = timestamp.to_pydatetime()
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                else:
+                    dt = dt.astimezone(timezone.utc)
+                
+                # Normalize daily candles to midnight UTC
+                if interval == "1d":
+                    dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                
+                # Handle potential NaN in volume
+                vol = row['Volume']
+                if pd.isna(vol):
+                    vol = None
+                else:
+                    vol = int(vol)
 
-            candles.append({
-                "timestamp": timestamp.to_pydatetime(),
-                "open": open_val,
-                "high": high_val,
-                "low": low_val,
-                "close": close_val,
-                "volume": volume_val
-            })
+                candles.append({
+                    "timestamp": dt,
+                    "open": float(row['Open']),
+                    "high": float(row['High']),
+                    "low": float(row['Low']),
+                    "close": float(row['Close']),
+                    "volume": vol
+                })
+            except Exception as e:
+                logger.warning(f"Failed to parse yf candle at {timestamp}: {e}")
 
         return candles
 
     def _get_default_lookback(self, interval: str) -> timedelta:
         mapping = {
-            "1m": timedelta(hours=5),
-            "5m": timedelta(days=1),
-            "15m": timedelta(days=3),
-            "1h": timedelta(days=12),
-            "1d": timedelta(days=300),
+            "1m": timedelta(days=7),
+            "2m": timedelta(days=30),
+            "5m": timedelta(days=30),
+            "15m": timedelta(days=30),
+            "30m": timedelta(days=30),
+            "60m": timedelta(days=60),
+            "1h": timedelta(days=730),
+            "1d": timedelta(days=365 * 2),
         }
-        return mapping.get(interval, timedelta(days=30))
+        return mapping.get(interval, timedelta(days=365))
 
 class AlphaVantageProvider(MarketDataProvider):
     BASE_URL = "https://www.alphavantage.co/query"
@@ -182,12 +204,18 @@ class AlphaVantageProvider(MarketDataProvider):
 
     async def _do_fetch(self, symbol: str, interval: str, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
         # Original fetch logic here...
-        if interval in ["1m", "5m", "15m", "30m", "60m"]:
+        if interval in ["1m", "5m", "15m", "30m", "60m", "1h"]:
             func = "TIME_SERIES_INTRADAY"
-            av_interval = interval
-        elif interval == "1h":
-            func = "TIME_SERIES_INTRADAY"
-            av_interval = "60min"
+            # Map common names to AV required names
+            mapping = {
+                "1m": "1min",
+                "5m": "5min",
+                "15m": "15min",
+                "30m": "30min",
+                "60m": "60min",
+                "1h": "60min"
+            }
+            av_interval = mapping.get(interval)
         elif interval == "1d":
             func = "TIME_SERIES_DAILY"
             av_interval = None
@@ -204,7 +232,7 @@ class AlphaVantageProvider(MarketDataProvider):
             "function": func,
             "symbol": symbol,
             "apikey": self.api_key,
-            "outputsize": "compact" # Default to latest 100
+            "outputsize": "full" # Get more points (AV full is usually up to 20 years for daily, 1 month for intraday)
         }
         if av_interval:
             params["interval"] = av_interval
@@ -239,14 +267,16 @@ class AlphaVantageProvider(MarketDataProvider):
             candles = []
             for ts_str, values in time_series.items():
                 try:
-                    # Handle both "2023-10-27" and "2023-10-27 15:00:00"
-                    if " " in ts_str:
-                        dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                    # Use pandas to_datetime for robustness
+                    dt = pd.to_datetime(ts_str).to_pydatetime()
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
                     else:
-                        dt = datetime.strptime(ts_str, "%Y-%m-%d")
+                        dt = dt.astimezone(timezone.utc)
                     
-                    # Ensure UTC (AV is typically US Eastern, but let's treat as naive/local for now
-                    # and assume it matches the app's naive datetime usage elsewhere)
+                    # Normalize daily candles to midnight UTC
+                    if interval == "1d":
+                        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
                     
                     # Filter by range if provided
                     if start and dt < start:

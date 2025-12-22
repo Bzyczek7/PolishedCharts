@@ -134,9 +134,9 @@ function App() {
         try {
             const [candleData, tdfi, crsi, adxvma] = await Promise.all([
                 getCandles(symbol, interval).catch(() => []),
-                getTDFI(symbol).catch(() => null),
-                getcRSI(symbol).catch(() => null),
-                getADXVMA(symbol).catch(() => null)
+                getTDFI(symbol, interval).catch(() => null),
+                getcRSI(symbol, interval).catch(() => null),
+                getADXVMA(symbol, interval).catch(() => null)
             ])
             setCandles(candleData)
             setTdfiData(tdfi)

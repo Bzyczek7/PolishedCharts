@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import ORJSONResponse
 from app.core.config import settings
 from app.api.api import api_router
 from app.services.data_poller import DataPoller
@@ -7,11 +8,29 @@ from app.services.alert_engine import AlertEngine
 from app.services.alpha_vantage import AlphaVantageService
 from app.db.session import AsyncSessionLocal
 import asyncio
+import traceback
+import logging
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    default_response_class=ORJSONResponse
 )
+
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global exception handler caught: {exc}")
+    logger.error(traceback.format_exc())
+    return ORJSONResponse(
+        status_code=500,
+        content={
+            "message": "Internal Server Error", 
+            "detail": str(exc), 
+            "traceback": traceback.format_exc()
+        },
+    )
 
 @app.on_event("startup")
 async def startup_event():
@@ -31,21 +50,21 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     print("Shutting down poller...")
-    if app.state.poller:
+    if hasattr(app.state, "poller") and app.state.poller:
         app.state.poller.stop()
-    if app.state.poller_task:
+    if hasattr(app.state, "poller_task") and app.state.poller_task:
         await app.state.poller_task
 
-# Set all CORS enabled origins
+app.include_router(api_router, prefix=settings.API_V1_STR)
+
+# Set all CORS enabled origins - MUST BE ADDED LAST TO BE OUTERMOST
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():

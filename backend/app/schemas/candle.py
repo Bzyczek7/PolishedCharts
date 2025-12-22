@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 class CandleResponse(BaseModel):
     id: int
@@ -10,7 +11,7 @@ class CandleResponse(BaseModel):
     high: float
     low: float
     close: float
-    volume: int
+    volume: Optional[int] = None
 
     class Config:
         from_attributes = True
