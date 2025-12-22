@@ -10,6 +10,8 @@ from app.services.orchestrator import DataOrchestrator
 from app.services.candles import CandleService
 from app.services.backfill import BackfillService
 from app.services.backfill_worker import BackfillWorker
+from app.services.incremental_worker import IncrementalUpdateWorker
+from app.services.alert_engine import AlertEngine
 from app.services.providers import YFinanceProvider, AlphaVantageProvider
 from app.core.config import settings
 
@@ -101,7 +103,22 @@ async def update_latest(
     """
     Incremental update endpoint for the most recent bars.
     """
-    # Placeholder for incremental update trigger
+    # 1. Initialize dependencies
+    candle_service = CandleService()
+    yf_provider = YFinanceProvider()
+    av_provider = AlphaVantageProvider(api_key=settings.ALPHA_VANTAGE_API_KEY)
+    orchestrator = DataOrchestrator(candle_service, yf_provider, av_provider)
+    
+    engine = AlertEngine(db_session_factory=AsyncSessionLocal)
+    worker = IncrementalUpdateWorker(orchestrator, AsyncSessionLocal, alert_engine=engine)
+    
+    # 2. Trigger in background
+    from app.main import worker_manager
+    worker_manager.start_task(
+        f"update_{symbol}_{interval}", 
+        worker.run_update(symbol, interval)
+    )
+
     return {
         "status": "success",
         "message": f"Incremental update triggered for {symbol} ({interval})"
