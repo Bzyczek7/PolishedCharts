@@ -236,183 +236,114 @@ function App() {
                 />
             }
         >
-        <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
-            <Toolbar 
-                symbol={symbol}
-                onSymbolClick={() => setIsSearchOpen(true)}
-                onIndicatorsClick={() => setIsIndicatorsOpen(true)}
-                onFullscreenToggle={toggleFullscreen}
-                activeLayout={activeLayout}
-                savedLayouts={layouts}
-                onLayoutSelect={setActiveLayout}
-                onLayoutSave={handleLayoutSave}
-            />
-
-            <SymbolSearch 
-                open={isSearchOpen} 
-                onOpenChange={setIsSearchOpen} 
-                onSelect={handleSymbolSelect} 
-            />
-
-            <IndicatorSearch 
-                open={isIndicatorsOpen} 
-                onOpenChange={setIsIndicatorsOpen} 
-                onSelect={toggleIndicator} 
-            />
-
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0">
-
-                      <div className="flex-[7] bg-slate-900 rounded-lg border border-slate-800 relative min-h-0">
-
-                        <ChartComponent 
-
-                            symbol={symbol} 
-
-                            candles={candles}
-
-                            width={dimensions.width}
-
-                            height={Math.floor(dimensions.height * 0.7)}
-
-                            overlays={activeLayout?.activeIndicators?.includes('adxvma') && adxvmaData ? [
-
-                                { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
-
-                            ] : []}
-
-                        />
-
-                      </div>
-
-                      
-
-                      <div className="flex-[3] flex flex-col gap-4 min-h-0">
-
-                        {activeLayout?.activeIndicators?.includes('tdfi') && tdfiData && (
-
-                            <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
-
-                                <IndicatorPane 
-
-                                    name="TDFI" 
-
+                <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
+                    <Toolbar 
+                        symbol={symbol}
+                        onSymbolClick={() => setIsSearchOpen(true)}
+                        onIndicatorsClick={() => setIsIndicatorsOpen(true)}
+                        onFullscreenToggle={toggleFullscreen}
+                        activeLayout={activeLayout}
+                        savedLayouts={layouts}
+                        onLayoutSelect={setActiveLayout}
+                        onLayoutSave={handleLayoutSave}
+                    />
+        
+                    <SymbolSearch 
+                        open={isSearchOpen} 
+                        onOpenChange={setIsSearchOpen} 
+                        onSelect={handleSymbolSelect} 
+                    />
+        
+                    <IndicatorSearch 
+                        open={isIndicatorsOpen} 
+                        onOpenChange={setIsIndicatorsOpen} 
+                        onSelect={toggleIndicator} 
+                    />
+        
+                    {dimensions.width > 0 && dimensions.height > 0 ? (
+                        <div className="flex-1 flex flex-col space-y-4 min-h-0">
+                            <div className="flex-[7] bg-slate-900 rounded-lg border border-slate-800 relative min-h-0">
+                                <ChartComponent 
+                                    symbol={symbol} 
+                                    candles={candles}
                                     width={dimensions.width}
-
-                                    height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
-
-                                    mainSeries={{
-
-                                        data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
-
-                                        displayType: "histogram",
-
-                                        color: tdfiData.metadata.color_schemes.line
-
-                                    }}
-
-                                    additionalSeries={[
-
-                                        {
-
-                                            data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi_signal),
-
-                                            displayType: "line",
-
-                                            color: "#f1f5f9", // Neutral signal color
-
-                                            lineWidth: 1
-
-                                        }
-
-                                    ]}
-
-                                    priceLines={[
-
-                                        { value: 0.05, color: "#ef4444", label: "Upper" },
-
-                                        { value: -0.05, color: "#22c55e", label: "Lower" }
-
-                                    ]}
-
-                                    scaleRanges={tdfiData.metadata.scale_ranges}
-
+                                    height={Math.floor(dimensions.height * 0.7)}
+                                    overlays={activeLayout?.activeIndicators?.includes('adxvma') && adxvmaData ? [
+                                        { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
+                                    ] : []}
                                 />
-
                             </div>
-
-                        )}
-
-            
-
-                        {activeLayout?.activeIndicators?.includes('crsi') && crsiData && (
-
-                            <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
-
-                                <IndicatorPane 
-
-                                    name="cRSI" 
-
-                                    width={dimensions.width}
-
-                                    height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
-
-                                    mainSeries={{
-
-                                        data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
-
-                                        displayType: "line",
-
-                                        color: crsiData.metadata.color_schemes.line
-
-                                    }}
-
-                                    additionalSeries={[
-
-                                        {
-
-                                            data: formatDataForChart(crsiData.timestamps, crsiData.upper_band),
-
-                                            displayType: "line",
-
-                                            color: "#ef4444",
-
-                                            lineWidth: 1
-
-                                        },
-
-                                        {
-
-                                            data: formatDataForChart(crsiData.timestamps, crsiData.lower_band),
-
-                                            displayType: "line",
-
-                                            color: "#22c55e",
-
-                                            lineWidth: 1
-
-                                        }
-
-                                    ]}
-
-                                    priceLines={[
-
-                                        { value: 70, color: "#475569", label: "70" },
-
-                                        { value: 30, color: "#475569", label: "30" }
-
-                                    ]}
-
-                                    scaleRanges={crsiData.metadata.scale_ranges}
-
-                                />
-
+                            
+                            <div className="flex-[3] flex flex-col gap-4 min-h-0">
+                                {activeLayout?.activeIndicators?.includes('tdfi') && tdfiData && (
+                                    <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
+                                        <IndicatorPane 
+                                            name="TDFI" 
+                                            width={dimensions.width}
+                                            height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
+                                            mainSeries={{
+                                                data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
+                                                displayType: "histogram",
+                                                color: tdfiData.metadata.color_schemes.line
+                                            }}
+                                            additionalSeries={[
+                                                {
+                                                    data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi_signal),
+                                                    displayType: "line",
+                                                    color: "#f1f5f9", // Neutral signal color
+                                                    lineWidth: 1
+                                                }
+                                            ]}
+                                            priceLines={[
+                                                { value: 0.05, color: "#ef4444", label: "Upper" },
+                                                { value: -0.05, color: "#22c55e", label: "Lower" }
+                                            ]}
+                                            scaleRanges={tdfiData.metadata.scale_ranges}
+                                        />
+                                    </div>
+                                )}
+        
+                                {activeLayout?.activeIndicators?.includes('crsi') && crsiData && (
+                                    <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
+                                        <IndicatorPane 
+                                            name="cRSI" 
+                                            width={dimensions.width}
+                                            height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
+                                            mainSeries={{
+                                                data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
+                                                displayType: "line",
+                                                color: crsiData.metadata.color_schemes.line
+                                            }}
+                                            additionalSeries={[
+                                                {
+                                                    data: formatDataForChart(crsiData.timestamps, crsiData.upper_band),
+                                                    displayType: "line",
+                                                    color: "#ef4444",
+                                                    lineWidth: 1
+                                                },
+                                                {
+                                                    data: formatDataForChart(crsiData.timestamps, crsiData.lower_band),
+                                                    displayType: "line",
+                                                    color: "#22c55e",
+                                                    lineWidth: 1
+                                                }
+                                            ]}
+                                            priceLines={[
+                                                { value: 70, color: "#475569", label: "70" },
+                                                { value: 30, color: "#475569", label: "30" }
+                                            ]}
+                                            scaleRanges={crsiData.metadata.scale_ranges}
+                                        />
+                                    </div>
+                                )}
                             </div>
-
-                        )}
-
-                      </div>
-
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-slate-500">
+                            Initializing viewport...
+                        </div>
+                    )}
+        
 
             
         </div>
