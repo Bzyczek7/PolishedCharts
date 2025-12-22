@@ -22,9 +22,9 @@
 ## Phase 3: Metadata & Indicator Transforms [checkpoint: ]
 - [x] Task: Extend backend Pydantic schemas to support `thresholds`, `color_mode`, and line styling. 3a05b96
 - [x] Task: Update TDFI service to calculate and return thresholds and regime metadata (Above/Neutral/Below colors). 747a2b2
-- [ ] Task: Create a reusable `indicatorTransform` utility layer in the frontend to handle multi-series splitting logic.
-- [ ] Task: Write failing tests for splitting a single TDFI series into three regime-based segments driven by thresholds (Red Phase).
-- [ ] Task: Wire the transformation layer into `App.tsx` to prepare data for the parity renderer (Green Phase).
+- [x] Task: Create a reusable `indicatorTransform` utility layer in the frontend to handle multi-series splitting logic. 9a1a6e9
+- [x] Task: Write failing tests for splitting a single TDFI series into three regime-based segments driven by thresholds (Red Phase). 9a1a6e9
+- [~] Task: Wire the transformation layer into `App.tsx` to prepare data for the parity renderer (Green Phase).
 - [ ] Task: Conductor - User Manual Verification 'Metadata & Indicator Transforms' (Protocol in workflow.md)
 
 ## Phase 4: Stable Rendering & Price Lines [checkpoint: ]
