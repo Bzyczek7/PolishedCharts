@@ -32,7 +32,7 @@
 - [x] Task: Implement the explicit "removePriceLine + Rebuild" mechanism in `IndicatorPane` using refs for deterministic cleanup. cc0a04a
 - [x] Task: Update `IndicatorPane` to render the three TDFI line series sharing a single vertical price scale and shared autoscale logic. cc0a04a
 - [x] Task: Write failing tests for Price Line cleanup and series ID stability (Red Phase). cc0a04a
-- [~] Task: Implement the full parity rendering logic in `IndicatorPane` driven by `metadata.reference_levels` and `metadata.scale_ranges` (Green Phase).
+- [x] Task: Implement the full parity rendering logic in `IndicatorPane` driven by `metadata.reference_levels` and `metadata.scale_ranges` (Green Phase). be0fe7f
 - [ ] Task: Conductor - User Manual Verification 'High-Fidelity Pane Rendering' (Protocol in workflow.md)
 
 ## Phase 5: Verification & Stress Testing [checkpoint: ]
