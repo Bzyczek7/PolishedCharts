@@ -19,6 +19,7 @@ async def get_candles(
     interval: str = Query("1d", description="Timeframe (e.g. 1m, 5m, 1h, 1d)"),
     from_ts: Optional[datetime] = Query(None, alias="from", description="Start timestamp (UTC)"),
     to_ts: Optional[datetime] = Query(None, alias="to", description="End timestamp (UTC)"),
+    local_only: bool = Query(False, description="If true, returns only data from DB without gap filling"),
     db: AsyncSession = Depends(get_db)
 ):
     # Normalize interval to lowercase
@@ -46,7 +47,8 @@ async def get_candles(
         ticker=symbol_obj.ticker,
         interval=interval,
         start=from_ts,
-        end=to_ts
+        end=to_ts,
+        local_only=local_only
     )
         
     return candles_data

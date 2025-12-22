@@ -20,7 +20,8 @@ class DataOrchestrator:
         ticker: str, 
         interval: str, 
         start: Optional[datetime] = None, 
-        end: Optional[datetime] = None
+        end: Optional[datetime] = None,
+        local_only: bool = False
     ) -> List[Dict[str, Any]]:
         """
         Main entry point for getting candles. 
@@ -38,30 +39,31 @@ class DataOrchestrator:
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
 
-        # 1. Identify Gaps
-        gaps = await self.candle_service.find_gaps(db, symbol_id, interval, start, end)
-        
-        if gaps:
-            logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
-            # Optimize: Instead of filling each gap individually, 
-            # find the total range covering all gaps and fetch it once.
-            # This avoids dozens of small API calls for things like weekends.
-            all_gap_starts = [g[0] for g in gaps]
-            all_gap_ends = [g[1] for g in gaps]
+        # 1. Identify Gaps (only if not local_only)
+        if not local_only:
+            gaps = await self.candle_service.find_gaps(db, symbol_id, interval, start, end)
             
-            fill_start = min(all_gap_starts)
-            fill_end = max(all_gap_ends)
-            
-            # Ensure aware
-            if fill_start.tzinfo is None:
-                fill_start = fill_start.replace(tzinfo=timezone.utc)
-            if fill_end.tzinfo is None:
-                fill_end = fill_end.replace(tzinfo=timezone.utc)
+            if gaps:
+                logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
+                # Optimize: Instead of filling each gap individually, 
+                # find the total range covering all gaps and fetch it once.
+                # This avoids dozens of small API calls for things like weekends.
+                all_gap_starts = [g[0] for g in gaps]
+                all_gap_ends = [g[1] for g in gaps]
                 
-            logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
-            await self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end)
+                fill_start = min(all_gap_starts)
+                fill_end = max(all_gap_ends)
+                
+                # Ensure aware
+                if fill_start.tzinfo is None:
+                    fill_start = fill_start.replace(tzinfo=timezone.utc)
+                if fill_end.tzinfo is None:
+                    fill_end = fill_end.replace(tzinfo=timezone.utc)
+                    
+                logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
+                await self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end)
 
-        # 2. Fetch all from DB after filling gaps
+        # 2. Fetch all from DB
         # We re-query the full range to ensure we have a continuous, sorted, deduplicated set.
         # This is slightly less efficient than merging in memory, but much safer for data integrity.
         from sqlalchemy.future import select
