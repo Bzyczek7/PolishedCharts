@@ -13,12 +13,14 @@ interface ChartComponentProps {
   overlays?: OverlayIndicator[]
   width?: number
   height?: number
+  onTimeScaleInit?: (timeScale: any) => void
 }
 
-const ChartComponent = ({ symbol, candles, overlays = [], width, height }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
-  const seriesRef = useRef<any>(null)
+  const candlestickSeriesRef = useRef<any>(null)
+  const overlaySeriesRef = useRef<Map<string, any>>(new Map())
 
   useEffect(() => {
     if (!chartContainerRef.current) return
@@ -37,6 +39,7 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height }: Chart
     })
 
     chartRef.current = chart
+    
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
         upColor: '#22c55e',
         downColor: '#ef4444',
@@ -45,16 +48,25 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height }: Chart
         wickDownColor: '#ef4444',
     })
     
-    seriesRef.current = candlestickSeries
+    candlestickSeriesRef.current = candlestickSeries
 
-    // Render Overlays
-    overlays.forEach(overlay => {
-        const lineSeries = chart.addSeries(LineSeries, {
-            color: overlay.color,
-            lineWidth: 2,
-        })
-        lineSeries.setData(overlay.data)
-    })
+    if (onTimeScaleInit) {
+        onTimeScaleInit(chart.timeScale())
+    }
+
+    return () => {
+      if (onTimeScaleInit) {
+        onTimeScaleInit(null)
+      }
+      chart.remove()
+      chartRef.current = null
+      candlestickSeriesRef.current = null
+      overlaySeriesRef.current.clear()
+    }
+  }, [symbol]) // Re-create only on symbol change
+
+  useEffect(() => {
+    if (!candlestickSeriesRef.current) return
 
     if (candles.length > 0) {
         const formattedData = candles.map(c => ({
@@ -65,13 +77,29 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height }: Chart
         const uniqueData = sortedData.filter((item, index, arr) => 
           index === 0 || item.time !== arr[index - 1].time
         );
-        candlestickSeries.setData(uniqueData);
+        candlestickSeriesRef.current.setData(uniqueData);
+    } else {
+        candlestickSeriesRef.current.setData([]);
     }
+  }, [candles])
 
-    return () => {
-      chart.remove()
-    }
-  }, [symbol, candles, overlays]) // Only recreate on data/symbol changes
+  useEffect(() => {
+    if (!chartRef.current) return
+
+    // Clean up old overlays
+    overlaySeriesRef.current.forEach(s => chartRef.current.removeSeries(s))
+    overlaySeriesRef.current.clear()
+
+    // Add new overlays
+    overlays.forEach((overlay, idx) => {
+        const lineSeries = chartRef.current.addSeries(LineSeries, {
+            color: overlay.color,
+            lineWidth: 2,
+        })
+        lineSeries.setData(overlay.data)
+        overlaySeriesRef.current.set(`overlay-${idx}`, lineSeries)
+    })
+  }, [overlays])
 
   useEffect(() => {
     if (chartRef.current && width && height) {

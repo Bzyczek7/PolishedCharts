@@ -55,7 +55,22 @@ async def get_indicator(
         metadata = IndicatorMetadata(
             display_type="pane",
             color_schemes={"line": "#2196F3", "histogram": "#E91E63"},
-            scale_ranges={"min": -1, "max": 1}
+            scale_ranges={"min": -1, "max": 1},
+            series_metadata=[
+                {
+                    "field": "tdfi",
+                    "role": "main",
+                    "label": "TDFI",
+                    "line_color": "#E91E63",
+                    "line_style": "solid",
+                    "line_width": 2,
+                    "display_type": "line"
+                }
+            ],
+            reference_levels=[
+                {"value": 0.05, "line_color": "#ef4444", "line_label": "Upper"},
+                {"value": -0.05, "line_color": "#22c55e", "line_label": "Lower"}
+            ]
         )
         return TDFIOutput(
             timestamps=timestamps,
@@ -69,7 +84,40 @@ async def get_indicator(
         metadata = IndicatorMetadata(
             display_type="pane",
             color_schemes={"line": "#4CAF50", "bands": "#81C784"},
-            scale_ranges={"min": 0, "max": 100}
+            scale_ranges={"min": 0, "max": 100},
+            series_metadata=[
+                {
+                    "field": "crsi",
+                    "role": "main",
+                    "label": "cRSI",
+                    "line_color": "#4CAF50",
+                    "line_style": "solid",
+                    "line_width": 2,
+                    "display_type": "line"
+                },
+                {
+                    "field": "upper_band",
+                    "role": "band",
+                    "label": "Upper Band",
+                    "line_color": "#ef4444",
+                    "line_style": "solid",
+                    "line_width": 1,
+                    "display_type": "line"
+                },
+                {
+                    "field": "lower_band",
+                    "role": "band",
+                    "label": "Lower Band",
+                    "line_color": "#22c55e",
+                    "line_style": "solid",
+                    "line_width": 1,
+                    "display_type": "line"
+                }
+            ],
+            reference_levels=[
+                {"value": 70, "line_color": "#475569", "line_label": "70"},
+                {"value": 30, "line_color": "#475569", "line_label": "30"}
+            ]
         )
         return cRSIOutput(
             timestamps=timestamps,
@@ -84,7 +132,18 @@ async def get_indicator(
         metadata = IndicatorMetadata(
             display_type="overlay",
             color_schemes={"line": "#FF9800"},
-            scale_ranges=None
+            scale_ranges=None,
+            series_metadata=[
+                {
+                    "field": "adxvma",
+                    "role": "main",
+                    "label": "ADXVMA",
+                    "line_color": "#FF9800",
+                    "line_style": "solid",
+                    "line_width": 2,
+                    "display_type": "line"
+                }
+            ]
         )
         return ADXVMAOutput(
             timestamps=timestamps,

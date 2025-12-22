@@ -1,23 +1,22 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './App.css'
 import Layout from './components/Layout'
 import Toolbar from './components/Toolbar'
 import SymbolSearch from './components/SymbolSearch'
 import IndicatorSearch from './components/IndicatorSearch'
 import Watchlist from './components/Watchlist'
-import AlertsList from './components/AlertsList'
-import type { Alert } from './components/AlertsList'
 import AlertsView from './components/AlertsView'
 import ChartComponent from './components/ChartComponent'
+import type { Alert } from './components/AlertsList'
 import type { Layout as LayoutType } from './components/Toolbar'
 import IndicatorPane from './components/IndicatorPane'
 import { loadLayouts, saveLayouts, loadWatchlist, saveWatchlist, loadAlerts, saveAlerts } from './services/layoutService'
 import { getCandles } from './api/candles'
 import type { Candle } from './api/candles'
 import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
-import type { TDFIOutput, cRSIOutput, ADXVMAOutput } from './api/indicators'
+import type { ADXVMAOutput, cRSIOutput, TDFIOutput } from './api/indicators'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useRef } from 'react'
+import { formatDataForChart } from './lib/chartUtils'
 
 function App() {
   const [symbol, setSymbol] = useState('IBM')
@@ -25,10 +24,12 @@ function App() {
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
   const mainViewportRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [mainTimeScale, setMainTimeScale] = useState<any>(null)
+  const indicatorTimeScalesRef = useRef<Map<string, any>>(new Map())
+
   const [watchlist, setWatchlist] = useState(() => {
     const symbols = loadWatchlist()
     return symbols.map(s => {
-        // Deterministic-ish random values based on symbol string for initial load
         const charSum = s.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         const basePrice = 100 + (charSum % 200);
         const change = (charSum % 10) - 5;
@@ -45,21 +46,6 @@ function App() {
   const [alerts, setAlerts] = useState<Alert[]>(() => loadAlerts())
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
-
-  const handleSymbolSelect = (newSymbol: string) => {
-    setSymbol(newSymbol)
-    setWatchlist(prev => {
-        if (prev.some(item => item.symbol === newSymbol)) return prev
-        // Add new mock item for the watchlist
-        return [...prev, {
-            symbol: newSymbol,
-            price: 150.00 + (Math.random() * 50),
-            change: (Math.random() * 4) - 2,
-            changePercent: (Math.random() * 2) - 1
-        }]
-    })
-  }
-  
   const [candles, setCandles] = useState<Candle[]>([])
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
@@ -78,6 +64,30 @@ function App() {
     observer.observe(mainViewportRef.current)
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    if (!mainTimeScale) return
+
+    const handleRangeChange = (range: any) => {
+        if (!range) return
+        indicatorTimeScalesRef.current.forEach((ts) => {
+            ts.setVisibleLogicalRange(range)
+        })
+    }
+
+    mainTimeScale.subscribeVisibleLogicalRangeChange(handleRangeChange)
+    
+    const currentRange = mainTimeScale.getVisibleLogicalRange()
+    if (currentRange) {
+        indicatorTimeScalesRef.current.forEach((ts) => {
+            ts.setVisibleLogicalRange(currentRange)
+        })
+    }
+
+    return () => {
+        mainTimeScale.unsubscribeVisibleLogicalRangeChange(handleRangeChange)
+    }
+  }, [mainTimeScale, activeLayout?.activeIndicators, candles])
 
   useEffect(() => {
     saveWatchlist(watchlist.map(item => item.symbol))
@@ -138,7 +148,20 @@ function App() {
     fetchData()
   }, [symbol])
 
-  const handleLayoutSave = (name: string) => {
+  const handleSymbolSelect = useCallback((newSymbol: string) => {
+    setSymbol(newSymbol)
+    setWatchlist(prev => {
+        if (prev.some(item => item.symbol === newSymbol)) return prev
+        return [...prev, {
+            symbol: newSymbol,
+            price: 150.00 + (Math.random() * 50),
+            change: (Math.random() * 4) - 2,
+            changePercent: (Math.random() * 2) - 1
+        }]
+    })
+  }, [])
+
+  const handleLayoutSave = useCallback((name: string) => {
     const newLayout: LayoutType = {
         id: Date.now().toString(),
         name,
@@ -149,9 +172,9 @@ function App() {
     setLayouts(updated)
     saveLayouts(updated)
     setActiveLayout(newLayout)
-  }
+  }, [activeLayout, layouts])
 
-  const toggleIndicator = (indicator: string) => {
+  const toggleIndicator = useCallback((indicator: string) => {
     const currentLayout = activeLayout || {
         id: 'default',
         name: 'Default Layout',
@@ -163,7 +186,7 @@ function App() {
     const updated: LayoutType = {
         ...currentLayout,
         activeIndicators: active 
-            ? currentLayout.activeIndicators.filter(i => i !== indicator)
+            ? currentLayout.activeIndicators.filter((i: string) => i !== indicator)
             : [...currentLayout.activeIndicators, indicator]
     }
     
@@ -174,32 +197,11 @@ function App() {
         setLayouts(updatedLayouts)
         saveLayouts(updatedLayouts)
     }
-  }
-
-  const formatDataForChart = (timestamps: string[] | undefined, values: (number | null)[] | undefined) => {
-    if (!timestamps || !values || timestamps.length === 0) return []
-    
-    const formatted = values.map((v, i) => {
-        if (v === null || v === undefined) return null;
-        const ts = timestamps[i];
-        if (!ts) return null;
-        const time = Math.floor(new Date(ts).getTime() / 1000);
-        if (isNaN(time)) return null;
-        return {
-            time: time as any,
-            value: v
-        };
-    }).filter((item): item is { time: any; value: number } => item !== null);
-    
-    const sorted = formatted.sort((a, b) => a.time - b.time)
-    return sorted.filter((item, index, arr) => 
-        index === 0 || item.time !== arr[index - 1].time
-    )
-  }
+  }, [activeLayout, layouts])
 
   const triggeredCount = alerts.filter(a => a.status === 'triggered').length
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable full-screen mode: ${err.message}`);
@@ -209,7 +211,63 @@ function App() {
             document.exitFullscreen();
         }
     }
-  }
+  }, [])
+
+  const mainHeight = Math.max(dimensions.height * 0.6, 300)
+  const indicatorHeight = Math.max((dimensions.height - mainHeight - 100) / Math.max(activeLayout?.activeIndicators.filter((i: string) => ['tdfi', 'crsi'].includes(i)).length || 1, 1), 100)
+
+  const adxvmaOverlay = useMemo(() => {
+    if (!activeLayout?.activeIndicators?.includes('adxvma') || !adxvmaData) return []
+    return [
+        { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
+    ]
+  }, [activeLayout?.activeIndicators, adxvmaData])
+
+  const tdfiPaneProps = useMemo(() => {
+    if (!activeLayout?.activeIndicators?.includes('tdfi') || !tdfiData) return null
+    return {
+        mainSeries: {
+            data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
+            displayType: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.display_type || "histogram" as const,
+            color: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.line_color || tdfiData.metadata.color_schemes.line
+        },
+        additionalSeries: tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
+            data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
+            displayType: s.display_type || "line" as const,
+            color: s.line_color,
+            lineWidth: s.line_width
+        })),
+        priceLines: tdfiData.metadata.reference_levels?.map(rl => ({
+            value: rl.value,
+            color: rl.line_color,
+            label: rl.line_label
+        })),
+        scaleRanges: tdfiData.metadata.scale_ranges
+    }
+  }, [activeLayout?.activeIndicators, tdfiData])
+
+  const crsiPaneProps = useMemo(() => {
+    if (!activeLayout?.activeIndicators?.includes('crsi') || !crsiData) return null
+    return {
+        mainSeries: {
+            data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
+            displayType: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.display_type || "line" as const,
+            color: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.line_color || crsiData.metadata.color_schemes.line
+        },
+        additionalSeries: crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
+            data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
+            displayType: s.display_type || "line" as const,
+            color: s.line_color,
+            lineWidth: s.line_width
+        })),
+        priceLines: crsiData.metadata.reference_levels?.map(rl => ({
+            value: rl.value,
+            color: rl.line_color,
+            label: rl.line_label
+        })),
+        scaleRanges: crsiData.metadata.scale_ranges
+    }
+  }, [activeLayout?.activeIndicators, crsiData])
 
   return (
     <TooltipProvider>
@@ -236,117 +294,97 @@ function App() {
                 />
             }
         >
-                <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
-                    <Toolbar 
-                        symbol={symbol}
-                        onSymbolClick={() => setIsSearchOpen(true)}
-                        onIndicatorsClick={() => setIsIndicatorsOpen(true)}
-                        onFullscreenToggle={toggleFullscreen}
-                        activeLayout={activeLayout}
-                        savedLayouts={layouts}
-                        onLayoutSelect={setActiveLayout}
-                        onLayoutSave={handleLayoutSave}
-                    />
-        
-                    <SymbolSearch 
-                        open={isSearchOpen} 
-                        onOpenChange={setIsSearchOpen} 
-                        onSelect={handleSymbolSelect} 
-                    />
-        
-                    <IndicatorSearch 
-                        open={isIndicatorsOpen} 
-                        onOpenChange={setIsIndicatorsOpen} 
-                        onSelect={toggleIndicator} 
-                    />
-        
-                    {dimensions.width > 0 && dimensions.height > 0 ? (
-                        <div className="flex-1 flex flex-col space-y-4 min-h-0">
-                            <div className="flex-[7] bg-slate-900 rounded-lg border border-slate-800 relative min-h-0">
-                                <ChartComponent 
-                                    symbol={symbol} 
-                                    candles={candles}
-                                    width={dimensions.width}
-                                    height={Math.floor(dimensions.height * 0.7)}
-                                    overlays={activeLayout?.activeIndicators?.includes('adxvma') && adxvmaData ? [
-                                        { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
-                                    ] : []}
-                                />
-                            </div>
-                            
-                            <div className="flex-[3] flex flex-col gap-4 min-h-0">
-                                {activeLayout?.activeIndicators?.includes('tdfi') && tdfiData && (
-                                    <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
-                                        <IndicatorPane 
-                                            name="TDFI" 
-                                            width={dimensions.width}
-                                            height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
-                                            mainSeries={{
-                                                data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi),
-                                                displayType: "histogram",
-                                                color: tdfiData.metadata.color_schemes.line
-                                            }}
-                                            additionalSeries={[
-                                                {
-                                                    data: formatDataForChart(tdfiData.timestamps, tdfiData.tdfi_signal),
-                                                    displayType: "line",
-                                                    color: "#f1f5f9", // Neutral signal color
-                                                    lineWidth: 1
-                                                }
-                                            ]}
-                                            priceLines={[
-                                                { value: 0.05, color: "#ef4444", label: "Upper" },
-                                                { value: -0.05, color: "#22c55e", label: "Lower" }
-                                            ]}
-                                            scaleRanges={tdfiData.metadata.scale_ranges}
-                                        />
-                                    </div>
-                                )}
-        
-                                {activeLayout?.activeIndicators?.includes('crsi') && crsiData && (
-                                    <div className="flex-1 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0">
-                                        <IndicatorPane 
-                                            name="cRSI" 
-                                            width={dimensions.width}
-                                            height={Math.floor((dimensions.height * 0.3) / (activeLayout.activeIndicators.filter(i => ['tdfi', 'crsi'].includes(i)).length || 1)) - 40}
-                                            mainSeries={{
-                                                data: formatDataForChart(crsiData.timestamps, crsiData.crsi),
-                                                displayType: "line",
-                                                color: crsiData.metadata.color_schemes.line
-                                            }}
-                                            additionalSeries={[
-                                                {
-                                                    data: formatDataForChart(crsiData.timestamps, crsiData.upper_band),
-                                                    displayType: "line",
-                                                    color: "#ef4444",
-                                                    lineWidth: 1
-                                                },
-                                                {
-                                                    data: formatDataForChart(crsiData.timestamps, crsiData.lower_band),
-                                                    displayType: "line",
-                                                    color: "#22c55e",
-                                                    lineWidth: 1
-                                                }
-                                            ]}
-                                            priceLines={[
-                                                { value: 70, color: "#475569", label: "70" },
-                                                { value: 30, color: "#475569", label: "30" }
-                                            ]}
-                                            scaleRanges={crsiData.metadata.scale_ranges}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center text-slate-500">
-                            Initializing viewport...
-                        </div>
-                    )}
-        
+            <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
+                <Toolbar 
+                    symbol={symbol}
+                    onSymbolClick={() => setIsSearchOpen(true)}
+                    onIndicatorsClick={() => setIsIndicatorsOpen(true)}
+                    onFullscreenToggle={toggleFullscreen}
+                    activeLayout={activeLayout}
+                    savedLayouts={layouts}
+                    onLayoutSelect={setActiveLayout}
+                    onLayoutSave={handleLayoutSave}
+                />
 
-            
-        </div>
+                <SymbolSearch 
+                    open={isSearchOpen} 
+                    onOpenChange={setIsSearchOpen} 
+                    onSelect={handleSymbolSelect} 
+                />
+
+                <IndicatorSearch 
+                    open={isIndicatorsOpen} 
+                    onOpenChange={setIsIndicatorsOpen} 
+                    onSelect={toggleIndicator} 
+                />
+
+                {dimensions.width > 0 && dimensions.height > 0 ? (
+                    <div className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
+                        <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 rounded-lg border border-slate-800 relative min-h-0 overflow-hidden">
+                            <ChartComponent 
+                                symbol={symbol} 
+                                candles={candles}
+                                width={dimensions.width}
+                                height={mainHeight}
+                                onTimeScaleInit={setMainTimeScale}
+                                overlays={adxvmaOverlay}
+                            />
+                        </div>
+                        
+                        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
+                            {tdfiPaneProps && (
+                                <div style={{ height: indicatorHeight }} className="shrink-0 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0 overflow-hidden">
+                                    <IndicatorPane 
+                                        name="TDFI" 
+                                        width={dimensions.width}
+                                        height={indicatorHeight - 40}
+                                        onTimeScaleInit={(ts) => {
+                                            if (ts) {
+                                                indicatorTimeScalesRef.current.set('tdfi', ts)
+                                                if (mainTimeScale) {
+                                                    const range = mainTimeScale.getVisibleLogicalRange()
+                                                    if (range) ts.setVisibleLogicalRange(range)
+                                                }
+                                            } else {
+                                                indicatorTimeScalesRef.current.delete('tdfi')
+                                            }
+                                        }}
+                                        candles={candles}
+                                        {...tdfiPaneProps}
+                                    />
+                                </div>
+                            )}
+
+                            {crsiPaneProps && (
+                                <div style={{ height: indicatorHeight }} className="shrink-0 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0 overflow-hidden">
+                                    <IndicatorPane 
+                                        name="cRSI" 
+                                        width={dimensions.width}
+                                        height={indicatorHeight - 40}
+                                        onTimeScaleInit={(ts) => {
+                                            if (ts) {
+                                                indicatorTimeScalesRef.current.set('crsi', ts)
+                                                if (mainTimeScale) {
+                                                    const range = mainTimeScale.getVisibleLogicalRange()
+                                                    if (range) ts.setVisibleLogicalRange(range)
+                                                }
+                                            } else {
+                                                indicatorTimeScalesRef.current.delete('crsi')
+                                            }
+                                        }}
+                                        candles={candles}
+                                        {...crsiPaneProps}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex items-center justify-center text-slate-500">
+                        Initializing viewport...
+                    </div>
+                )}
+            </div>
         </Layout>
     </TooltipProvider>
   )

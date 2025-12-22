@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft, ChevronRight, LayoutGrid, Bell } from "lucide-react"
@@ -35,7 +34,7 @@ const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key.toLowerCase() === 'b') {
         e.preventDefault()
-        setIsSidebarOpen((prev) => !prev)
+        setIsSidebarOpen((prev: boolean) => !prev)
       }
     }
     window.addEventListener('keydown', handleKeyDown)

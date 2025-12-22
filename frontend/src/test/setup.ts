@@ -22,19 +22,19 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-global.ResizeObserver = ResizeObserverMock;
+(window as any).ResizeObserver = ResizeObserverMock;
 
 window.Element.prototype.scrollIntoView = vi.fn();
 
 // dnd-kit needs PointerEvent
-if (!global.PointerEvent) {
+if (!(window as any).PointerEvent) {
     class PointerEvent extends MouseEvent {
       constructor(type: string, params: PointerEventInit = {}) {
         super(type, params);
       }
     }
     // @ts-ignore
-    global.PointerEvent = PointerEvent;
+    (window as any).PointerEvent = PointerEvent;
 }
 
 // Mock lightweight-charts
@@ -67,10 +67,18 @@ vi.mock('lightweight-charts', () => ({
   },
 }));
 
-// Mock Radix UI Portal
-vi.mock('@radix-ui/react-portal', () => ({
-  Root: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
-}));
+// Mock Radix UI Tooltip
+vi.mock('@radix-ui/react-tooltip', async () => {
+  const React = await import('react');
+  return {
+    Provider: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+    Root: ({ children }: any) => React.createElement('div', null, children),
+    Trigger: React.forwardRef(({ children, ...props }: any, ref) => React.createElement('div', { ...props, ref }, children)),
+    Content: React.forwardRef(({ children }: { children: React.ReactNode }, ref) => React.createElement('div', { ref }, children)),
+    Portal: ({ children }: { children: React.ReactNode }) => React.createElement('div', null, children),
+    Arrow: () => React.createElement('div'),
+  };
+});
 
 // Mock Radix UI ContextMenu
 vi.mock('@radix-ui/react-context-menu', async () => {

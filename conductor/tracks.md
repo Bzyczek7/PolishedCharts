@@ -1,5 +1,5 @@
 
 ---
 
-## [~] Track: TradingView-style UI/UX foundation with responsive layout, collapsible panels, and professional dark theme
-*Link: [./conductor/tracks/ui_foundation_20251220/](./conductor/tracks/ui_foundation_20251220/)*
+## [~] Track: Historical Data Management & Indicator Visual Parity
+*Link: [./conductor/tracks/historical_data_indicator_parity_20251222/](./conductor/tracks/historical_data_indicator_parity_20251222/)*

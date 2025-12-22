@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react"
-import { Plus, Trash2, GripVertical, Search, Bell, Check, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Plus, Trash2, GripVertical, Search, Bell, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import {
@@ -35,12 +35,29 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 interface WatchlistItemData {
   symbol: string
   price: number
   change: number
   changePercent: number
+}
+
+// Mock details lookup
+const getSymbolDetails = (symbol: string) => {
+    const details: Record<string, { name: string, high: number, low: number, volume: string }> = {
+        'IBM': { name: 'International Business Machines', high: 146.50, low: 144.20, volume: '3.2M' },
+        'AAPL': { name: 'Apple Inc.', high: 182.10, low: 178.50, volume: '52.4M' },
+        'MSFT': { name: 'Microsoft Corporation', high: 340.20, low: 335.80, volume: '21.1M' },
+        'GOOGL': { name: 'Alphabet Inc.', high: 135.40, low: 132.10, volume: '18.5M' },
+        'TSLA': { name: 'Tesla, Inc.', high: 250.30, low: 242.10, volume: '110.2M' },
+    }
+    return details[symbol] || { name: symbol, high: 0, low: 0, volume: '0' }
 }
 
 interface WatchlistProps {
@@ -71,6 +88,7 @@ const WatchlistItem = ({
 }) => {
   const [flash, setFlash] = useState<"up" | "down" | null>(null)
   const prevPriceRef = useRef(item.price)
+  const details = getSymbolDetails(item.symbol)
 
   const {
     attributes,
@@ -143,7 +161,39 @@ const WatchlistItem = ({
             </div>
           </TableCell>
           <TableCell className="font-bold text-slate-200 py-3">
-            {item.symbol}
+                <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                        <span>{item.symbol}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="bg-slate-900 border-slate-800 p-3 w-64 shadow-xl">
+                        <div className="space-y-2">
+                            <div className="border-b border-slate-800 pb-1">
+                                <p className="text-sm font-bold text-white">{details.name}</p>
+                                <p className="text-[10px] text-slate-500 uppercase tracking-widest">{item.symbol} • NYSE</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-0.5">
+                                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Day High</p>
+                                    <p className="text-xs text-slate-300">${details.high.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Day Low</p>
+                                    <p className="text-xs text-slate-300">${details.low.toFixed(2)}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Volume</p>
+                                    <p className="text-xs text-slate-300">{details.volume}</p>
+                                </div>
+                                <div className="space-y-0.5">
+                                    <p className="text-[10px] text-slate-500 uppercase font-semibold">Price Chg</p>
+                                    <p className={cn("text-xs font-medium", item.change >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                        {item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </TooltipContent>
+                </Tooltip>
           </TableCell>
           <TableCell 
             className={cn(
@@ -267,8 +317,8 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
   }
 
   return (
-    <div className="flex flex-col h-full" data-testid="watchlist-container">
-      <div className="flex items-center justify-between mb-4 px-1">
+    <div className="flex flex-col flex-1 min-h-0" data-testid="watchlist-container">
+      <div className="flex items-center justify-between mb-4 px-1 shrink-0">
         <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
             Watchlist
@@ -325,7 +375,7 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
           </Button>
         </div>
       ) : (
-        <div className="overflow-auto px-1">
+        <div className="flex-1 overflow-auto px-1">
           <DndContext 
             sensors={sensors}
             collisionDetection={closestCenter}

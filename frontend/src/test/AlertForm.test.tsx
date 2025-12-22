@@ -10,7 +10,7 @@ describe('AlertForm', () => {
     vi.clearAllMocks()
   })
 
-  test('submits correctly', async () => {
+  it('submits correctly', async () => {
     vi.mocked(createAlert).mockResolvedValueOnce({ id: 1, symbol_id: 1, condition: 'price_above', threshold: 150, is_active: true } as any)
     render(<AlertForm symbol="IBM" />)
 

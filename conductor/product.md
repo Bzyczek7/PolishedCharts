@@ -17,7 +17,17 @@ TradingAlert is a comprehensive, self-hosted trading analysis and notification p
 - **Centralized Management:** Provide a unified dashboard for managing indicators, active alerts, and viewing alert history.
 
 ## Key Features
+
 - **Advanced Charting Engine:** Integration of interactive charting libraries for seamless price action and indicator visualization.
+
+- **Responsive Layout:** A collapsible right sidebar structure with persistence, maximizing chart visibility.
+
+- **Command Palette Navigation:** Fast symbol and indicator search via `Ctrl+K` and `Ctrl+I` palettes.
+
+- **Interactive Watchlist:** Symbol management with drag-and-drop, real-time price flashes, and detailed tooltips.
+
+- **Alert Monitoring Dashboard:** A dedicated sidebar panel for filtering, searching, and managing active/triggered alerts with chart-linking logic.
+
 - **Indicator Scripting Environment:** A built-in code editor for defining custom indicator logic and mathematical transformations.
+
 - **Dynamic Alert Engine:** A robust system that evaluates indicator outputs in real-time and dispatches notifications through various channels.
-- **Alert Management Dashboard:** A dedicated interface for creating, editing, and monitoring the status of all alerts.

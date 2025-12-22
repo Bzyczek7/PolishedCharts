@@ -6,6 +6,8 @@ class IndicatorMetadata(BaseModel):
     display_type: str # "overlay" or "pane"
     color_schemes: Dict[str, Any]
     scale_ranges: Optional[Dict[str, Any]] = None
+    series_metadata: Optional[List[Dict[str, Any]]] = None
+    reference_levels: Optional[List[Dict[str, Any]]] = None
 
 class TDFIOutput(BaseModel):
     timestamps: List[datetime]

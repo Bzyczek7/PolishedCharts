@@ -7,6 +7,20 @@ export interface IndicatorMetadata {
     min: number
     max: number
   }
+  series_metadata?: {
+    field: string
+    role: 'main' | 'signal' | 'band'
+    label: string
+    line_color: string
+    line_style: 'solid' | 'dashed'
+    line_width: number
+    display_type?: 'line' | 'histogram'
+  }[]
+  reference_levels?: {
+    value: number
+    line_color: string
+    line_label: string
+  }[]
 }
 
 export interface TDFIOutput {

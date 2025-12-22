@@ -1,4 +1,3 @@
-import React from "react"
 import {
   CommandDialog,
   CommandEmpty,
@@ -8,7 +7,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Search, History, Globe, Landmark } from "lucide-react"
+import { History, Landmark } from "lucide-react"
 
 interface SymbolSearchProps {
   open: boolean

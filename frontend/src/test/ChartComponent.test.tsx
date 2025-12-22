@@ -62,11 +62,8 @@ describe('ChartComponent', () => {
 
 
     const mockOverlay = {
-
-        data: [{ time: '2023-10-27', value: 102 }],
-
+        data: [{ time: 1698364800, value: 102 }],
         color: '#FF9800'
-
     }
 
 

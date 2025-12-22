@@ -8,7 +8,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { LineChart, Zap, Activity, Waves } from "lucide-react"
+import { LineChart, Zap, Activity } from "lucide-react"
 
 interface IndicatorSearchProps {
   open: boolean

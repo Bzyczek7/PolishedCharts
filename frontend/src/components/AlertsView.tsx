@@ -1,4 +1,3 @@
-import React from 'react'
 import AlertsList from './AlertsList'
 import AlertForm from './AlertForm'
 import type { Alert } from './AlertsList'
