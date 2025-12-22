@@ -131,8 +131,12 @@ class YFinanceProvider(MarketDataProvider):
 class AlphaVantageProvider(MarketDataProvider):
     BASE_URL = "https://www.alphavantage.co/query"
 
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str, calls_per_minute: int = 5, calls_per_day: int = 500):
         self.api_key = api_key
+        self.calls_per_minute = calls_per_minute
+        self.calls_per_day = calls_per_day
+        self._last_call_ts = 0
+        self._min_interval = 60.0 / calls_per_minute
 
     async def fetch_candles(
         self, 
@@ -142,11 +146,42 @@ class AlphaVantageProvider(MarketDataProvider):
         end: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
-        Fetch incremental candles from Alpha Vantage.
+        Fetch incremental candles from Alpha Vantage with retry and rate limit support.
         """
-        # Mapping standard intervals to AV functions/intervals
-        # AV functions: TIME_SERIES_INTRADAY, TIME_SERIES_DAILY, TIME_SERIES_WEEKLY, TIME_SERIES_MONTHLY
+        import time
+        import random
+
+        # Simple client-side throttling
+        now = time.time()
+        elapsed = now - self._last_call_ts
+        if elapsed < self._min_interval:
+            await asyncio.sleep(self._min_interval - elapsed)
+
+        max_retries = 3
+        current_retry = 0
         
+        while current_retry <= max_retries:
+            try:
+                self._last_call_ts = time.time()
+                candles = await self._do_fetch(symbol, interval, start, end)
+                return candles
+            except Exception as e:
+                if "RATE_LIMIT_EXCEEDED" in str(e):
+                    current_retry += 1
+                    if current_retry > max_retries:
+                        raise e
+                    
+                    # Exponential backoff with jitter
+                    wait_time = (2 ** current_retry) + random.uniform(0, 1)
+                    logger.warning(f"Alpha Vantage rate limit hit for {symbol}. Retrying in {wait_time:.2f}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise e
+        
+        return []
+
+    async def _do_fetch(self, symbol: str, interval: str, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        # Original fetch logic here...
         if interval in ["1m", "5m", "15m", "30m", "60m"]:
             func = "TIME_SERIES_INTRADAY"
             av_interval = interval
