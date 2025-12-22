@@ -1,11 +1,11 @@
 # Plan: Charting Engine Enhancement (Indicators & Layout Parity)
 
-## Phase 1: Responsive Layout & Unified Resizing [checkpoint: 1afe023]
+## Phase 1: Responsive Layout & Unified Resizing [checkpoint: 38ea677]
 - [x] Task: Write failing tests for unified viewport resizing using a mocked `ResizeObserver`, verifying container-driven sizing instead of window events (Red Phase). 1afe023
 - [x] Task: Implement centralized `ResizeObserver` in `App.tsx` to drive dimensions for all panes (Green Phase). 1afe023
 - [x] Task: Remove per-component `window.resize` handlers in `ChartComponent` and `IndicatorPane` to avoid duplicate logic (Green Phase). 1afe023
 - [x] Task: Refactor the main layout to a 100% vertical flex system, removing hardcoded heights and the indicator stack cap (Green Phase). 1afe023
-- [ ] Task: Conductor - User Manual Verification 'Responsive Layout & Unified Resizing' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Responsive Layout & Unified Resizing' (Protocol in workflow.md) 38ea677
 
 ## Phase 2: Metadata Schema & Data Integrity
 - [ ] Task: Extend the `IndicatorMetadata` interface to support snake_case `series_metadata` (with `field` mapping) and `reference_levels` (Green Phase).
