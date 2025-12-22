@@ -22,7 +22,7 @@
 - [x] Task: Implement worker task lifecycle management (store task handles, add `done_callback`, and handle graceful shutdown) 322ecba
 - [x] Task: Implement backfill worker logic using the `BackfillJob` table for coordination and error state tracking cf67524
 - [x] Task: Implement incremental update task that pulls latest candles for active symbols at a controlled cadence f30590d
-- [ ] Task: Add rate-limiting and backoff decorators for all yfinance interactions to prevent IP blocks
+- [x] Task: Add rate-limiting and backoff decorators for all yfinance interactions to prevent IP blocks cfd6487
 - [ ] Task: Write Unit/Integration Tests for Workers: verify job state transitions and robust exception handling
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Background Workers & Concurrency' (Protocol in workflow.md)
 
