@@ -28,6 +28,28 @@ async def test_yfinance_provider_lookback_clamping():
         assert passed_start >= earliest_possible - timedelta(seconds=5)
 
 @pytest.mark.asyncio
+async def test_yfinance_provider_lookback_clamping_1h():
+    provider = YFinanceProvider()
+    
+    # 1h interval has a limit of 729 days
+    interval = "1h"
+    too_far_back = datetime.now() - timedelta(days=1000)
+    
+    with patch("yfinance.download") as mock_download:
+        mock_df = MagicMock()
+        mock_df.empty = True
+        mock_download.return_value = mock_df
+        
+        await provider.fetch_candles("IBM", interval, start=too_far_back)
+        
+        args, kwargs = mock_download.call_args
+        passed_start = kwargs["start"]
+        
+        # Should be clamped to roughly 729 days ago
+        earliest_possible = datetime.now() - timedelta(days=729)
+        assert passed_start >= earliest_possible - timedelta(seconds=5)
+
+@pytest.mark.asyncio
 async def test_alphavantage_rate_limit_detection():
     provider = AlphaVantageProvider(api_key="demo")
     
