@@ -19,7 +19,7 @@
 - [x] Task: Write Integration Tests for Gap Filling: verify missing bars are fetched and upserted during GET requests e89c797
 - [x] Task: Conductor - User Manual Verification 'Phase 2: yfinance Orchestrator & Gap Filling' (Protocol in workflow.md) b0403f9
 ## Phase 3: Background Workers & Concurrency
-- [ ] Task: Implement worker task lifecycle management (store task handles, add `done_callback`, and handle graceful shutdown)
+- [x] Task: Implement worker task lifecycle management (store task handles, add `done_callback`, and handle graceful shutdown) 322ecba
 - [ ] Task: Implement backfill worker logic using the `BackfillJob` table for coordination and error state tracking
 - [ ] Task: Implement incremental update task that pulls latest candles for active symbols at a controlled cadence
 - [ ] Task: Add rate-limiting and backoff decorators for all yfinance interactions to prevent IP blocks
