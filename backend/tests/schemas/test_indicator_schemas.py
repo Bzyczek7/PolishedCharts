@@ -1,35 +1,35 @@
 import pytest
-from app.schemas.indicator import TDFIOutput, cRSIOutput, ADXVMAOutput, IndicatorMetadata
+from pydantic import ValidationError
+from app.schemas.indicator import IndicatorMetadata, SeriesMetadata
 
-def test_tdfi_output_schema():
-    metadata = {"display_type": "pane", "color_schemes": {}}
-    data = {
-        "timestamps": ["2023-10-27T00:00:00"],
-        "tdfi": [1.0, 2.0], 
-        "tdfi_signal": [1, -1], 
-        "metadata": metadata
-    }
-    model = TDFIOutput(**data)
-    assert len(model.tdfi) == 2
+def test_series_metadata_validation():
+    # Should work with defaults
+    sm = SeriesMetadata(
+        field="tdfi",
+        role="main",
+        label="TDFI",
+        line_color="#E91E63"
+    )
+    assert sm.line_style == "solid"
+    assert sm.line_width == 2
+    assert sm.display_type == "line"
 
-def test_crsi_output_schema():
-    metadata = {"display_type": "pane", "color_schemes": {}}
-    data = {
-        "timestamps": ["2023-10-27T00:00:00"],
-        "crsi": [50.0], 
-        "upper_band": [70.0], 
-        "lower_band": [30.0], 
-        "metadata": metadata
-    }
-    model = cRSIOutput(**data)
-    assert model.crsi[0] == 50.0
-
-def test_adxvma_output_schema():
-    metadata = {"display_type": "overlay", "color_schemes": {}}
-    data = {
-        "timestamps": ["2023-10-27T00:00:00"],
-        "adxvma": [100.0, 101.0], 
-        "metadata": metadata
-    }
-    model = ADXVMAOutput(**data)
-    assert len(model.adxvma) == 2
+def test_indicator_metadata_extended():
+    metadata = IndicatorMetadata(
+        display_type="pane",
+        color_schemes={"line": "#2196F3"},
+        color_mode="threshold",
+        thresholds={"high": 0.05, "low": -0.05},
+        series_metadata=[
+            {
+                "field": "tdfi",
+                "role": "main",
+                "label": "TDFI",
+                "line_color": "#E91E63",
+                "line_style": "solid"
+            }
+        ]
+    )
+    assert metadata.color_mode == "threshold"
+    assert metadata.thresholds["high"] == 0.05
+    assert metadata.series_metadata[0].line_style == "solid"
