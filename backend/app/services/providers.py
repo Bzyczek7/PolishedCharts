@@ -30,6 +30,7 @@ class YFinanceProvider(MarketDataProvider):
         "60m": 60,
         "1h": 90,
         "1d": 365 * 5, # 5 years
+        "1w": 365 * 10,
         "1wk": 365 * 10,
         "1mo": 365 * 20,
     }
@@ -82,6 +83,8 @@ class YFinanceProvider(MarketDataProvider):
                     "15m": "60d",
                     "1h": "730d",
                     "1d": "max",
+                    "1wk": "max",
+                    "1w": "max",
                 }
                 p = period_map.get(interval, "1mo")
                 df = ticker.history(period=p, interval=interval)
@@ -147,6 +150,8 @@ class YFinanceProvider(MarketDataProvider):
             "60m": timedelta(days=60),
             "1h": timedelta(days=730),
             "1d": timedelta(days=365 * 2),
+            "1wk": timedelta(days=365 * 5),
+            "1w": timedelta(days=365 * 5),
         }
         return mapping.get(interval, timedelta(days=365))
 
@@ -219,7 +224,7 @@ class AlphaVantageProvider(MarketDataProvider):
         elif interval == "1d":
             func = "TIME_SERIES_DAILY"
             av_interval = None
-        elif interval == "1wk":
+        elif interval in ["1wk", "1w"]:
             func = "TIME_SERIES_WEEKLY"
             av_interval = None
         elif interval == "1mo":

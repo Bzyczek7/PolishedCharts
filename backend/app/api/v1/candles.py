@@ -23,6 +23,8 @@ async def get_candles(
 ):
     # Normalize interval to lowercase
     interval = interval.lower()
+    if interval == "1w":
+        interval = "1wk"
     
     # Find Symbol
     result = await db.execute(select(Symbol).filter(Symbol.ticker == symbol.upper()))

@@ -1,40 +1,44 @@
 import asyncio
-from sqlalchemy import select, delete, update
+from sqlalchemy import select, delete
 from app.db.session import AsyncSessionLocal
 from app.models.candle import Candle
 from app.models.symbol import Symbol
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 async def cleanup():
     async with AsyncSessionLocal() as db:
-        # 1. Rename '1D' to '1d'
-        print("Renaming '1D' to '1d'...")
-        await db.execute(update(Candle).where(Candle.interval == '1D').values(interval='1d'))
-        await db.commit()
-        
-        # 2. Fetch all '1d' candles to find duplicates after rename and normalization
-        res = await db.execute(select(Candle).filter(Candle.interval == "1d").order_by(Candle.timestamp.asc()))
+        res = await db.execute(select(Symbol).filter(Symbol.ticker == "IBM"))
+        s = res.scalars().first()
+        if not s: return
+
+        res = await db.execute(select(Candle).filter(Candle.symbol_id == s.id, Candle.interval == "1d").order_by(Candle.timestamp.asc()))
         candles = res.scalars().all()
-        print(f"Checking {len(candles)} daily candles for duplicates...")
         
-        seen = {}
         to_delete = []
-        for c in candles:
-            # Already normalized to midnight in previous step, but let's be sure
-            normalized_ts = c.timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
-            key = (c.symbol_id, normalized_ts)
+        for i in range(len(candles) - 1):
+            c1 = candles[i]
+            c2 = candles[i+1]
             
-            if key in seen:
-                to_delete.append(c.id)
-            else:
-                seen[key] = c.id
+            # If they are very close in price and exactly 1 day apart
+            price_diff = abs(c1.open - c2.open)
+            time_diff = c2.timestamp - c1.timestamp
+            
+            if time_diff == timedelta(days=1) and price_diff < 0.001:
+                # Check weekdays (0=Mon, 6=Sun)
+                # If c1 is Sunday and c2 is Monday, delete Sunday (c1)
+                if c1.timestamp.weekday() == 6:
+                    print(f"Sunday Duplicate: Removing ID {c1.id} ({c1.timestamp}) in favor of Monday {c2.id}")
+                    to_delete.append(c1.id)
+                else:
+                    print(f"Generic Duplicate: Removing ID {c2.id} ({c2.timestamp})")
+                    to_delete.append(c2.id)
         
         if to_delete:
-            print(f"Removing {len(to_delete)} duplicate '1d' candles...")
+            # dedupe to_delete
+            to_delete = list(set(to_delete))
             await db.execute(delete(Candle).where(Candle.id.in_(to_delete)))
             await db.commit()
-            
-        print("Cleanup complete.")
+            print(f"Removed {len(to_delete)} staggered duplicates")
 
 if __name__ == "__main__":
     asyncio.run(cleanup())

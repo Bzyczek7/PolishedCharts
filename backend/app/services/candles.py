@@ -146,6 +146,7 @@ class CandleService:
             "1h": timedelta(hours=1),
             "1d": timedelta(days=1),
             "5d": timedelta(days=5),
+            "1w": timedelta(weeks=1),
             "1wk": timedelta(weeks=1),
             "1mo": timedelta(days=30), # Approximation, but good enough for gap detection
         }

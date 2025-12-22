@@ -111,9 +111,13 @@ const IndicatorPane = ({
     if (!chartRef.current) return
 
     // Handle main series
-    if (!mainSeriesRef.current) {
+    const mainSeriesType = mainSeries.displayType === 'line' ? LineSeries : HistogramSeries
+    if (!mainSeriesRef.current || mainSeriesRef.current.seriesType() !== (mainSeries.displayType === 'line' ? 'Line' : 'Histogram')) {
+        if (mainSeriesRef.current) {
+            chartRef.current.removeSeries(mainSeriesRef.current)
+        }
         mainSeriesRef.current = chartRef.current.addSeries(
-            mainSeries.displayType === 'line' ? LineSeries : HistogramSeries, 
+            mainSeriesType, 
             {
                 color: mainSeries.color,
                 lineWidth: mainSeries.lineWidth ?? 2,

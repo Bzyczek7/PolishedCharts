@@ -28,6 +28,8 @@ async def get_indicator(
 ):
     # Normalize interval
     interval = interval.lower()
+    if interval == "1w":
+        interval = "1wk"
     
     # 1. Fetch Symbol
     stmt = select(Symbol).where(Symbol.ticker == symbol.upper())
@@ -71,6 +73,10 @@ async def get_indicator(
     # Ensure timestamp is datetime
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values("timestamp")
+    
+    # Deduplicate by timestamp to ensure indicator accuracy
+    # (Keep the first occurrence of each unique timestamp)
+    df = df.drop_duplicates(subset=["timestamp"], keep="first")
 
     # 4. Calculate Indicator
     try:
@@ -112,9 +118,9 @@ async def get_indicator(
             metadata = IndicatorMetadata(
                 display_type="pane",
                 color_schemes={
-                    "above": "#22c55e", # Green
-                    "below": "#ef4444", # Red
-                    "neutral": "#94a3b8" # Slate
+                    "above": "#22c55e", # Green 500
+                    "below": "#ef4444", # Red 500
+                    "neutral": "#64748b" # Slate 500 (Darker than before)
                 },
                 color_mode="threshold",
                 thresholds={"high": 0.05, "low": -0.05},
@@ -124,7 +130,7 @@ async def get_indicator(
                         "field": "tdfi",
                         "role": "main",
                         "label": "TDFI",
-                        "line_color": "#94a3b8", # Default color
+                        "line_color": "#64748b",
                         "line_style": "solid",
                         "line_width": 2,
                         "display_type": "line"
@@ -147,12 +153,9 @@ async def get_indicator(
             metadata = IndicatorMetadata(
                 display_type="pane",
                 color_schemes={
-                    "above": "#ef4444", # Overbought (Red)
-                    "below": "#22c55e", # Oversold (Green)
-                    "neutral": "#4CAF50" # Main color
+                    "main": "#4CAF50"
                 },
-                color_mode="threshold",
-                thresholds={"high": 70, "low": 30},
+                color_mode="single",
                 scale_ranges={"min": 0, "max": 100},
                 series_metadata=[
                     {
