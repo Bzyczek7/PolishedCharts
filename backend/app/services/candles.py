@@ -1,6 +1,8 @@
 import asyncio
 import logging
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
+from sqlalchemy.future import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.candle import Candle
@@ -66,3 +68,75 @@ class CandleService:
             await db.execute(stmt)
             await db.commit()
             logger.info(f"Upserted {len(values)} candles for symbol_id={symbol_id}, interval={interval}")
+
+    async def find_gaps(
+        self, 
+        db: AsyncSession, 
+        symbol_id: int, 
+        interval: str, 
+        start: datetime, 
+        end: datetime
+    ) -> List[tuple]:
+        """
+        Identify missing data segments within a given range.
+        Returns a list of (start, end) tuples representing the gaps.
+        """
+        # 1. Fetch all existing timestamps in the range
+        stmt = select(Candle.timestamp).where(
+            Candle.symbol_id == symbol_id,
+            Candle.interval == interval,
+            Candle.timestamp >= start,
+            Candle.timestamp <= end
+        ).order_by(Candle.timestamp.asc())
+        
+        result = await db.execute(stmt)
+        # result.all() returns rows, each row is a tuple (timestamp,)
+        existing_ts = [r[0] for r in result.all()]
+        
+        gaps = []
+        
+        if not existing_ts:
+            return [(start, end)]
+            
+        # Check for gap at the beginning (Head)
+        if existing_ts[0] > start:
+            # The gap ends just before the first existing timestamp
+            gap_end = existing_ts[0] - self._get_interval_delta(interval)
+            if gap_end >= start:
+                gaps.append((start, gap_end))
+                
+        # Check for gaps in the middle
+        for i in range(len(existing_ts) - 1):
+            curr = existing_ts[i]
+            nxt = existing_ts[i+1]
+            
+            expected_next = curr + self._get_interval_delta(interval)
+            if nxt > expected_next:
+                # There's a gap
+                gaps.append((expected_next, nxt - self._get_interval_delta(interval)))
+                
+        # Check for gap at the end (Tail)
+        if existing_ts[-1] < end:
+            gap_start = existing_ts[-1] + self._get_interval_delta(interval)
+            if gap_start <= end:
+                gaps.append((gap_start, end))
+                
+        return gaps
+
+    def _get_interval_delta(self, interval: str) -> timedelta:
+        # yfinance intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+        mapping = {
+            "1m": timedelta(minutes=1),
+            "2m": timedelta(minutes=2),
+            "5m": timedelta(minutes=5),
+            "15m": timedelta(minutes=15),
+            "30m": timedelta(minutes=30),
+            "60m": timedelta(hours=1),
+            "90m": timedelta(minutes=90),
+            "1h": timedelta(hours=1),
+            "1d": timedelta(days=1),
+            "5d": timedelta(days=5),
+            "1wk": timedelta(weeks=1),
+            "1mo": timedelta(days=30), # Approximation, but good enough for gap detection
+        }
+        return mapping.get(interval, timedelta(days=1))
