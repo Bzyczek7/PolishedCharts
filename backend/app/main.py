@@ -6,6 +6,7 @@ from app.api.api import api_router
 from app.services.data_poller import DataPoller
 from app.services.alert_engine import AlertEngine
 from app.services.alpha_vantage import AlphaVantageService
+from app.services.worker_manager import WorkerManager
 from app.db.session import AsyncSessionLocal
 import asyncio
 import traceback
@@ -18,6 +19,9 @@ app = FastAPI(
 )
 
 logger = logging.getLogger(__name__)
+
+# Initialize WorkerManager
+worker_manager = WorkerManager()
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -45,15 +49,16 @@ async def startup_event():
         alert_engine=engine,
         interval=3600
     )
-    app.state.poller_task = asyncio.create_task(app.state.poller.start())
+    # Use worker_manager to start the poller task
+    app.state.poller_task = worker_manager.start_task("data_poller", app.state.poller.start())
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    print("Shutting down poller...")
+    print("Shutting down workers...")
     if hasattr(app.state, "poller") and app.state.poller:
         app.state.poller.stop()
-    if hasattr(app.state, "poller_task") and app.state.poller_task:
-        await app.state.poller_task
+    
+    await worker_manager.stop_all(timeout=5.0)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
