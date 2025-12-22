@@ -52,10 +52,10 @@ const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 
       </main>
 
       {/* Right Sidebar */}
-      <aside 
+      <aside
         data-testid="right-sidebar"
         data-state={isSidebarOpen ? "expanded" : "collapsed"}
-        className={`flex border-l border-slate-800 bg-slate-900 transition-all duration-300 ${
+        className={`flex border-slate-800 bg-slate-900 transition-all duration-300 ${
           isSidebarOpen ? "w-[350px]" : "w-[56px]"
         }`}
       >

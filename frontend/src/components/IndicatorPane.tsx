@@ -7,13 +7,15 @@ interface IndicatorSeries {
     color: string
     displayType: 'line' | 'histogram'
     lineWidth?: number
+    visible?: boolean
 }
 
 interface IndicatorPaneProps {
   name: string
-  mainSeries: IndicatorSeries
+  mainSeries?: IndicatorSeries
   additionalSeries?: IndicatorSeries[]
   candles?: any[]
+  visible?: boolean
   priceLines?: {
     value: number
     color: string
@@ -26,10 +28,11 @@ interface IndicatorPaneProps {
     max: number
   }
   onTimeScaleInit?: (timeScale: any) => void
+  crosshairPosition?: number | null
 }
 
-const IndicatorPane = ({ 
-  name, 
+const IndicatorPane = ({
+  name,
   mainSeries,
   additionalSeries = [],
   candles = [],
@@ -37,7 +40,9 @@ const IndicatorPane = ({
   height,
   width,
   scaleRanges,
-  onTimeScaleInit
+  visible = true,
+  onTimeScaleInit,
+  crosshairPosition
 }: IndicatorPaneProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
@@ -58,6 +63,20 @@ const IndicatorPane = ({
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
+      crosshair: {
+        mode: 1, // Normal crosshair mode
+        horzLine: {
+          visible: true,
+          labelVisible: false,
+        },
+        vertLine: {
+          visible: true,
+          style: 0, // Solid line
+          width: 1,
+          color: 'rgba(224, 227, 235, 0.1)', // Subtle color
+          labelVisible: false,
+        },
+      },
       width: width || chartContainerRef.current.clientWidth,
       height: height || 150,
       timeScale: {
@@ -70,9 +89,10 @@ const IndicatorPane = ({
 
     chartRef.current = chart
     
-    // Add a hidden series to force the timescale to match candles
     const baseline = chart.addSeries(LineSeries, {
         visible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
     })
     baselineSeriesRef.current = baseline
 
@@ -91,7 +111,7 @@ const IndicatorPane = ({
       additionalSeriesRefs.current.clear()
       priceLinesRef.current = []
     }
-  }, [name]) // Re-create only on name change
+  }, [name])
 
   useEffect(() => {
     if (!baselineSeriesRef.current || candles.length === 0) return
@@ -112,30 +132,40 @@ const IndicatorPane = ({
     if (!chartRef.current) return
 
     // Handle main series
-    const mainSeriesType = mainSeries.displayType === 'line' ? LineSeries : HistogramSeries
-    if (!mainSeriesRef.current || mainSeriesRef.current.seriesType() !== (mainSeries.displayType === 'line' ? 'Line' : 'Histogram')) {
-        if (mainSeriesRef.current) {
-            chartRef.current.removeSeries(mainSeriesRef.current)
-        }
-        mainSeriesRef.current = chartRef.current.addSeries(
-            mainSeriesType, 
-            {
+    if (mainSeries) {
+        const mainSeriesType = mainSeries.displayType === 'line' ? LineSeries : HistogramSeries
+        if (!mainSeriesRef.current || mainSeriesRef.current.seriesType() !== (mainSeries.displayType === 'line' ? 'Line' : 'Histogram')) {
+            if (mainSeriesRef.current) {
+                chartRef.current.removeSeries(mainSeriesRef.current)
+            }
+            mainSeriesRef.current = chartRef.current.addSeries(
+                mainSeriesType, 
+                {
+                    color: mainSeries.color,
+                    lineWidth: mainSeries.lineWidth ?? 2,
+                    visible: mainSeries.visible ?? true,
+                    lastValueVisible: false,
+                    priceLineVisible: false,
+                }
+            )
+        } else {
+            mainSeriesRef.current.applyOptions({
                 color: mainSeries.color,
                 lineWidth: mainSeries.lineWidth ?? 2,
-            }
-        )
-    } else {
-        mainSeriesRef.current.applyOptions({
-            color: mainSeries.color,
-            lineWidth: mainSeries.lineWidth ?? 2,
-        })
+                visible: mainSeries.visible ?? true,
+                lastValueVisible: false,
+                priceLineVisible: false,
+            })
+        }
+        mainSeriesRef.current.setData(mainSeries.data)
+    } else if (mainSeriesRef.current) {
+        chartRef.current.removeSeries(mainSeriesRef.current)
+        mainSeriesRef.current = null
     }
-    mainSeriesRef.current.setData(mainSeries.data)
 
     // Handle additional series
     const currentAdditionalKeys = new Set(additionalSeries.map((s, i) => s.id || `extra-${i}`))
     
-    // Cleanup old additional series
     additionalSeriesRefs.current.forEach((s, key) => {
         if (!currentAdditionalKeys.has(key)) {
             chartRef.current.removeSeries(s)
@@ -143,7 +173,6 @@ const IndicatorPane = ({
         }
     })
 
-    // Update or add additional series
     additionalSeries.forEach((s, i) => {
         const key = s.id || `extra-${i}`
         let addedSeries = additionalSeriesRefs.current.get(key)
@@ -154,6 +183,9 @@ const IndicatorPane = ({
                 {
                     color: s.color,
                     lineWidth: s.lineWidth ?? 1,
+                    visible: s.visible ?? true,
+                    lastValueVisible: false,
+                    priceLineVisible: false,
                 }
             )
             additionalSeriesRefs.current.set(key, addedSeries)
@@ -161,24 +193,26 @@ const IndicatorPane = ({
             addedSeries.applyOptions({
                 color: s.color,
                 lineWidth: s.lineWidth ?? 1,
+                visible: s.visible ?? true,
+                lastValueVisible: false,
+                priceLineVisible: false,
             })
         }
         addedSeries.setData(s.data)
     })
 
-    // Handle price lines (attached to mainSeries)
-    if (mainSeriesRef.current) {
+    // Handle price lines (Thresholds)
+    // Attach to main series if it exists, otherwise to the first additional series
+    const targetSeries = mainSeriesRef.current || (additionalSeriesRefs.current.size > 0 ? additionalSeriesRefs.current.values().next().value : null)
+    
+    if (targetSeries) {
         priceLinesRef.current.forEach(pl => {
-            try {
-                mainSeriesRef.current.removePriceLine(pl)
-            } catch (e) {
-                // Ignore if already removed
-            }
+            try { targetSeries.removePriceLine(pl) } catch(e) {}
         })
         priceLinesRef.current = []
 
         priceLines.forEach(pl => {
-            const line = mainSeriesRef.current.createPriceLine({
+            const line = targetSeries.createPriceLine({
                 price: pl.value,
                 color: pl.color,
                 lineWidth: 1,
@@ -192,36 +226,24 @@ const IndicatorPane = ({
   }, [mainSeries, additionalSeries, priceLines])
 
   useEffect(() => {
-    if (!chartRef.current || !scaleRanges) return
+    if (!chartRef.current) return
 
     chartRef.current.priceScale('right').applyOptions({
-        autoScale: false,
+        autoScale: true,
         scaleMargins: {
             top: 0.1,
             bottom: 0.1,
         },
     })
     
-    // Set price range
-    if (mainSeriesRef.current) {
-        // Ensure all series in this pane use the same price scale
+    if (scaleRanges) {
         chartRef.current.priceScale('right').applyOptions({
-            autoScale: true,
-            scaleMargins: {
-                top: 0.1,
-                bottom: 0.1,
-            },
+            autoScale: false,
+            visiblePriceRange: {
+                from: scaleRanges.min,
+                to: scaleRanges.max,
+            }
         })
-
-        if (scaleRanges) {
-            chartRef.current.priceScale('right').applyOptions({
-                autoScale: false,
-                visiblePriceRange: {
-                    from: scaleRanges.min,
-                    to: scaleRanges.max,
-                }
-            })
-        }
     }
   }, [scaleRanges])
 
@@ -231,14 +253,18 @@ const IndicatorPane = ({
     }
   }, [width, height])
 
+  if (!visible) return null;
+
   return (
-    <div className="mt-4 h-full">
-      <div className="text-xs text-slate-500 mb-1">{name}</div>
-      <div 
-        ref={chartContainerRef} 
-        data-testid={`indicator-pane-${name}`} 
-        className="w-full h-[calc(100%-20px)]"
+    <div className="h-full relative">
+      <div
+        ref={chartContainerRef}
+        data-testid={`indicator-pane-${name}`}
+        className="w-full h-full"
       />
+      <div className="absolute top-2 left-2 text-xs text-slate-400 z-10 pointer-events-none">
+        {name}
+      </div>
     </div>
   )
 }

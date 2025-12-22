@@ -3,8 +3,10 @@ import { createChart, ColorType, LineSeries, CandlestickSeries } from 'lightweig
 import type { Candle } from '../api/candles'
 
 interface OverlayIndicator {
-    data: { time: number; value: number }[]
+    id: string
+    data: { time: number; value: number; color?: string }[]
     color: string
+    lineWidth?: number
 }
 
 interface ChartComponentProps {
@@ -14,9 +16,10 @@ interface ChartComponentProps {
   width?: number
   height?: number
   onTimeScaleInit?: (timeScale: any) => void
+  onCrosshairMove?: (param: any) => void
 }
 
-const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit, onCrosshairMove }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const candlestickSeriesRef = useRef<any>(null)
@@ -34,6 +37,20 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
         vertLines: { color: '#1e293b' },
         horzLines: { color: '#1e293b' },
       },
+      crosshair: {
+        mode: 1, // Normal crosshair mode
+        horzLine: {
+          visible: true,
+          labelVisible: true,
+        },
+        vertLine: {
+          visible: true,
+          style: 0, // Solid line
+          width: 1,
+          color: 'rgba(224, 227, 235, 0.1)', // Subtle color
+          labelVisible: true,
+        },
+      },
       width: width || chartContainerRef.current.clientWidth,
       height: height || chartContainerRef.current.clientHeight || 400,
     })
@@ -46,6 +63,8 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
         borderVisible: false,
         wickUpColor: '#22c55e',
         wickDownColor: '#ef4444',
+        lastValueVisible: false,
+        priceLineVisible: false,
     })
     
     candlestickSeriesRef.current = candlestickSeries
@@ -54,9 +73,17 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
         onTimeScaleInit(chart.timeScale())
     }
 
+    // Subscribe to crosshair movement
+    if (onCrosshairMove) {
+        chart.subscribeCrosshairMove(onCrosshairMove);
+    }
+
     return () => {
       if (onTimeScaleInit) {
         onTimeScaleInit(null)
+      }
+      if (onCrosshairMove) {
+        chart.unsubscribeCrosshairMove(onCrosshairMove);
       }
       chart.remove()
       chartRef.current = null
@@ -86,18 +113,38 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
   useEffect(() => {
     if (!chartRef.current) return
 
-    // Clean up old overlays
-    overlaySeriesRef.current.forEach(s => chartRef.current.removeSeries(s))
-    overlaySeriesRef.current.clear()
+    const currentOverlayIds = new Set(overlays.map(o => o.id))
 
-    // Add new overlays
-    overlays.forEach((overlay, idx) => {
-        const lineSeries = chartRef.current.addSeries(LineSeries, {
-            color: overlay.color,
-            lineWidth: 2,
-        })
+    // Clean up old overlays
+    overlaySeriesRef.current.forEach((s, id) => {
+        if (!currentOverlayIds.has(id)) {
+            chartRef.current.removeSeries(s)
+            overlaySeriesRef.current.delete(id)
+        }
+    })
+
+    // Add or update overlays
+    overlays.forEach((overlay) => {
+        let lineSeries = overlaySeriesRef.current.get(overlay.id)
+        if (!lineSeries) {
+            lineSeries = chartRef.current.addSeries(LineSeries, {
+                color: overlay.color,
+                lineWidth: overlay.lineWidth ?? 2,
+                lastValueVisible: false,
+                priceLineVisible: false,
+            })
+            overlaySeriesRef.current.set(overlay.id, lineSeries)
+        } else {
+            lineSeries.applyOptions({
+                color: overlay.color,
+                lineWidth: overlay.lineWidth ?? 2,
+                lastValueVisible: false,
+                priceLineVisible: false,
+            })
+        }
+        // For line series, if data points have individual colors, lightweight-charts will use them
+        // Otherwise it will use the series color
         lineSeries.setData(overlay.data)
-        overlaySeriesRef.current.set(`overlay-${idx}`, lineSeries)
     })
   }, [overlays])
 

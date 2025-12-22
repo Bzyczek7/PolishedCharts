@@ -118,9 +118,9 @@ async def get_indicator(
             metadata = IndicatorMetadata(
                 display_type="pane",
                 color_schemes={
-                    "above": "#22c55e", # Green 500
-                    "below": "#ef4444", # Red 500
-                    "neutral": "#64748b" # Slate 500 (Darker than before)
+                    "above": "#00ff00", # Lime
+                    "below": "#ff0000", # Red
+                    "neutral": "#64748b" # Slate 500
                 },
                 color_mode="threshold",
                 thresholds={"high": 0.05, "low": -0.05},
@@ -137,8 +137,16 @@ async def get_indicator(
                     }
                 ],
                 reference_levels=[
-                    {"value": 0.05, "line_color": "#ef4444", "line_label": "Upper"},
-                    {"value": -0.05, "line_color": "#22c55e", "line_label": "Lower"}
+                    {
+                        "value": 0.05,
+                        "line_color": "#00ff00",  # Green for upper threshold
+                        "line_label": "Upper Threshold"
+                    },
+                    {
+                        "value": -0.05,
+                        "line_color": "#ff0000",  # Red for lower threshold
+                        "line_label": "Lower Threshold"
+                    }
                 ]
             )
             return TDFIOutput(
@@ -186,10 +194,7 @@ async def get_indicator(
                         "display_type": "line"
                     }
                 ],
-                reference_levels=[
-                    {"value": 70, "line_color": "#475569", "line_label": "70"},
-                    {"value": 30, "line_color": "#475569", "line_label": "30"}
-                ]
+                reference_levels=[]
             )
             return cRSIOutput(
                 timestamps=timestamps,
@@ -203,20 +208,26 @@ async def get_indicator(
             df_result = indicators.calculate_adxvma(df)
             metadata = IndicatorMetadata(
                 display_type="overlay",
-                color_schemes={"line": "#FF9800"},
-                color_mode="single",
+                color_schemes={
+                    "above": "#00ff00", # Lime
+                    "below": "#ff0000", # Red
+                    "neutral": "#ffff00" # Yellow
+                },
+                color_mode="threshold",
+                thresholds={"high": 0.5, "low": -0.5},
                 scale_ranges=None,
                 series_metadata=[
                     {
                         "field": "adxvma",
                         "role": "main",
                         "label": "ADXVMA",
-                        "line_color": "#FF9800",
+                        "line_color": "#ffff00",
                         "line_style": "solid",
-                        "line_width": 2,
+                        "line_width": 3,
                         "display_type": "line"
                     }
-                ]
+                ],
+                reference_levels=[]
             )
             return ADXVMAOutput(
                 timestamps=timestamps,

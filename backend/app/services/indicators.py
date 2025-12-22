@@ -104,85 +104,78 @@ def calculate_crsi(
     return df
 
 def calculate_adxvma(df: pd.DataFrame, adxvma_period: int = 15) -> pd.DataFrame:
-
     df = df.copy()
-
     k = 1.0 / adxvma_period
-
     
-
-    # Calculate ADX first (simplified version of what's in the original ADXVMA script)
-
-    tr1 = df['high'] - df['low']
-
-    tr2 = abs(df['high'] - df['close'].shift(1))
-
-    tr3 = abs(df['low'] - df['close'].shift(1))
-
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-
-    atr = rma(tr, adxvma_period)
-
-
-
-    up_move = df['high'].diff()
-
-    down_move = df['low'].shift(1) - df['low']
-
+    # Initialize series
+    adxvma = pd.Series(0.0, index=df.index)
+    up = pd.Series(0.0, index=df.index)
+    down = pd.Series(0.0, index=df.index)
+    ups = pd.Series(0.0, index=df.index)
+    downs = pd.Series(0.0, index=df.index)
+    index_vals = pd.Series(0.0, index=df.index)
+    trend = pd.Series(0, index=df.index)
     
-
-    pDM = np.where((up_move > down_move) & (up_move > 0), up_move, 0)
-
-    mDM = np.where((down_move > up_move) & (down_move > 0), down_move, 0)
-
+    close = df['close']
     
-
-    pDI = 100 * rma(pd.Series(pDM, index=df.index), adxvma_period) / atr
-
-    mDI = 100 * rma(pd.Series(mDM, index=df.index), adxvma_period) / atr
-
-    
-
-    dx = 100 * abs(pDI - mDI) / (pDI + mDI)
-
-    adx = rma(dx.fillna(0), adxvma_period)
-
-    
-
-    # ADXVMA Calculation
-
-    index = adx
-
-    hhp = index.rolling(window=adxvma_period).max().shift(1)
-
-    llp = index.rolling(window=adxvma_period).min().shift(1)
-
-    
-
-    hhv = np.maximum(index, hhp)
-
-    llv = np.minimum(index, llp)
-
-    
-
-    vIndex = (index - llv) / (hhv - llv)
-
-    vIndex = vIndex.fillna(0) # Handle potential division by zero
-
-    
-
-    adxvma = pd.Series(index=df.index, dtype=float)
-
-    adxvma.iloc[0] = df['close'].iloc[0]
-
-    
-
     for i in range(1, len(df)):
-
-        adxvma.iloc[i] = (1 - k * vIndex.iloc[i]) * adxvma.iloc[i-1] + k * vIndex.iloc[i] * df['close'].iloc[i]
-
+        # up/down components
+        currentUp = max(close.iloc[i] - close.iloc[i-1], 0)
+        currentDown = max(close.iloc[i-1] - close.iloc[i], 0)
         
+        up.iloc[i] = (1-k) * up.iloc[i-1] + k * currentUp
+        down.iloc[i] = (1-k) * down.iloc[i-1] + k * currentDown
+        
+        sum_val = up.iloc[i] + down.iloc[i]
+        fractionUp = 0.0
+        fractionDown = 0.0
+        if sum_val > 0.0:
+            fractionUp = up.iloc[i] / sum_val
+            fractionDown = down.iloc[i] / sum_val
+            
+        ups.iloc[i] = (1-k) * ups.iloc[i-1] + k * fractionUp
+        downs.iloc[i] = (1-k) * downs.iloc[i-1] + k * fractionDown
+        
+        normDiff = abs(ups.iloc[i] - downs.iloc[i])
+        normSum = ups.iloc[i] + downs.iloc[i]
+        
+        normFraction = 0.0
+        if normSum > 0.0:
+            normFraction = normDiff / normSum
+            
+        index_vals.iloc[i] = (1-k) * index_vals.iloc[i-1] + k * normFraction
+        
+        # Calculate vIndex using rolling window of index_vals
+        if i >= adxvma_period:
+            # highest(index, adxvma_period)[1] -> max of previous period
+            window = index_vals.iloc[max(0, i-adxvma_period):i]
+            hhp = window.max()
+            llp = window.min()
+            
+            hhv = max(index_vals.iloc[i], hhp)
+            llv = min(index_vals.iloc[i], llp)
+            
+            vIndex = 0.0
+            if (hhv - llv) > 0.0:
+                vIndex = (index_vals.iloc[i] - llv) / (hhv - llv)
+            
+            adxvma.iloc[i] = (1 - k * vIndex) * adxvma.iloc[i-1] + k * vIndex * close.iloc[i]
+        else:
+            # Seed value
+            adxvma.iloc[i] = close.iloc[i]
+
+        # Trend logic from Pine Script
+        prev_trend = trend.iloc[i-1]
+        curr_val = adxvma.iloc[i]
+        prev_val = adxvma.iloc[i-1]
+        
+        if prev_trend > -1 and curr_val > prev_val:
+            trend.iloc[i] = 1
+        elif prev_trend < 1 and curr_val < prev_val:
+            trend.iloc[i] = -1
+        else:
+            trend.iloc[i] = 0
 
     df['ADXVMA'] = adxvma
-
+    df['ADXVMA_Signal'] = trend
     return df

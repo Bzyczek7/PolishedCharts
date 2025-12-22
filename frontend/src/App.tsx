@@ -52,6 +52,41 @@ function App() {
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
+  const [crosshairTime, setCrosshairTime] = useState<number | null>(null)
+  const [indicatorSettings, setIndicatorSettings] = useState<Record<string, { visible: boolean; series: Record<string, boolean>; showLevels: boolean }>>({})
+
+  const toggleIndicatorVisibility = useCallback((indicatorId: string) => {
+    setIndicatorSettings(prev => ({
+        ...prev,
+        [indicatorId]: {
+            ...prev[indicatorId],
+            visible: prev[indicatorId]?.visible === false ? true : false
+        }
+    }))
+  }, [])
+
+  const toggleSeriesVisibility = useCallback((indicatorId: string, seriesId: string) => {
+    setIndicatorSettings(prev => ({
+        ...prev,
+        [indicatorId]: {
+            ...prev[indicatorId],
+            series: {
+                ...prev[indicatorId]?.series,
+                [seriesId]: prev[indicatorId]?.series?.[seriesId] === false ? true : false
+            }
+        }
+    }))
+  }, [])
+
+  const toggleLevelsVisibility = useCallback((indicatorId: string) => {
+    setIndicatorSettings(prev => ({
+        ...prev,
+        [indicatorId]: {
+            ...prev[indicatorId],
+            showLevels: prev[indicatorId]?.showLevels === false ? true : false
+        }
+    }))
+  }, [])
 
   useEffect(() => {
     if (!mainViewportRef.current) return
@@ -216,88 +251,132 @@ function App() {
   }, [])
 
   const mainHeight = Math.max(dimensions.height * 0.6, 300)
-  const indicatorHeight = Math.max((dimensions.height - mainHeight - 100) / Math.max(activeLayout?.activeIndicators.filter((i: string) => ['tdfi', 'crsi'].includes(i)).length || 1, 1), 100)
+  // Calculate indicator height to use all remaining space
+  const remainingHeight = Math.max(dimensions.height - mainHeight, 120)
+  const indicatorHeight = Math.max(remainingHeight / Math.max(activeLayout?.activeIndicators.filter((i: string) => ['tdfi', 'crsi'].includes(i)).length || 1, 1), 120)
 
   const adxvmaOverlay = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('adxvma') || !adxvmaData) return []
+
+    if (indicatorSettings['adxvma']?.visible === false) return [];
+
+    // Use formatDataForChart to get properly formatted data points
+    const formattedData = formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma);
+
+    // Create points with trend-based colors
+    const coloredData = [];
+    for (let i = 0; i < formattedData.length; i++) {
+      // Determine trend based on comparison with previous value
+      let trend = 'neutral';
+      if (i > 0) {
+        if (formattedData[i].value > formattedData[i - 1].value) {
+          trend = 'up';
+        } else if (formattedData[i].value < formattedData[i - 1].value) {
+          trend = 'down';
+        }
+      }
+
+      // Determine color based on trend
+      let color;
+      switch (trend) {
+        case 'up': color = '#00ff00'; break; // Green for up trend
+        case 'down': color = '#ef4444'; break; // Red for down trend
+        case 'neutral': color = '#eab308'; break; // Yellow for neutral
+      }
+
+      coloredData.push({
+        time: formattedData[i].time, // Unix timestamp
+        value: formattedData[i].value,
+        color: color
+      });
+    }
+
     return [
-        { data: formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma), color: adxvmaData.metadata.color_schemes.line }
-    ]
-  }, [activeLayout?.activeIndicators, adxvmaData])
+      {
+        id: 'adxvma',
+        data: coloredData,
+        color: "#eab308", // Default color
+        lineWidth: 3
+      }
+    ];
+  }, [activeLayout?.activeIndicators, adxvmaData, indicatorSettings])
 
   const tdfiPaneProps = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('tdfi') || !tdfiData) return null
-    
+
+    const isVisible = indicatorSettings['tdfi']?.visible !== false;
     const rawData = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi);
-    
+
     if (tdfiData.metadata.color_mode === 'threshold' && tdfiData.metadata.thresholds) {
         const { above, neutral, below } = splitSeriesByThresholds(rawData, {
             high: tdfiData.metadata.thresholds.high,
             low: tdfiData.metadata.thresholds.low
         });
 
+        // 3-series ONLY - no mainSeries, no extra metadata series
         return {
-            mainSeries: {
-                data: neutral,
-                displayType: 'line' as const,
-                color: tdfiData.metadata.color_schemes.neutral || "#94a3b8"
-            },
+            visible: isVisible,
             additionalSeries: [
                 {
-                    id: 'above',
-                    data: above,
+                    id: 'tdfi-neutral',
+                    data: neutral,
                     displayType: 'line' as const,
-                    color: tdfiData.metadata.color_schemes.above || "#22c55e",
-                    lineWidth: 2
+                    color: tdfiData.metadata.color_schemes.neutral || "#64748b",
+                    lineWidth: 2,
+                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
                 },
                 {
-                    id: 'below',
+                    id: 'tdfi-above',
+                    data: above,
+                    displayType: 'line' as const,
+                    color: tdfiData.metadata.color_schemes.above || "#00ff00",
+                    lineWidth: 2,
+                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
+                },
+                {
+                    id: 'tdfi-below',
                     data: below,
                     displayType: 'line' as const,
-                    color: tdfiData.metadata.color_schemes.below || "#ef4444",
-                    lineWidth: 2
-                },
-                ...(tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
-                    id: s.field,
-                    data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
-                    displayType: (s.display_type as any) || "line",
-                    color: s.line_color,
-                    lineWidth: s.line_width
-                })) || [])
+                    color: tdfiData.metadata.color_schemes.below || "#ff0000",
+                    lineWidth: 2,
+                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
+                }
             ],
-            priceLines: tdfiData.metadata.reference_levels?.map(rl => ({
-                value: rl.value,
-                color: rl.line_color,
-                label: rl.line_label
-            })),
+            priceLines: indicatorSettings['tdfi']?.showLevels !== false
+                ? tdfiData.metadata.reference_levels?.map(rl => ({
+                    value: rl.value,
+                    color: rl.line_color,
+                    label: rl.line_label
+                }))
+                : [],
             scaleRanges: tdfiData.metadata.scale_ranges
         }
     }
 
+    // FALLBACK: single series only
     return {
+        visible: isVisible,
         mainSeries: {
             data: rawData,
             displayType: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.display_type || "histogram" as const,
-            color: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.line_color || tdfiData.metadata.color_schemes.line
+            color: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.line_color || tdfiData.metadata.color_schemes.neutral || "#64748b",
+            visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
         },
-        additionalSeries: tdfiData.metadata.series_metadata?.filter(s => s.field !== 'tdfi').map(s => ({
-            data: formatDataForChart(tdfiData.timestamps, (tdfiData as any)[s.field]),
-            displayType: (s.display_type as any) || "line",
-            color: s.line_color,
-            lineWidth: s.line_width
-        })),
-        priceLines: tdfiData.metadata.reference_levels?.map(rl => ({
-            value: rl.value,
-            color: rl.line_color,
-            label: rl.line_label
-        })),
+        priceLines: indicatorSettings['tdfi']?.showLevels !== false
+            ? tdfiData.metadata.reference_levels?.map(rl => ({
+                value: rl.value,
+                color: rl.line_color,
+                label: rl.line_label
+            }))
+            : [],
         scaleRanges: tdfiData.metadata.scale_ranges
     }
-  }, [activeLayout?.activeIndicators, tdfiData])
+  }, [activeLayout?.activeIndicators, tdfiData, indicatorSettings])
 
   const crsiPaneProps = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('crsi') || !crsiData) return null
-    
+
+    const isVisible = indicatorSettings['crsi']?.visible !== false;
     const rawData = formatDataForChart(crsiData.timestamps, crsiData.crsi);
 
     if (crsiData.metadata.color_mode === 'threshold' && crsiData.metadata.thresholds) {
@@ -307,63 +386,70 @@ function App() {
         });
 
         return {
-            mainSeries: {
-                data: neutral,
-                displayType: 'line' as const,
-                color: crsiData.metadata.color_schemes.neutral || "#4CAF50"
-            },
+            visible: isVisible,
             additionalSeries: [
                 {
-                    id: 'above',
+                    id: 'crsi-neutral',
+                    data: neutral,
+                    displayType: 'line' as const,
+                    color: crsiData.metadata.color_schemes.neutral || "#4CAF50",
+                    lineWidth: 2,
+                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
+                },
+                {
+                    id: 'crsi-above',
                     data: above,
                     displayType: 'line' as const,
                     color: crsiData.metadata.color_schemes.above || "#ef4444",
-                    lineWidth: 2
+                    lineWidth: 2,
+                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
                 },
                 {
-                    id: 'below',
+                    id: 'crsi-below',
                     data: below,
                     displayType: 'line' as const,
                     color: crsiData.metadata.color_schemes.below || "#22c55e",
-                    lineWidth: 2
-                },
-                ...(crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
-                    id: s.field,
-                    data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
-                    displayType: (s.display_type as any) || "line",
-                    color: s.line_color,
-                    lineWidth: s.line_width
-                })) || [])
+                    lineWidth: 2,
+                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
+                }
             ],
-            priceLines: crsiData.metadata.reference_levels?.map(rl => ({
-                value: rl.value,
-                color: rl.line_color,
-                label: rl.line_label
-            })),
+            priceLines: indicatorSettings['crsi']?.showLevels !== false
+                ? crsiData.metadata.reference_levels?.map(rl => ({
+                    value: rl.value,
+                    color: rl.line_color,
+                    label: rl.line_label
+                }))
+                : [],
             scaleRanges: crsiData.metadata.scale_ranges
         }
     }
 
     return {
+        visible: isVisible,
         mainSeries: {
             data: rawData,
             displayType: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.display_type || "line" as const,
-            color: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.line_color || crsiData.metadata.color_schemes.line
+            color: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.line_color || crsiData.metadata.color_schemes.neutral || "#4CAF50",
+            visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
         },
         additionalSeries: crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
+            id: s.field,
             data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
             displayType: (s.display_type as any) || "line",
             color: s.line_color,
-            lineWidth: s.line_width
+            lineWidth: s.line_width,
+            visible: indicatorSettings['crsi']?.series?.[s.field] !== false
         })),
-        priceLines: crsiData.metadata.reference_levels?.map(rl => ({
-            value: rl.value,
-            color: rl.line_color,
-            label: rl.line_label
-        })),
+        priceLines: indicatorSettings['crsi']?.showLevels !== false
+            ? crsiData.metadata.reference_levels?.map(rl => ({
+                value: rl.value,
+                color: rl.line_color,
+                label: rl.line_label
+            }))
+            : [],
         scaleRanges: crsiData.metadata.scale_ranges
     }
-  }, [activeLayout?.activeIndicators, crsiData])
+  }, [activeLayout?.activeIndicators, crsiData, indicatorSettings])
 
   const handleIntervalSelect = useCallback((newInterval: string) => {
     setInterval(newInterval)
@@ -394,8 +480,9 @@ function App() {
                 />
             }
         >
-            <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
-                <Toolbar 
+            <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-0 space-y-0">
+
+                <Toolbar
                     symbol={symbol}
                     interval={interval}
                     onIntervalSelect={handleIntervalSelect}
@@ -406,40 +493,63 @@ function App() {
                     savedLayouts={layouts}
                     onLayoutSelect={setActiveLayout}
                     onLayoutSave={handleLayoutSave}
-                />
-
-                <SymbolSearch 
-                    open={isSearchOpen} 
-                    onOpenChange={setIsSearchOpen} 
-                    onSelect={handleSymbolSelect} 
-                />
-
-                <IndicatorSearch 
-                    open={isIndicatorsOpen} 
-                    onOpenChange={setIsIndicatorsOpen} 
-                    onSelect={toggleIndicator} 
+                    indicatorSettings={indicatorSettings}
+                    onToggleIndicatorVisibility={toggleIndicatorVisibility}
+                    onToggleSeriesVisibility={toggleSeriesVisibility}
+                    onToggleLevelsVisibility={toggleLevelsVisibility}
                 />
 
                 {dimensions.width > 0 && dimensions.height > 0 ? (
-                    <div className="flex-1 flex flex-col space-y-4 min-h-0 overflow-hidden">
-                        <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 rounded-lg border border-slate-800 relative min-h-0 overflow-hidden">
-                            <ChartComponent 
-                                symbol={symbol} 
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 border-b-0 border-slate-800 relative min-h-0 overflow-hidden">
+                            <ChartComponent
+                                symbol={symbol}
                                 candles={candles}
                                 width={dimensions.width}
                                 height={mainHeight}
                                 onTimeScaleInit={setMainTimeScale}
+                                onCrosshairMove={(param) => {
+                                    if (param.time) {
+                                        setCrosshairTime(param.time);
+                                    } else {
+                                        setCrosshairTime(null);
+                                    }
+                                }}
                                 overlays={adxvmaOverlay}
                             />
                         </div>
-                        
-                        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
-                            {tdfiPaneProps && (
-                                <div style={{ height: indicatorHeight }} className="shrink-0 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0 overflow-hidden">
-                                    <IndicatorPane 
-                                        name="TDFI" 
+
+                        <div className="flex flex-col gap-0 flex-1 min-h-0">
+                            {tdfiPaneProps && !crsiPaneProps && (  // Only TDFI active
+                                <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
+                                    <IndicatorPane
+                                        name="TDFI"
                                         width={dimensions.width}
-                                        height={indicatorHeight - 40}
+                                        height={undefined} // Let the container determine the height
+                                        crosshairPosition={crosshairTime}
+                                        onTimeScaleInit={(ts) => {
+                                            if (ts) {
+                                                indicatorTimeScalesRef.current.set('tdfi', ts)
+                                                if (mainTimeScale) {
+                                                    const range = mainTimeScale.getVisibleLogicalRange()
+                                                    if (range) ts.setVisibleLogicalRange(range)
+                                                }
+                                            } else {
+                                                indicatorTimeScalesRef.current.delete('tdfi')
+                                            }
+                                        }}
+                                        candles={candles}
+                                        {...tdfiPaneProps}
+                                    />
+                                </div>
+                            )}
+                            {tdfiPaneProps && crsiPaneProps && (  // Both TDFI and cRSI active - TDFI doesn't have rounded corners
+                                <div className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800">
+                                    <IndicatorPane
+                                        name="TDFI"
+                                        width={dimensions.width}
+                                        height={undefined} // Let the container determine the height
+                                        crosshairPosition={crosshairTime}
                                         onTimeScaleInit={(ts) => {
                                             if (ts) {
                                                 indicatorTimeScalesRef.current.set('tdfi', ts)
@@ -458,11 +568,12 @@ function App() {
                             )}
 
                             {crsiPaneProps && (
-                                <div style={{ height: indicatorHeight }} className="shrink-0 bg-slate-900 rounded-lg p-4 border border-slate-800 min-h-0 overflow-hidden">
-                                    <IndicatorPane 
-                                        name="cRSI" 
+                                <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
+                                    <IndicatorPane
+                                        name="cRSI"
                                         width={dimensions.width}
-                                        height={indicatorHeight - 40}
+                                        height={undefined} // Let the container determine the height
+                                        crosshairPosition={crosshairTime}
                                         onTimeScaleInit={(ts) => {
                                             if (ts) {
                                                 indicatorTimeScalesRef.current.set('crsi', ts)

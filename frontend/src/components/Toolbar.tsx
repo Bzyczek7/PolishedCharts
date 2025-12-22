@@ -30,6 +30,10 @@ interface ToolbarProps {
   savedLayouts: Layout[]
   onLayoutSelect: (layout: Layout) => void
   onLayoutSave: (name: string) => void
+  indicatorSettings: Record<string, { visible: boolean; series: Record<string, boolean>; showLevels: boolean }>
+  onToggleIndicatorVisibility: (indicator: string) => void
+  onToggleSeriesVisibility: (indicator: string, series: string) => void
+  onToggleLevelsVisibility: (indicator: string) => void
 }
 
 const Toolbar = ({ 
@@ -42,7 +46,11 @@ const Toolbar = ({
   activeLayout,
   savedLayouts,
   onLayoutSelect,
-  onLayoutSave
+  onLayoutSave,
+  indicatorSettings,
+  onToggleIndicatorVisibility,
+  onToggleSeriesVisibility,
+  onToggleLevelsVisibility
 }: ToolbarProps) => {
   const timeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '1D', '1W']
   const [newLayoutName, setNewLayoutName] = useState('')
@@ -50,7 +58,7 @@ const Toolbar = ({
   return (
     <div 
         data-testid="top-toolbar"
-        className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg w-full h-12"
+        className="flex items-center gap-1 bg-slate-900 border border-slate-800 border-b-0 p-1 w-full h-12"
     >
       <div className="flex items-center px-3 mr-2">
         <span className="text-sm font-bold tracking-tighter text-blue-500">TradingAlert</span>
@@ -113,15 +121,92 @@ const Toolbar = ({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      <Separator orientation="vertical" className="mx-1 h-6 bg-slate-800" />
+
       {/* Indicators Trigger */}
-      <Button 
-        variant="ghost" 
-        size="sm" 
-        onClick={onIndicatorsClick}
-        className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 h-8"
-      >
-        Indicators
-      </Button>
+      <div className="flex gap-0.5">
+        <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onIndicatorsClick}
+            className="text-slate-400 hover:text-white hover:bg-slate-800 px-3 h-8"
+        >
+            Indicators
+        </Button>
+        
+        {activeLayout && activeLayout.activeIndicators.length > 0 && (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-4 text-slate-500 hover:text-white p-0">
+                        <Settings className="h-3 w-3" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64 bg-slate-900 border-slate-800 text-slate-300">
+                    <DropdownMenuLabel className="text-slate-500 text-xs">Indicator Visibility</DropdownMenuLabel>
+                    {activeLayout.activeIndicators.map(id => (
+                        <div key={id} className="p-2 space-y-1 border-b border-slate-800 last:border-0">
+                            <div className="flex items-center justify-between text-sm px-2 font-bold text-blue-400">
+                                <span className="capitalize">{id}</span>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="h-6 px-2 text-xs"
+                                    onClick={() => onToggleIndicatorVisibility(id)}
+                                >
+                                    {indicatorSettings[id]?.visible !== false ? "Hide All" : "Show All"}
+                                </Button>
+                            </div>
+                            
+                            <div className="ml-2 space-y-1">
+                                {/* Horizontal Thresholds Toggle */}
+                                <div className="flex items-center justify-between text-xs px-2 text-slate-400">
+                                    <span>Threshold Levels</span>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-5 text-[10px] p-0"
+                                        onClick={() => onToggleLevelsVisibility(id)}
+                                    >
+                                        {indicatorSettings[id]?.showLevels !== false ? "Hide" : "Show"}
+                                    </Button>
+                                </div>
+
+                                {id === 'crsi' && (
+                                    <>
+                                        <div className="flex items-center justify-between text-xs px-2 text-slate-400">
+                                            <span>RSI Line</span>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-5 text-[10px] p-0"
+                                                onClick={() => onToggleSeriesVisibility(id, 'crsi')}
+                                            >
+                                                {indicatorSettings[id]?.series?.['crsi'] !== false ? "Hide" : "Show"}
+                                            </Button>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs px-2 text-slate-400">
+                                            <span>Bands</span>
+                                            <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="h-5 text-[10px] p-0"
+                                                onClick={() => {
+                                                    onToggleSeriesVisibility(id, 'upper_band');
+                                                    onToggleSeriesVisibility(id, 'lower_band');
+                                                }}
+                                            >
+                                                {indicatorSettings[id]?.series?.['upper_band'] !== false ? "Hide" : "Show"}
+                                            </Button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        )}
+      </div>
 
       <Separator orientation="vertical" className="mx-1 h-6 bg-slate-800" />
 

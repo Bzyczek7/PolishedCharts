@@ -9,16 +9,23 @@ export interface Thresholds {
 }
 
 /**
- * Splits a single indicator data series into three series based on thresholds:
- * 1. above: points > high threshold
- * 2. neutral: points between low and high (inclusive)
- * 3. below: points < low threshold
- * 
- * To ensure visual continuity without overlapping segments (which causes "dual lines"),
- * each segment [Ti, Ti+1] is assigned to exactly one series based on the regime 
- * of the second point (Ti+1).
+ * Finalizes a series by filtering invalid values and sorting by time.
+ * Deduplication is removed to preserve shared endpoints for segmented coloring.
+ */
+const finalize = (arr: DataPoint[]) => {
+  if (arr.length === 0) return [];
+
+  return [...arr]
+    .filter(p => p.value !== undefined && p.value !== null && !isNaN(p.value))
+    .sort((a, b) => Number(a.time) - Number(b.time));
+};
+
+/**
+ * Splits a data series based on thresholds into sparse segments.
  */
 export const splitSeriesByThresholds = (data: DataPoint[], thresholds: Thresholds) => {
+    if (data.length === 0) return { above: [], neutral: [], below: [] };
+
     const above: DataPoint[] = [];
     const neutral: DataPoint[] = [];
     const below: DataPoint[] = [];
@@ -29,49 +36,85 @@ export const splitSeriesByThresholds = (data: DataPoint[], thresholds: Threshold
         return 'neutral';
     };
 
-    data.forEach((p, i) => {
-        const regime = getRegime(p.value);
+    let currentRegime = getRegime(data[0].value);
+    let currentSegment: DataPoint[] = [data[0]];
 
-        if (i === 0) {
-            // First point: just add to its regime
-            if (regime === 'above') above.push(p);
-            else if (regime === 'below') below.push(p);
-            else neutral.push(p);
-            return;
-        }
+    for (let i = 1; i < data.length; i++) {
+        const curr = data[i];
+        const newRegime = getRegime(curr.value);
 
-        const prev = data[i - 1];
-        const prevRegime = getRegime(prev.value);
-
-        // Assign the current segment [prev, p] to a series
-        // We use the current regime to determine the segment color
-        if (regime === 'above') {
-            // Segment is Above. Ensure both points are in 'above' series.
-            if (prevRegime !== 'above') above.push(prev);
-            above.push(p);
-        } else if (regime === 'below') {
-            // Segment is Below.
-            if (prevRegime !== 'below') below.push(prev);
-            below.push(p);
+        if (newRegime === currentRegime) {
+            currentSegment.push(curr);
         } else {
-            // Segment is Neutral.
-            if (prevRegime !== 'neutral') neutral.push(prev);
-            neutral.push(p);
+            // Regime changed - finalize current segment by including transition point
+            currentSegment.push(curr);
+            const target = currentRegime === 'above' ? above : currentRegime === 'below' ? below : neutral;
+            target.push(...currentSegment);
+            
+            // Start new segment
+            currentSegment = [curr];
+            currentRegime = newRegime;
         }
-    });
+    }
 
-    const finalize = (arr: DataPoint[]) => {
-        if (arr.length === 0) return [];
-        // Sort and deduplicate by time
-        const sorted = [...arr].sort((a, b) => Number(a.time) - Number(b.time));
-        return sorted.filter((item, index, self) => 
-            index === 0 || item.time !== self[index - 1].time
-        );
+    if (currentSegment.length > 0) {
+        const target = currentRegime === 'above' ? above : currentRegime === 'below' ? below : neutral;
+        target.push(...currentSegment);
+    }
+
+    return { 
+        above: finalize(above), 
+        neutral: finalize(neutral), 
+        below: finalize(below) 
     };
+};
+
+/**
+ * Splits a series based on trend (up/down/flat) into sparse segments.
+ */
+export const splitSeriesByTrend = (data: DataPoint[]) => {
+    if (data.length === 0) return { up: [], down: [], neutral: [] };
+
+    const up: DataPoint[] = [];
+    const down: DataPoint[] = [];
+    const neutral: DataPoint[] = [];
+
+    let currentTrend: 'up' | 'down' | 'neutral' = 'neutral';
+    let currentSegment: DataPoint[] = [data[0]];
+
+    for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1];
+        const curr = data[i];
+        
+        let newTrend: 'up' | 'down' | 'neutral';
+        if (curr.value > prev.value) newTrend = 'up';
+        else if (curr.value < prev.value) newTrend = 'down';
+        else newTrend = 'neutral';
+
+        if (i === 1) currentTrend = newTrend;
+
+        if (newTrend === currentTrend) {
+            currentSegment.push(curr);
+        } else {
+            // Trend changed - finalize current segment by including transition point
+            currentSegment.push(curr);
+            const target = currentTrend === 'up' ? up : currentTrend === 'down' ? down : neutral;
+            target.push(...currentSegment);
+            
+            // Start new segment
+            currentSegment = [curr];
+            currentTrend = newTrend;
+        }
+    }
+
+    if (currentSegment.length > 0) {
+        const target = currentTrend === 'up' ? up : currentTrend === 'down' ? down : neutral;
+        target.push(...currentSegment);
+    }
 
     return {
-        above: finalize(above),
-        neutral: finalize(neutral),
-        below: finalize(below)
+        up: finalize(up),
+        down: finalize(down),
+        neutral: finalize(neutral)
     };
 };
