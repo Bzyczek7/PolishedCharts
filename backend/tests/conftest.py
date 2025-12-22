@@ -12,6 +12,7 @@ def client() -> Generator:
     with TestClient(app) as c:
         yield c
 
+from app.db.base import Base
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -20,6 +21,12 @@ test_engine = create_async_engine(settings.async_database_url, poolclass=NullPoo
 test_session_factory = sessionmaker(
     test_engine, class_=AsyncSession, expire_on_commit=False
 )
+
+@pytest.fixture(scope="session", autouse=True)
+async def setup_test_db():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 @pytest.fixture
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
