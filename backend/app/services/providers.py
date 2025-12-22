@@ -5,8 +5,13 @@ import yfinance as yf
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from app.services.rate_limiter import RateLimiter, rate_limit
 
 logger = logging.getLogger(__name__)
+
+# Global rate limiter for yfinance (e.g. 2 requests per second)
+yf_limiter = RateLimiter(2, 1.0)
 
 class MarketDataProvider(ABC):
     @abstractmethod
@@ -95,36 +100,33 @@ class YFinanceProvider(MarketDataProvider):
     ) -> List[Dict[str, Any]]:
         """
         Fetch a single chunk with retries and window shrinking.
+        Uses tenacity for backoff.
         """
-        import random
-        
-        current_start = start
-        current_end = end
-        retry_count = 0
-        
-        while retry_count <= max_retries:
-            try:
-                return await self._fetch_chunk(symbol, interval, current_start, current_end)
-            except Exception as e:
-                retry_count += 1
-                if retry_count > max_retries:
-                    raise e
-                
-                # Window shrinking: if it failed, try half the window
-                duration = current_end - current_start
-                if duration > timedelta(hours=1):
-                    new_duration = duration / 2
-                    logger.warning(f"Shrinking window for {symbol} due to error: {new_duration}")
-                    # We only shrink for the FIRST retry attempt of this range
-                    # In a real implementation, we might recursion or a queue.
-                    # For now, let's just do a simple retry with delay.
-                
-                wait_time = (2 ** retry_count) + random.uniform(0, 1)
-                logger.warning(f"yfinance retry {retry_count} for {symbol} in {wait_time:.2f}s...")
-                await asyncio.sleep(wait_time)
-        
-        return []
+        @retry(
+            stop=stop_after_attempt(max_retries),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type(Exception),
+            reraise=True
+        )
+        async def _attempt():
+            return await self._fetch_chunk(symbol, interval, start, end)
 
+        try:
+            return await _attempt()
+        except Exception as e:
+            # Window shrinking: if it failed after all retries, try a smaller range
+            duration = end - start
+            if duration > timedelta(hours=1):
+                mid = start + (duration / 2)
+                logger.warning(f"All retries failed for {symbol} range {start} to {end}. Shrinking window.")
+                first_half = await self._fetch_with_retries(symbol, interval, start, mid, max_retries=2)
+                second_half = await self._fetch_with_retries(symbol, interval, mid, end, max_retries=2)
+                return first_half + second_half
+            else:
+                logger.error(f"Failed to fetch minimal window for {symbol}: {e}")
+                return []
+
+    @rate_limit(yf_limiter)
     async def _fetch_chunk(
         self, 
         symbol: str, 
