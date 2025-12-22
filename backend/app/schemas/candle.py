@@ -4,6 +4,7 @@ from datetime import datetime
 class CandleResponse(BaseModel):
     id: int
     ticker: str
+    interval: str
     timestamp: datetime
     open: float
     high: float
