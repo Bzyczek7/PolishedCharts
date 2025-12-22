@@ -12,5 +12,16 @@ class CandleResponse(BaseModel):
     close: float
     volume: Optional[int] = None
 
+class BackfillRequest(BaseModel):
+    symbol: str
+    interval: str
+    start_date: datetime
+    end_date: datetime
+
+class BackfillResponse(BaseModel):
+    status: str
+    job_id: Optional[int] = None
+    message: Optional[str] = None
+
     class Config:
         from_attributes = True

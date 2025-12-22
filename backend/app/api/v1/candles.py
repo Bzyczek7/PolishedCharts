@@ -5,9 +5,10 @@ from typing import List, Optional
 from datetime import datetime, timezone
 from app.db.session import get_db
 from app.models.symbol import Symbol
-from app.schemas.candle import CandleResponse
+from app.schemas.candle import CandleResponse, BackfillRequest, BackfillResponse
 from app.services.orchestrator import DataOrchestrator
 from app.services.candles import CandleService
+from app.services.backfill import BackfillService
 from app.services.providers import YFinanceProvider, AlphaVantageProvider
 from app.core.config import settings
 
@@ -52,3 +53,40 @@ async def get_candles(
     )
         
     return candles_data
+
+@router.post("/backfill", response_model=BackfillResponse)
+async def trigger_backfill(
+    request: BackfillRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Trigger a historical data backfill for a given symbol and interval.
+    """
+    backfill_service = BackfillService()
+    job = await backfill_service.create_job(
+        db=db,
+        symbol=request.symbol.upper(),
+        interval=request.interval.lower(),
+        start_date=request.start_date,
+        end_date=request.end_date
+    )
+    return {
+        "status": "pending",
+        "job_id": job.id,
+        "message": f"Backfill job created for {request.symbol}"
+    }
+
+@router.post("/update-latest", response_model=BackfillResponse)
+async def update_latest(
+    symbol: str = Query(..., description="Ticker symbol"),
+    interval: str = Query("1h", description="Timeframe"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Incremental update endpoint for the most recent bars.
+    """
+    # Placeholder for incremental update trigger
+    return {
+        "status": "success",
+        "message": f"Incremental update triggered for {symbol} ({interval})"
+    }

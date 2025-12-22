@@ -1,6 +1,7 @@
 import pytest
 from typing import Generator, AsyncGenerator
 from fastapi.testclient import TestClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.db.session import engine, AsyncSessionLocal
 from app.core.config import settings
@@ -11,6 +12,11 @@ from sqlalchemy.orm import sessionmaker
 def client() -> Generator:
     with TestClient(app) as c:
         yield c
+
+@pytest.fixture
+async def async_client() -> AsyncGenerator[AsyncClient, None]:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
 
 from app.db.base import Base
 from sqlalchemy.pool import NullPool
