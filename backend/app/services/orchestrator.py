@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,27 +42,48 @@ class DataOrchestrator:
 
         # 1. Identify Gaps (only if not local_only)
         if not local_only:
-            gaps = await self.candle_service.find_gaps(db, symbol_id, interval, start, end)
+            gaps = await self.candle_service.find_gaps(db, symbol_id, ticker, interval, start, end)
             
             if gaps:
                 logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
-                # Optimize: Instead of filling each gap individually, 
-                # find the total range covering all gaps and fetch it once.
-                # This avoids dozens of small API calls for things like weekends.
-                all_gap_starts = [g[0] for g in gaps]
-                all_gap_ends = [g[1] for g in gaps]
                 
-                fill_start = min(all_gap_starts)
-                fill_end = max(all_gap_ends)
+                # Check if total missing bars exceed hard cap
+                total_missing = 0
+                from app.core.intervals import get_interval_delta
+                delta = get_interval_delta(interval)
+                for g_start, g_end in gaps:
+                    total_missing += (g_end - g_start) / delta + 1
                 
-                # Ensure aware
-                if fill_start.tzinfo is None:
-                    fill_start = fill_start.replace(tzinfo=timezone.utc)
-                if fill_end.tzinfo is None:
-                    fill_end = fill_end.replace(tzinfo=timezone.utc)
+                HARD_CAP = 500
+                if total_missing > HARD_CAP:
+                    logger.warning(f"Gap size {total_missing} exceeds hard cap of {HARD_CAP}. Skipping dynamic fill.")
+                    # In Phase 3/4 we might return 'needs_backfill: True'
+                else:
+                    # Optimize: Instead of filling each gap individually, 
+                    # find the total range covering all gaps and fetch it once.
+                    all_gap_starts = [g[0] for g in gaps]
+                    all_gap_ends = [g[1] for g in gaps]
                     
-                logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
-                await self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end)
+                    fill_start = min(all_gap_starts)
+                    fill_end = max(all_gap_ends)
+                    
+                    # Ensure aware
+                    if fill_start.tzinfo is None:
+                        fill_start = fill_start.replace(tzinfo=timezone.utc)
+                    if fill_end.tzinfo is None:
+                        fill_end = fill_end.replace(tzinfo=timezone.utc)
+                        
+                    logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
+                    try:
+                        # Timeout protection: don't hang the API request for more than 10s
+                        await asyncio.wait_for(
+                            self._fill_gap(db, symbol_id, ticker, interval, fill_start, fill_end),
+                            timeout=10.0
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"Gap filling timed out for {ticker} ({interval})")
+                    except Exception as e:
+                        logger.error(f"Error filling gaps for {ticker}: {e}")
 
         # 2. Fetch all from DB
         # We re-query the full range to ensure we have a continuous, sorted, deduplicated set.
