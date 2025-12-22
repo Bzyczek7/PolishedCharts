@@ -85,6 +85,7 @@ const IndicatorPane = ({
       },
       handleScroll: false,
       handleScale: false,
+      // Ensure the grid settings match the main chart for alignment
     })
 
     chartRef.current = chart
