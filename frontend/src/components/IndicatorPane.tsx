@@ -61,10 +61,10 @@ const IndicatorPane = ({
       height: height || 150,
       timeScale: {
         visible: false,
-        handleScroll: false,
-        handleScale: false,
         shiftVisibleRangeOnNewBar: false,
       },
+      handleScroll: false,
+      handleScale: false,
     })
 
     chartRef.current = chart
@@ -72,8 +72,6 @@ const IndicatorPane = ({
     // Add a hidden series to force the timescale to match candles
     const baseline = chart.addSeries(LineSeries, {
         visible: false,
-        handleScale: false,
-        handleScroll: false,
     })
     baselineSeriesRef.current = baseline
 

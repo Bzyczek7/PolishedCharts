@@ -21,6 +21,8 @@ export interface Layout {
 
 interface ToolbarProps {
   symbol: string
+  interval: string
+  onIntervalSelect: (interval: string) => void
   onSymbolClick: () => void
   onIndicatorsClick: () => void
   onFullscreenToggle: () => void
@@ -32,6 +34,8 @@ interface ToolbarProps {
 
 const Toolbar = ({ 
   symbol, 
+  interval,
+  onIntervalSelect,
   onSymbolClick, 
   onIndicatorsClick, 
   onFullscreenToggle,
@@ -74,7 +78,8 @@ const Toolbar = ({
             key={tf}
             variant="ghost" 
             size="sm" 
-            className="text-xs text-slate-400 hover:text-white hover:bg-slate-800 px-2 h-8"
+            onClick={() => onIntervalSelect(tf)}
+            className={`text-xs text-slate-400 hover:text-white hover:bg-slate-800 px-2 h-8 ${interval === tf ? 'bg-slate-700 text-white' : ''}`}
           >
             {tf}
           </Button>

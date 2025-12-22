@@ -11,7 +11,16 @@ export interface Candle {
   volume: number
 }
 
-export const getCandles = async (symbol: string): Promise<Candle[]> => {
-  const response = await client.get<Candle[]>(`/candles/${symbol}`)
+export const getCandles = async (
+    symbol: string, 
+    interval: string = '1d',
+    from?: string,
+    to?: string
+): Promise<Candle[]> => {
+  const params: any = { interval }
+  if (from) params.from = from
+  if (to) params.to = to
+  
+  const response = await client.get<Candle[]>(`/candles/${symbol}`, { params })
   return response.data
 }

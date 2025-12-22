@@ -20,6 +20,7 @@ import { formatDataForChart } from './lib/chartUtils'
 
 function App() {
   const [symbol, setSymbol] = useState('IBM')
+  const [interval, setInterval] = useState('1d')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
   const mainViewportRef = useRef<HTMLDivElement>(null)
@@ -132,7 +133,7 @@ function App() {
     const fetchData = async () => {
         try {
             const [candleData, tdfi, crsi, adxvma] = await Promise.all([
-                getCandles(symbol).catch(() => []),
+                getCandles(symbol, interval).catch(() => []),
                 getTDFI(symbol).catch(() => null),
                 getcRSI(symbol).catch(() => null),
                 getADXVMA(symbol).catch(() => null)
@@ -146,7 +147,7 @@ function App() {
         }
     }
     fetchData()
-  }, [symbol])
+  }, [symbol, interval])
 
   const handleSymbolSelect = useCallback((newSymbol: string) => {
     setSymbol(newSymbol)
@@ -269,6 +270,10 @@ function App() {
     }
   }, [activeLayout?.activeIndicators, crsiData])
 
+  const handleIntervalSelect = useCallback((newInterval: string) => {
+    setInterval(newInterval)
+  }, [])
+
   return (
     <TooltipProvider>
         <Layout
@@ -297,6 +302,8 @@ function App() {
             <div ref={mainViewportRef} data-testid="main-viewport" className="flex flex-col h-full w-full p-4 space-y-4">
                 <Toolbar 
                     symbol={symbol}
+                    interval={interval}
+                    onIntervalSelect={handleIntervalSelect}
                     onSymbolClick={() => setIsSearchOpen(true)}
                     onIndicatorsClick={() => setIsIndicatorsOpen(true)}
                     onFullscreenToggle={toggleFullscreen}
