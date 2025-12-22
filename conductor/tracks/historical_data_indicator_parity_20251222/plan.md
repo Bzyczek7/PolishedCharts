@@ -1,13 +1,13 @@
 # Plan: Historical Data Management & Indicator Visual Parity
 
-## Phase 1: Data Store & API Contract [checkpoint: ]
+## Phase 1: Data Store & API Contract [checkpoint: 91f8b25]
 - [x] Task: Create SQLAlchemy migration for expanded `candles` table including `interval` column and unique constraint on `(symbol_id, interval, timestamp)`. 1a39a11
 - [x] Task: Implement `CandleService.upsert_candles` with bulk operations and locking to prevent duplicate concurrent backfills. d01aeaa
 - [x] Task: Define Range Semantics: Establish UTC timestamps, inclusive bounds, and default window behavior (last 300 bars) for omitted `from/to`. b3d867f
 - [x] Task: Write failing tests for idempotent upsert and multi-segment gap detection (Head, Tail, and Middle Gaps) (Red Phase). e632750
 - [x] Task: Implement gap detection logic to identify missing segments, including holes between existing data points (Green Phase). 144bcb5
 - [x] Task: Update Backend API: Define `GET /candles` parameters and update the endpoint to use the orchestrator. e6b63c6
-- [ ] Task: Conductor - User Manual Verification 'Data Store & API Contract' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Data Store & API Contract' (Protocol in workflow.md) 91f8b25
 
 ## Phase 2: Orchestration & UI Wiring [checkpoint: ]
 - [ ] Task: Implement `YFinanceProvider` with per-interval chunking and explicit handling for interval-specific lookback limits.
