@@ -48,6 +48,7 @@ function App() {
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   const [candles, setCandles] = useState<Candle[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [visibleRange, setVisibleRange] = useState<IRange<Time> | null>(null)
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
@@ -535,10 +536,48 @@ function App() {
     setInterval(newInterval)
   }, [])
 
+  const fetchMoreHistory = useCallback(async () => {
+    if (isLoading || candles.length === 0) return
+    
+    setIsLoading(true)
+    try {
+        const earliestDate = new Date(candles[0].timestamp)
+        const to = earliestDate.toISOString()
+        
+        const fromDate = new Date(earliestDate)
+        fromDate.setDate(fromDate.getDate() - 30) // Fetch another 30 days
+        const from = fromDate.toISOString()
+        
+        console.log(`Fetching more history for ${symbol}: ${from} to ${to}`)
+        const moreCandles = await getCandles(symbol, interval, from, to)
+        
+        if (moreCandles.length > 0) {
+            setCandles(prev => {
+                const combined = [...moreCandles, ...prev]
+                const unique = combined.filter((c, index, self) =>
+                    index === self.findIndex((t) => t.timestamp === c.timestamp)
+                )
+                return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            })
+        }
+    } catch (e) {
+        console.error('Failed to fetch more history', e)
+    } finally {
+        setIsLoading(false)
+    }
+  }, [isLoading, candles, symbol, interval])
+
   const handleVisibleTimeRangeChange = useCallback((range: IRange<Time> | null) => {
     if (!range) return
     setVisibleRange(range)
-  }, [])
+    
+    if (candles.length > 0 && !isLoading) {
+        const earliestLoaded = Math.floor(new Date(candles[0].timestamp).getTime() / 1000)
+        if (Number(range.from) <= earliestLoaded + (3600 * 24)) {
+            fetchMoreHistory()
+        }
+    }
+  }, [candles, isLoading, fetchMoreHistory])
 
   return (
     <TooltipProvider>
