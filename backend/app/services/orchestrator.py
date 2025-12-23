@@ -54,7 +54,7 @@ class DataOrchestrator:
                 for g_start, g_end in gaps:
                     total_missing += (g_end - g_start) / delta + 1
                 
-                HARD_CAP = 500
+                HARD_CAP = 10000 # Increased to allow more history in dynamic fills
                 if total_missing > HARD_CAP:
                     logger.warning(f"Gap size {total_missing} exceeds hard cap of {HARD_CAP}. Skipping dynamic fill.")
                     # In Phase 3/4 we might return 'needs_backfill: True'

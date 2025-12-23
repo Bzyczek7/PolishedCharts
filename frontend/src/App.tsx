@@ -49,6 +49,8 @@ function App() {
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   const [candles, setCandles] = useState<Candle[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [hasMoreHistory, setHasMoreHistory] = useState(true)
+  const lastFetchedToDateRef = useRef<string | null>(null)
   const [visibleRange, setVisibleRange] = useState<IRange<Time> | null>(null)
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
@@ -57,28 +59,6 @@ function App() {
   const [indicatorSettings, setIndicatorSettings] = useState<Record<string, { visible: boolean; series: Record<string, boolean>; showLevels: boolean }>>({})
   const mainChartRef = useRef<any>(null)
   const indicatorChartsRef = useRef<Map<string, { chart: any; series: any }>>(new Map())
-
-  // Helper to build a time→value map
-  const buildValueMap = useCallback((seriesArr?: { time: number; value: number }[]) => {
-    const m = new Map<number, number>()
-    if (seriesArr) {
-      seriesArr.forEach(p => m.set(p.time, p.value))
-    }
-    return m
-  }, [])
-
-  // Create value maps for indicators
-  const crsiValueByTime = useMemo(() => {
-    if (!crsiData) return new Map<number, number>()
-    const raw = formatDataForChart(crsiData.timestamps, crsiData.crsi)
-    return buildValueMap(raw)
-  }, [crsiData, buildValueMap])
-
-  const tdfiValueByTime = useMemo(() => {
-    if (!tdfiData) return new Map<number, number>()
-    const raw = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi)
-    return buildValueMap(raw)
-  }, [tdfiData, buildValueMap])
 
   // Main crosshair move handler
   const handleMainCrosshairMove = useCallback((param: any) => {
@@ -96,39 +76,7 @@ function App() {
     }
 
     setCrosshairTime(t)
-
-    // tdfi
-    const tdfiEntry = indicatorChartsRef.current.get('tdfi')
-    if (tdfiEntry) {
-      const v = tdfiValueByTime.get(t)
-      if (v !== undefined) {
-        try {
-          (tdfiEntry.chart as any).setCrosshairPosition?.(v, t, tdfiEntry.series) ||
-          tdfiEntry.chart.setCrosshairPosition?.(v, t)
-        } catch(e) {}
-      } else {
-        try {
-          (tdfiEntry.chart as any).clearCrosshairPosition?.() || tdfiEntry.chart.clearCrosshair?.()
-        } catch(e) {}
-      }
-    }
-
-    // crsi
-    const crsiEntry = indicatorChartsRef.current.get('crsi')
-    if (crsiEntry) {
-      const v = crsiValueByTime.get(t)
-      if (v !== undefined) {
-        try {
-          (crsiEntry.chart as any).setCrosshairPosition?.(v, t, crsiEntry.series) ||
-          crsiEntry.chart.setCrosshairPosition?.(v, t)
-        } catch(e) {}
-      } else {
-        try {
-          (crsiEntry.chart as any).clearCrosshairPosition?.() || crsiEntry.chart.clearCrosshair?.()
-        } catch(e) {}
-      }
-    }
-  }, [crsiValueByTime, tdfiValueByTime])
+  }, [])
 
   const toggleIndicatorVisibility = useCallback((indicatorId: string) => {
     setIndicatorSettings(prev => ({
@@ -537,15 +485,19 @@ function App() {
   }, [])
 
   const fetchMoreHistory = useCallback(async () => {
-    if (isLoading || candles.length === 0) return
+    if (isLoading || !hasMoreHistory || candles.length === 0) return
     
+    const earliestDateStr = candles[0].timestamp
+    if (lastFetchedToDateRef.current === earliestDateStr) return
+    lastFetchedToDateRef.current = earliestDateStr
+
     setIsLoading(true)
     try {
-        const earliestDate = new Date(candles[0].timestamp)
+        const earliestDate = new Date(earliestDateStr)
         const to = earliestDate.toISOString()
         
         const fromDate = new Date(earliestDate)
-        fromDate.setDate(fromDate.getDate() - 30) // Fetch another 30 days
+        fromDate.setDate(fromDate.getDate() - 30) 
         const from = fromDate.toISOString()
         
         console.log(`Fetching more history for ${symbol}: ${from} to ${to}`)
@@ -559,25 +511,33 @@ function App() {
                 )
                 return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
             })
+        } else {
+            console.log(`No more history found for ${symbol} before ${to}`)
+            setHasMoreHistory(false)
         }
     } catch (e) {
         console.error('Failed to fetch more history', e)
     } finally {
         setIsLoading(false)
     }
-  }, [isLoading, candles, symbol, interval])
+  }, [isLoading, hasMoreHistory, candles, symbol, interval])
 
   const handleVisibleTimeRangeChange = useCallback((range: IRange<Time> | null) => {
     if (!range) return
     setVisibleRange(range)
     
-    if (candles.length > 0 && !isLoading) {
+    if (candles.length > 0 && !isLoading && hasMoreHistory) {
         const earliestLoaded = Math.floor(new Date(candles[0].timestamp).getTime() / 1000)
-        if (Number(range.from) <= earliestLoaded + (3600 * 24)) {
+        // Trigger when within 20% of the currently loaded data's start
+        const latestLoaded = Math.floor(new Date(candles[candles.length-1].timestamp).getTime() / 1000)
+        const loadedDuration = latestLoaded - earliestLoaded
+        const threshold = earliestLoaded + (loadedDuration * 0.2)
+        
+        if (Number(range.from) <= threshold) {
             fetchMoreHistory()
         }
     }
-  }, [candles, isLoading, fetchMoreHistory])
+  }, [candles, isLoading, hasMoreHistory, fetchMoreHistory])
 
   return (
     <TooltipProvider>

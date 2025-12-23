@@ -32,4 +32,4 @@
 - [x] Task: Implement "Scroll Left" behavior to trigger on-demand fetching of older historical ranges 677be53
 - [x] Task: Stress test deep historical scrolling (e.g., Aug 2025 daily) to confirm zero duplicates and seamless stitching c207176
 - [x] Task: Verify sub-second chart loading for fully cached symbol/interval datasets c207176
-- [ ] Task: Conductor - User Manual Verification 'Phase 4: Frontend Integration & Stress Testing' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Phase 4: Frontend Integration & Stress Testing' (Protocol in workflow.md)
