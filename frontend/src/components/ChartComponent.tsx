@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createChart, ColorType, LineSeries, CandlestickSeries } from 'lightweight-charts'
+import type { Time, LogicalRange, IRange } from 'lightweight-charts'
 import type { Candle } from '../api/candles'
 
 interface OverlayIndicator {
@@ -18,7 +19,8 @@ interface ChartComponentProps {
   onTimeScaleInit?: (timeScale: any) => void
   onCrosshairMove?: (param: any) => void
   onChartReady?: (chart: any, syncSeries: any[]) => void
-  onVisibleTimeRangeChange?: (range: { from: number; to: number } | null) => void
+  onVisibleTimeRangeChange?: (range: IRange<Time> | null) => void
+  onVisibleLogicalRangeChange?: (range: LogicalRange | null) => void
 }
 
 const ChartComponent = ({
@@ -30,7 +32,8 @@ const ChartComponent = ({
     onTimeScaleInit,
     onCrosshairMove,
     onChartReady,
-    onVisibleTimeRangeChange
+    onVisibleTimeRangeChange,
+    onVisibleLogicalRangeChange
 }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
@@ -82,6 +85,10 @@ const ChartComponent = ({
     if (onVisibleTimeRangeChange) {
         chart.timeScale().subscribeVisibleTimeRangeChange(onVisibleTimeRangeChange);
     }
+    
+    if (onVisibleLogicalRangeChange) {
+        chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChange);
+    }
 
     if (onCrosshairMove) {
       chart.subscribeCrosshairMove(onCrosshairMove)
@@ -96,6 +103,7 @@ const ChartComponent = ({
     return () => {
       if (onCrosshairMove) chart.unsubscribeCrosshairMove(onCrosshairMove)
       if (onVisibleTimeRangeChange) chart.timeScale().unsubscribeVisibleTimeRangeChange(onVisibleTimeRangeChange)
+      if (onVisibleLogicalRangeChange) chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleLogicalRangeChange)
       onTimeScaleInit?.(null)
       chart.remove()
       chartRef.current = null

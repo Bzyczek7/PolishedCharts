@@ -2,7 +2,12 @@ import client from './client'
 
 export interface IndicatorMetadata {
   display_type: 'overlay' | 'pane'
+  color_mode?: 'single' | 'threshold' | 'gradient'
   color_schemes: Record<string, string>
+  thresholds?: {
+    high: number
+    low: number
+  }
   scale_ranges?: {
     min: number
     max: number

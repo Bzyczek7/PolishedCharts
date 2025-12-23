@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './App.css'
 import Layout from './components/Layout'
 import Toolbar from './components/Toolbar'
-import SymbolSearch from './components/SymbolSearch'
-import IndicatorSearch from './components/IndicatorSearch'
 import Watchlist from './components/Watchlist'
 import AlertsView from './components/AlertsView'
 import ChartComponent from './components/ChartComponent'
@@ -18,6 +16,7 @@ import type { ADXVMAOutput, cRSIOutput, TDFIOutput } from './api/indicators'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { formatDataForChart } from './lib/chartUtils'
 import { splitSeriesByThresholds } from './lib/indicatorTransform'
+import type { Time, IRange } from 'lightweight-charts'
 
 function App() {
   const [symbol, setSymbol] = useState('IBM')
@@ -49,6 +48,7 @@ function App() {
   const [layouts, setLayouts] = useState<LayoutType[]>([])
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   const [candles, setCandles] = useState<Candle[]>([])
+  const [visibleRange, setVisibleRange] = useState<IRange<Time> | null>(null)
   const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
   const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
@@ -58,24 +58,26 @@ function App() {
   const indicatorChartsRef = useRef<Map<string, { chart: any; series: any }>>(new Map())
 
   // Helper to build a time→value map
-  const buildValueMap = (seriesArr?: { time: number; value: number }[]) => {
+  const buildValueMap = useCallback((seriesArr?: { time: number; value: number }[]) => {
     const m = new Map<number, number>()
-    ;(seriesArr || []).forEach(p => m.set(p.time, p.value))
+    if (seriesArr) {
+      seriesArr.forEach(p => m.set(p.time, p.value))
+    }
     return m
-  }
+  }, [])
 
   // Create value maps for indicators
   const crsiValueByTime = useMemo(() => {
     if (!crsiData) return new Map<number, number>()
     const raw = formatDataForChart(crsiData.timestamps, crsiData.crsi)
     return buildValueMap(raw)
-  }, [crsiData])
+  }, [crsiData, buildValueMap])
 
   const tdfiValueByTime = useMemo(() => {
     if (!tdfiData) return new Map<number, number>()
     const raw = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi)
     return buildValueMap(raw)
-  }, [tdfiData])
+  }, [tdfiData, buildValueMap])
 
   // Main crosshair move handler
   const handleMainCrosshairMove = useCallback((param: any) => {
@@ -240,8 +242,13 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
         try {
+            const to = new Date().toISOString()
+            const fromDate = new Date()
+            fromDate.setDate(fromDate.getDate() - 30) // 30 days default
+            const from = fromDate.toISOString()
+
             const [candleData, tdfi, crsi, adxvma] = await Promise.all([
-                getCandles(symbol, interval).catch(() => []),
+                getCandles(symbol, interval, from, to).catch(() => []),
                 getTDFI(symbol, interval).catch(() => null),
                 getcRSI(symbol, interval).catch(() => null),
                 getADXVMA(symbol, interval).catch(() => null)
@@ -528,6 +535,11 @@ function App() {
     setInterval(newInterval)
   }, [])
 
+  const handleVisibleTimeRangeChange = useCallback((range: IRange<Time> | null) => {
+    if (!range) return
+    setVisibleRange(range)
+  }, [])
+
   return (
     <TooltipProvider>
         <Layout
@@ -583,6 +595,7 @@ function App() {
                                 onTimeScaleInit={setMainTimeScale}
                                 onCrosshairMove={handleMainCrosshairMove}
                                 overlays={adxvmaOverlay}
+                                onVisibleTimeRangeChange={handleVisibleTimeRangeChange}
                             />
                         </div>
 
