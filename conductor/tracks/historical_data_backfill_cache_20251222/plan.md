@@ -27,7 +27,7 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 3: Background Workers & Concurrency' (Protocol in workflow.md) 43dd574
 
 ## Phase 4: Frontend Integration & Stress Testing
-- [ ] Task: Update frontend `getCandles` service to capture chart visible range from Lightweight Charts `timeScale` events
+- [x] Task: Update frontend `getCandles` service to capture chart visible range from Lightweight Charts `timeScale` events 84601f3
 - [ ] Task: Pass ISO-8601 `from`/`to` parameters to `/api/v1/candles` based on requested range
 - [ ] Task: Implement "Scroll Left" behavior to trigger on-demand fetching of older historical ranges
 - [ ] Task: Stress test deep historical scrolling (e.g., Aug 2025 daily) to confirm zero duplicates and seamless stitching
