@@ -18,9 +18,20 @@ interface ChartComponentProps {
   onTimeScaleInit?: (timeScale: any) => void
   onCrosshairMove?: (param: any) => void
   onChartReady?: (chart: any, syncSeries: any[]) => void
+  onVisibleTimeRangeChange?: (range: { from: number; to: number } | null) => void
 }
 
-const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit, onCrosshairMove, onChartReady }: ChartComponentProps) => {
+const ChartComponent = ({
+    symbol,
+    candles,
+    overlays = [],
+    width,
+    height,
+    onTimeScaleInit,
+    onCrosshairMove,
+    onChartReady,
+    onVisibleTimeRangeChange
+}: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const candlestickSeriesRef = useRef<any>(null)
@@ -68,6 +79,10 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
 
     onTimeScaleInit?.(chart.timeScale())
 
+    if (onVisibleTimeRangeChange) {
+        chart.timeScale().subscribeVisibleTimeRangeChange(onVisibleTimeRangeChange);
+    }
+
     if (onCrosshairMove) {
       chart.subscribeCrosshairMove(onCrosshairMove)
     }
@@ -80,6 +95,7 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
 
     return () => {
       if (onCrosshairMove) chart.unsubscribeCrosshairMove(onCrosshairMove)
+      if (onVisibleTimeRangeChange) chart.timeScale().unsubscribeVisibleTimeRangeChange(onVisibleTimeRangeChange)
       onTimeScaleInit?.(null)
       chart.remove()
       chartRef.current = null

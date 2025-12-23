@@ -1,7 +1,6 @@
 import client from './client'
 
 export interface Candle {
-  id: number
   ticker: string
   timestamp: string
   open: number
