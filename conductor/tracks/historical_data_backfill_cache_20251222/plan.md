@@ -18,13 +18,13 @@
 - [x] Task: Integrate downloader into `GET /api/v1/candles` to enable transparent gap filling (up to hard cap) with timeout protection 234394e
 - [x] Task: Write Integration Tests for Gap Filling: verify missing bars are fetched and upserted during GET requests e89c797
 - [x] Task: Conductor - User Manual Verification 'Phase 2: yfinance Orchestrator & Gap Filling' (Protocol in workflow.md) b0403f9
-## Phase 3: Background Workers & Concurrency
+## Phase 3: Background Workers & Concurrency [checkpoint: 43dd574]
 - [x] Task: Implement worker task lifecycle management (store task handles, add `done_callback`, and handle graceful shutdown) 322ecba
 - [x] Task: Implement backfill worker logic using the `BackfillJob` table for coordination and error state tracking cf67524
 - [x] Task: Implement incremental update task that pulls latest candles for active symbols at a controlled cadence f30590d
 - [x] Task: Add rate-limiting and backoff decorators for all yfinance interactions to prevent IP blocks cfd6487
 - [x] Task: Write Unit/Integration Tests for Workers: verify job state transitions and robust exception handling c35ed4f
-- [~] Task: Conductor - User Manual Verification 'Phase 3: Background Workers & Concurrency' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Background Workers & Concurrency' (Protocol in workflow.md) 43dd574
 
 ## Phase 4: Frontend Integration & Stress Testing
 - [ ] Task: Update frontend `getCandles` service to capture chart visible range from Lightweight Charts `timeScale` events
