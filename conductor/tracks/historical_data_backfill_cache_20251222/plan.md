@@ -29,7 +29,7 @@
 ## Phase 4: Frontend Integration & Stress Testing
 - [x] Task: Update frontend `getCandles` service to capture chart visible range from Lightweight Charts `timeScale` events 84601f3
 - [x] Task: Pass ISO-8601 `from`/`to` parameters to `/api/v1/candles` based on requested range 0d10ebc
-- [ ] Task: Implement "Scroll Left" behavior to trigger on-demand fetching of older historical ranges
+- [x] Task: Implement "Scroll Left" behavior to trigger on-demand fetching of older historical ranges 677be53
 - [ ] Task: Stress test deep historical scrolling (e.g., Aug 2025 daily) to confirm zero duplicates and seamless stitching
 - [ ] Task: Verify sub-second chart loading for fully cached symbol/interval datasets
 - [ ] Task: Conductor - User Manual Verification 'Phase 4: Frontend Integration & Stress Testing' (Protocol in workflow.md)
