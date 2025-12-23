@@ -17,9 +17,10 @@ interface ChartComponentProps {
   height?: number
   onTimeScaleInit?: (timeScale: any) => void
   onCrosshairMove?: (param: any) => void
+  onChartReady?: (chart: any, syncSeries: any[]) => void
 }
 
-const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit, onCrosshairMove }: ChartComponentProps) => {
+const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeScaleInit, onCrosshairMove, onChartReady }: ChartComponentProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const candlestickSeriesRef = useRef<any>(null)
@@ -38,16 +39,13 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
         horzLines: { color: '#1e293b' },
       },
       crosshair: {
-        mode: 1, // Normal crosshair mode
-        horzLine: {
-          visible: true,
-          labelVisible: true,
-        },
+        mode: 1,
+        horzLine: { visible: true, labelVisible: true },
         vertLine: {
           visible: true,
-          style: 0, // Solid line
+          style: 0,
           width: 1,
-          color: 'rgba(224, 227, 235, 0.1)', // Subtle color
+          color: 'rgba(224, 227, 235, 0.1)',
           labelVisible: true,
         },
       },
@@ -56,41 +54,39 @@ const ChartComponent = ({ symbol, candles, overlays = [], width, height, onTimeS
     })
 
     chartRef.current = chart
-    
+
     const candlestickSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderVisible: false,
-        wickUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-        lastValueVisible: false,
-        priceLineVisible: false,
+      upColor: '#22c55e',
+      downColor: '#ef4444',
+      borderVisible: false,
+      wickUpColor: '#22c55e',
+      wickDownColor: '#ef4444',
+      lastValueVisible: false,
+      priceLineVisible: false,
     })
-    
     candlestickSeriesRef.current = candlestickSeries
 
-    if (onTimeScaleInit) {
-        onTimeScaleInit(chart.timeScale())
+    onTimeScaleInit?.(chart.timeScale())
+
+    if (onCrosshairMove) {
+      chart.subscribeCrosshairMove(onCrosshairMove)
     }
 
-    // Subscribe to crosshair movement
-    if (onCrosshairMove) {
-        chart.subscribeCrosshairMove(onCrosshairMove);
+    // Notify when chart is ready
+    if (onChartReady) {
+        const syncSeries = [candlestickSeries, ...Array.from(overlaySeriesRef.current.values())];
+        onChartReady(chart, syncSeries);
     }
 
     return () => {
-      if (onTimeScaleInit) {
-        onTimeScaleInit(null)
-      }
-      if (onCrosshairMove) {
-        chart.unsubscribeCrosshairMove(onCrosshairMove);
-      }
+      if (onCrosshairMove) chart.unsubscribeCrosshairMove(onCrosshairMove)
+      onTimeScaleInit?.(null)
       chart.remove()
       chartRef.current = null
       candlestickSeriesRef.current = null
       overlaySeriesRef.current.clear()
     }
-  }, [symbol]) // Re-create only on symbol change
+  }, [symbol, width, height, onTimeScaleInit, onCrosshairMove])
 
   useEffect(() => {
     if (!candlestickSeriesRef.current) return

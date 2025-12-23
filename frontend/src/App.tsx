@@ -54,6 +54,78 @@ function App() {
   const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
   const [crosshairTime, setCrosshairTime] = useState<number | null>(null)
   const [indicatorSettings, setIndicatorSettings] = useState<Record<string, { visible: boolean; series: Record<string, boolean>; showLevels: boolean }>>({})
+  const mainChartRef = useRef<any>(null)
+  const indicatorChartsRef = useRef<Map<string, { chart: any; series: any }>>(new Map())
+
+  // Helper to build a time→value map
+  const buildValueMap = (seriesArr?: { time: number; value: number }[]) => {
+    const m = new Map<number, number>()
+    ;(seriesArr || []).forEach(p => m.set(p.time, p.value))
+    return m
+  }
+
+  // Create value maps for indicators
+  const crsiValueByTime = useMemo(() => {
+    if (!crsiData) return new Map<number, number>()
+    const raw = formatDataForChart(crsiData.timestamps, crsiData.crsi)
+    return buildValueMap(raw)
+  }, [crsiData])
+
+  const tdfiValueByTime = useMemo(() => {
+    if (!tdfiData) return new Map<number, number>()
+    const raw = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi)
+    return buildValueMap(raw)
+  }, [tdfiData])
+
+  // Main crosshair move handler
+  const handleMainCrosshairMove = useCallback((param: any) => {
+    // ignore non-pointer / programmatic moves to avoid jitter during scroll
+    if (!param?.sourceEvent) return
+
+    const t = param?.time
+    if (!t) {
+      indicatorChartsRef.current.forEach(({ chart }) => {
+        try {
+          (chart as any).clearCrosshairPosition?.() || chart.clearCrosshair?.()
+        } catch(e) {}
+      })
+      return
+    }
+
+    setCrosshairTime(t)
+
+    // tdfi
+    const tdfiEntry = indicatorChartsRef.current.get('tdfi')
+    if (tdfiEntry) {
+      const v = tdfiValueByTime.get(t)
+      if (v !== undefined) {
+        try {
+          (tdfiEntry.chart as any).setCrosshairPosition?.(v, t, tdfiEntry.series) ||
+          tdfiEntry.chart.setCrosshairPosition?.(v, t)
+        } catch(e) {}
+      } else {
+        try {
+          (tdfiEntry.chart as any).clearCrosshairPosition?.() || tdfiEntry.chart.clearCrosshair?.()
+        } catch(e) {}
+      }
+    }
+
+    // crsi
+    const crsiEntry = indicatorChartsRef.current.get('crsi')
+    if (crsiEntry) {
+      const v = crsiValueByTime.get(t)
+      if (v !== undefined) {
+        try {
+          (crsiEntry.chart as any).setCrosshairPosition?.(v, t, crsiEntry.series) ||
+          crsiEntry.chart.setCrosshairPosition?.(v, t)
+        } catch(e) {}
+      } else {
+        try {
+          (crsiEntry.chart as any).clearCrosshairPosition?.() || crsiEntry.chart.clearCrosshair?.()
+        } catch(e) {}
+      }
+    }
+  }, [crsiValueByTime, tdfiValueByTime])
 
   const toggleIndicatorVisibility = useCallback((indicatorId: string) => {
     setIndicatorSettings(prev => ({
@@ -254,6 +326,7 @@ function App() {
   // Calculate indicator height to use all remaining space
   const remainingHeight = Math.max(dimensions.height - mainHeight, 120)
   const indicatorHeight = Math.max(remainingHeight / Math.max(activeLayout?.activeIndicators.filter((i: string) => ['tdfi', 'crsi'].includes(i)).length || 1, 1), 120)
+
 
   const adxvmaOverlay = useMemo(() => {
     if (!activeLayout?.activeIndicators?.includes('adxvma') || !adxvmaData) return []
@@ -508,13 +581,7 @@ function App() {
                                 width={dimensions.width}
                                 height={mainHeight}
                                 onTimeScaleInit={setMainTimeScale}
-                                onCrosshairMove={(param) => {
-                                    if (param.time) {
-                                        setCrosshairTime(param.time);
-                                    } else {
-                                        setCrosshairTime(null);
-                                    }
-                                }}
+                                onCrosshairMove={handleMainCrosshairMove}
                                 overlays={adxvmaOverlay}
                             />
                         </div>
@@ -526,7 +593,6 @@ function App() {
                                         name="TDFI"
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
-                                        crosshairPosition={crosshairTime}
                                         onTimeScaleInit={(ts) => {
                                             if (ts) {
                                                 indicatorTimeScalesRef.current.set('tdfi', ts)
@@ -537,6 +603,9 @@ function App() {
                                             } else {
                                                 indicatorTimeScalesRef.current.delete('tdfi')
                                             }
+                                        }}
+                                        onChartInit={(chart, series) => {
+                                            indicatorChartsRef.current.set('tdfi', { chart, series });
                                         }}
                                         candles={candles}
                                         {...tdfiPaneProps}
@@ -549,7 +618,6 @@ function App() {
                                         name="TDFI"
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
-                                        crosshairPosition={crosshairTime}
                                         onTimeScaleInit={(ts) => {
                                             if (ts) {
                                                 indicatorTimeScalesRef.current.set('tdfi', ts)
@@ -560,6 +628,9 @@ function App() {
                                             } else {
                                                 indicatorTimeScalesRef.current.delete('tdfi')
                                             }
+                                        }}
+                                        onChartInit={(chart, series) => {
+                                            indicatorChartsRef.current.set('tdfi', { chart, series });
                                         }}
                                         candles={candles}
                                         {...tdfiPaneProps}
@@ -573,7 +644,6 @@ function App() {
                                         name="cRSI"
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
-                                        crosshairPosition={crosshairTime}
                                         onTimeScaleInit={(ts) => {
                                             if (ts) {
                                                 indicatorTimeScalesRef.current.set('crsi', ts)
@@ -584,6 +654,9 @@ function App() {
                                             } else {
                                                 indicatorTimeScalesRef.current.delete('crsi')
                                             }
+                                        }}
+                                        onChartInit={(chart, series) => {
+                                            indicatorChartsRef.current.set('crsi', { chart, series });
                                         }}
                                         candles={candles}
                                         {...crsiPaneProps}

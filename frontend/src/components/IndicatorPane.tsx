@@ -28,7 +28,7 @@ interface IndicatorPaneProps {
     max: number
   }
   onTimeScaleInit?: (timeScale: any) => void
-  crosshairPosition?: number | null
+  onChartInit?: (chart: any, syncSeries: any) => void
 }
 
 const IndicatorPane = ({
@@ -42,7 +42,7 @@ const IndicatorPane = ({
   scaleRanges,
   visible = true,
   onTimeScaleInit,
-  crosshairPosition
+  onChartInit
 }: IndicatorPaneProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
@@ -100,6 +100,10 @@ const IndicatorPane = ({
     if (onTimeScaleInit) {
         onTimeScaleInit(chart.timeScale())
     }
+
+    // Notify when chart is ready
+    baselineSeriesRef.current = baseline
+    onChartInit?.(chart, baseline)
 
     return () => {
       if (onTimeScaleInit) {
