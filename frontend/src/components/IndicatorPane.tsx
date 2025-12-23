@@ -12,6 +12,8 @@ interface IndicatorSeries {
 
 interface IndicatorPaneProps {
   name: string
+  symbol: string
+  interval: string
   mainSeries?: IndicatorSeries
   additionalSeries?: IndicatorSeries[]
   candles?: any[]
@@ -33,6 +35,8 @@ interface IndicatorPaneProps {
 
 const IndicatorPane = ({
   name,
+  symbol,
+  interval,
   mainSeries,
   additionalSeries = [],
   candles = [],
@@ -116,7 +120,7 @@ const IndicatorPane = ({
       additionalSeriesRefs.current.clear()
       priceLinesRef.current = []
     }
-  }, [name])
+  }, [name, symbol, interval])
 
   useEffect(() => {
     if (!baselineSeriesRef.current || candles.length === 0) return

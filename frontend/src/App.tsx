@@ -69,13 +69,37 @@ function App() {
     if (!t) {
       indicatorChartsRef.current.forEach(({ chart }) => {
         try {
-          (chart as any).clearCrosshairPosition?.() || chart.clearCrosshair?.()
+          if (chart.clearCrosshairPosition) {
+            chart.clearCrosshairPosition();
+          } else {
+            chart.clearCrosshair && chart.clearCrosshair();
+          }
         } catch(e) {}
       })
       return
     }
 
     setCrosshairTime(t)
+
+    // tdfi
+    const tdfiEntry = indicatorChartsRef.current.get('tdfi')
+    if (tdfiEntry) {
+      try {
+        if (tdfiEntry.chart.setCrosshairPosition) {
+          tdfiEntry.chart.setCrosshairPosition(0, t); // Using 0 as y-value placeholder
+        }
+      } catch(e) {}
+    }
+
+    // crsi
+    const crsiEntry = indicatorChartsRef.current.get('crsi')
+    if (crsiEntry) {
+      try {
+        if (crsiEntry.chart.setCrosshairPosition) {
+          crsiEntry.chart.setCrosshairPosition(0, t); // Using 0 as y-value placeholder
+        }
+      } catch(e) {}
+    }
   }, [])
 
   const toggleIndicatorVisibility = useCallback((indicatorId: string) => {
@@ -189,6 +213,10 @@ function App() {
   }, [])
 
   useEffect(() => {
+    // Reset pagination state when symbol or interval changes
+    setHasMoreHistory(true)
+    lastFetchedToDateRef.current = null
+    
     const fetchData = async () => {
         try {
             const to = new Date().toISOString()
@@ -481,7 +509,7 @@ function App() {
   }, [activeLayout?.activeIndicators, crsiData, indicatorSettings])
 
   const handleIntervalSelect = useCallback((newInterval: string) => {
-    setInterval(newInterval)
+    setInterval(newInterval.toLowerCase())
   }, [])
 
   const fetchMoreHistory = useCallback(async () => {
@@ -587,6 +615,7 @@ function App() {
                     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 border-b-0 border-slate-800 relative min-h-0 overflow-hidden">
                             <ChartComponent
+                                key={`${symbol}-${interval}`}
                                 symbol={symbol}
                                 candles={candles}
                                 width={dimensions.width}
@@ -603,6 +632,8 @@ function App() {
                                 <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
                                     <IndicatorPane
                                         name="TDFI"
+                                        symbol={symbol}
+                                        interval={interval}
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
                                         onTimeScaleInit={(ts) => {
@@ -628,6 +659,8 @@ function App() {
                                 <div className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800">
                                     <IndicatorPane
                                         name="TDFI"
+                                        symbol={symbol}
+                                        interval={interval}
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
                                         onTimeScaleInit={(ts) => {
@@ -654,6 +687,8 @@ function App() {
                                 <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
                                     <IndicatorPane
                                         name="cRSI"
+                                        symbol={symbol}
+                                        interval={interval}
                                         width={dimensions.width}
                                         height={undefined} // Let the container determine the height
                                         onTimeScaleInit={(ts) => {

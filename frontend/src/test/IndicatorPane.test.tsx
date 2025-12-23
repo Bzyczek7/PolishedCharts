@@ -37,10 +37,17 @@ describe('IndicatorPane', () => {
         displayType: 'line' as const
     }
 
-    it('renders without crashing', () => {
+    it('renders and initializes chart', () => {
+        const mainSeries: any = {
+            data: [{ time: 1698364800, value: 50 }],
+            color: '#4CAF50',
+            displayType: 'line'
+        }
+
         const { getByTestId } = render(
-            <IndicatorPane name="Test" mainSeries={mainSeries} />
+            <IndicatorPane name="Test" symbol="IBM" interval="1d" mainSeries={mainSeries} />
         )
+
         expect(getByTestId('indicator-pane-Test')).toBeTruthy()
     })
 })

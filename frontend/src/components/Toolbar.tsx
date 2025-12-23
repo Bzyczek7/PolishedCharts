@@ -87,7 +87,7 @@ const Toolbar = ({
             variant="ghost" 
             size="sm" 
             onClick={() => onIntervalSelect(tf)}
-            className={`text-xs text-slate-400 hover:text-white hover:bg-slate-800 px-2 h-8 ${interval === tf ? 'bg-slate-700 text-white' : ''}`}
+            className={`text-xs text-slate-400 hover:text-white hover:bg-slate-800 px-2 h-8 ${interval.toLowerCase() === tf.toLowerCase() ? 'bg-slate-700 text-white' : ''}`}
           >
             {tf}
           </Button>
