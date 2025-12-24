@@ -15,7 +15,7 @@ describe('API Client', () => {
 
     const candles = await getCandles('IBM')
     
-    expect(client.get).toHaveBeenCalledWith('/candles/IBM')
+    expect(client.get).toHaveBeenCalledWith('/candles/IBM', { params: { interval: '1d' } })
     expect(candles).toEqual(mockData)
   })
 })

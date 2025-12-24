@@ -46,9 +46,9 @@ describe('App Integration', () => {
     vi.clearAllMocks();
     localStorage.clear();
     vi.mocked(getCandles).mockResolvedValue([]);
-    vi.mocked(getTDFI).mockResolvedValue({ timestamps: ['2023-10-27T00:00:00'], tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } });
-    vi.mocked(getcRSI).mockResolvedValue({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_schemes: { line: '#fff' } } });
-    vi.mocked(getADXVMA).mockResolvedValue({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_schemes: { line: '#fff' } } });
+    vi.mocked(getTDFI).mockResolvedValue({ timestamps: ['2023-10-27T00:00:00'], tdfi: [0.1], tdfi_signal: [0], metadata: { display_type: 'pane', color_mode: 'single', color_schemes: { line: '#fff' }, series_metadata: [{ field: 'tdfi', role: 'main', label: 'TDFI', line_color: '#fff', line_style: 'solid', line_width: 2 }] } });
+    vi.mocked(getcRSI).mockResolvedValue({ timestamps: [], crsi: [], upper_band: [], lower_band: [], metadata: { display_type: 'pane', color_mode: 'single', color_schemes: { line: '#fff' }, series_metadata: [{ field: 'crsi', role: 'main', label: 'cRSI', line_color: '#fff', line_style: 'solid', line_width: 2 }] } });
+    vi.mocked(getADXVMA).mockResolvedValue({ timestamps: [], adxvma: [], metadata: { display_type: 'overlay', color_mode: 'single', color_schemes: { line: '#fff' }, series_metadata: [{ field: 'adxvma', role: 'main', label: 'ADXVMA', line_color: '#fff', line_style: 'solid', line_width: 2 }] } });
   });
 
   it('successfully saves a new layout via the toolbar', async () => {

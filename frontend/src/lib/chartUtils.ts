@@ -5,7 +5,8 @@ export const formatDataForChart = (timestamps: string[] | undefined, values: (nu
         if (v === null || v === undefined) return null;
         const ts = timestamps[i];
         if (!ts) return null;
-        const time = Math.floor(new Date(ts).getTime() / 1000);
+        // The timestamps from API are Unix timestamps (seconds), but Date constructor expects milliseconds
+        const time = Number(ts);  // Unix timestamp in seconds
         if (isNaN(time)) return null;
         return {
             time: time as any,

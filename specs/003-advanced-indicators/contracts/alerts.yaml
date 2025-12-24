@@ -1,0 +1,230 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Alerts API - Indicator Extensions
+  description: API endpoints for creating and managing indicator-based alerts
+  version: 1.0.0
+
+paths:
+  /api/v1/alerts:
+    post:
+      summary: Create alert (supports indicator-based alerts)
+      description: Creates a new alert. Can be price-based or indicator-based.
+      tags:
+        - Alerts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlertRequest'
+      responses:
+        '201':
+          description: Alert created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+
+  /api/v1/alerts/indicator-conditions:
+    get:
+      summary: Get available indicator alert conditions
+      description: Returns available alert condition types for indicators
+      tags:
+        - Alerts
+      parameters:
+        - name: indicator_name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Name of the indicator
+      responses:
+        '200':
+          description: Available conditions for the indicator
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indicator_name:
+                    type: string
+                  conditions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IndicatorCondition'
+
+components:
+  schemas:
+    CreateAlertRequest:
+      type: object
+      properties:
+        symbol_id:
+          type: integer
+          description: ID of the symbol to watch
+        condition:
+          type: string
+          enum:
+            # Price conditions (existing)
+            - above
+            - below
+            - crosses_up
+            - crosses_down
+            # Indicator conditions (new)
+            - indicator_crosses_upper
+            - indicator_crosses_lower
+            - indicator_turns_positive
+            - indicator_turns_negative
+            - indicator_slope_bullish
+            - indicator_slope_bearish
+            - indicator_signal_change
+          description: Alert condition type
+        threshold:
+          type: number
+          description: Threshold value for condition (required for price alerts and some indicator conditions)
+        indicator_name:
+          type: string
+          description: Name of indicator (required for indicator-based alerts)
+          example: crsi
+        indicator_field:
+          type: string
+          description: Field within indicator output (required for indicator-based alerts)
+          example: crsi
+        indicator_params:
+          type: object
+          additionalProperties: true
+          description: Parameters for indicator calculation
+          example:
+            period: 14
+            smooth: 3
+        cooldown:
+          type: integer
+          default: 300
+          description: Cooldown period in seconds between alerts
+        name:
+          type: string
+          description: Optional custom name for the alert
+      required:
+        - symbol_id
+        - condition
+
+    AlertResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol_id:
+          type: integer
+        symbol:
+          type: string
+          description: Symbol ticker (for reference)
+        condition:
+          type: string
+        threshold:
+          type: number
+          nullable: true
+        indicator_name:
+          type: string
+          nullable: true
+        indicator_field:
+          type: string
+          nullable: true
+        indicator_params:
+          type: object
+          nullable: true
+        is_active:
+          type: boolean
+        cooldown:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        last_triggered:
+          type: string
+          format: date-time
+          nullable: true
+
+    IndicatorCondition:
+      type: object
+      properties:
+        condition_type:
+          type: string
+          enum:
+            - indicator_crosses_upper
+            - indicator_crosses_lower
+            - indicator_turns_positive
+            - indicator_turns_negative
+            - indicator_slope_bullish
+            - indicator_slope_bearish
+            - indicator_signal_change
+        label:
+          type: string
+          example: "Crosses Above Upper Band"
+        description:
+          type: string
+          example: "Triggers when indicator crosses above the specified threshold"
+        requires_threshold:
+          type: boolean
+          description: Whether this condition type requires a threshold value
+          example: true
+        applicable_fields:
+          type: array
+          items:
+            type: string
+          description: List of fields this condition can apply to
+          example: [crsi, upper_band, lower_band]
+
+    AlertTriggerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+        alert_id:
+          type: integer
+        triggered_at:
+          type: string
+          format: date-time
+        observed_price:
+          type: number
+          nullable: true
+        indicator_value:
+          type: number
+          nullable: true
+        delivery_status:
+          type: string
+          enum: [pending, delivered, failed, retrying]
+        retry_count:
+          type: integer
+        message:
+          type: string
+          description: Human-readable trigger message
+          example: "AAPL cRSI crossed above upper band (70) at 72.3"
+
+# Condition Semantics Reference
+#
+# indicator_crosses_upper:
+#   Triggers when: previous_value < threshold AND current_value >= threshold
+#   Use for: Entering overbought zones, breakout signals
+#
+# indicator_crosses_lower:
+#   Triggers when: previous_value > threshold AND current_value <= threshold
+#   Use for: Entering oversold zones, breakdown signals
+#
+# indicator_turns_positive:
+#   Triggers when: previous_value <= lower_threshold AND current_value >= upper_threshold
+#   Use for: Trend reversal from bearish to bullish (e.g., TDFI turning positive)
+#
+# indicator_turns_negative:
+#   Triggers when: previous_value >= upper_threshold AND current_value <= lower_threshold
+#   Use for: Trend reversal from bullish to bearish
+#
+# indicator_slope_bullish:
+#   Triggers when: (previous - prev_previous) <= 0 AND (current - previous) > 0
+#   Use for: Detecting when indicator starts rising (e.g., ADXVMA slope change)
+#
+# indicator_slope_bearish:
+#   Triggers when: (previous - prev_previous) >= 0 AND (current - previous) < 0
+#   Use for: Detecting when indicator starts falling
+#
+# indicator_signal_change:
+#   Triggers when: previous_signal != current_signal
+#   Use for: Discrete signal changes (e.g., TDFI signal: -1/0/1)

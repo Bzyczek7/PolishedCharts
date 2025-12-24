@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import { createChart, ColorType, LineSeries, HistogramSeries, LineStyle } from 'lightweight-charts'
+import type { IndicatorOutput } from './types/indicators'
 
 interface IndicatorSeries {
-    id?: string
+    id: string
     data: any[]
     color: string
     displayType: 'line' | 'histogram'
@@ -31,6 +32,8 @@ interface IndicatorPaneProps {
   }
   onTimeScaleInit?: (timeScale: any) => void
   onChartInit?: (chart: any, syncSeries: any) => void
+  // T031 [US1]: Support generic IndicatorOutput input
+  indicatorData?: IndicatorOutput
 }
 
 const IndicatorPane = ({
@@ -46,8 +49,81 @@ const IndicatorPane = ({
   scaleRanges,
   visible = true,
   onTimeScaleInit,
-  onChartInit
+  onChartInit,
+  indicatorData,
 }: IndicatorPaneProps) => {
+  // T031 [US1]: Convert IndicatorOutput to series format
+  const derivedSeries = useMemo(() => {
+    if (!indicatorData) return { mainSeries: undefined, additionalSeries: [], priceLines: [] };
+
+    const { data, metadata } = indicatorData;
+
+    // Get main series from metadata
+    const mainMeta = metadata.series_metadata[0];
+    if (!mainMeta) return { mainSeries: undefined, additionalSeries: [], priceLines: [] };
+
+    const mainFieldData = data[mainMeta.field];
+    if (!mainFieldData) return { mainSeries: undefined, additionalSeries: [], priceLines: [] };
+
+    // Convert timestamps and data to lightweight-charts format
+    const mainChartData = indicatorData.timestamps.map((ts, i) => {
+      const value = mainFieldData[i];
+      if (value === null || value === undefined) return null;
+      return {
+        time: ts as any,
+        value: value as number,
+      };
+    }).filter((item): item is { time: any; value: number } => item !== null);
+
+    // Convert additional series
+    const additionalSeriesData = metadata.series_metadata.slice(1).map((meta) => {
+      const fieldData = data[meta.field];
+      if (!fieldData) return null;
+
+      const chartData = indicatorData.timestamps.map((ts, i) => {
+        const value = fieldData[i];
+        if (value === null || value === undefined) return null;
+        return {
+          time: ts as any,
+          value: value as number,
+        };
+      }).filter((item): item is { time: any; value: number } => item !== null);
+
+      return {
+        id: meta.field,
+        data: chartData,
+        color: meta.line_color,
+        displayType: 'line',
+        lineWidth: meta.line_width,
+        visible: true,
+      };
+    }).filter((s) => s !== null) as IndicatorSeries[];
+
+    // Convert reference levels to price lines
+    const priceLinesData = (metadata.reference_levels || []).map(level => ({
+      value: level.value,
+      color: level.line_color,
+      label: level.line_label || `${level.value}`,
+    }));
+
+    return {
+      mainSeries: {
+        data: mainChartData,
+        color: mainMeta.line_color,
+        displayType: 'line' as const,
+        lineWidth: mainMeta.line_width,
+        visible: true,
+      },
+      additionalSeries: additionalSeriesData,
+      priceLines: priceLinesData,
+    };
+  }, [indicatorData]);
+
+  // Use derived series if provided, otherwise use props
+  const effectiveMainSeries = derivedSeries.mainSeries ?? mainSeries;
+  const effectiveAdditionalSeries = derivedSeries.additionalSeries.length > 0 ? derivedSeries.additionalSeries : additionalSeries;
+  const effectivePriceLines = derivedSeries.priceLines.length > 0 ? derivedSeries.priceLines : priceLines;
+
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<any>(null)
   const mainSeriesRef = useRef<any>(null)
@@ -60,12 +136,12 @@ const IndicatorPane = ({
 
     const chart = createChart(chartContainerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: '#0f172a' },
-        textColor: '#94a3b8',
+        background: { type: ColorType.Solid, color: '#131722' }, // TradingView Supercharts dark theme
+        textColor: '#d1d4dc',
       },
       grid: {
-        vertLines: { color: '#1e293b' },
-        horzLines: { color: '#1e293b' },
+        vertLines: { color: '#1e222d' },
+        horzLines: { color: '#1e222d' },
       },
       crosshair: {
         mode: 1, // Normal crosshair mode
@@ -82,7 +158,7 @@ const IndicatorPane = ({
         },
       },
       width: width || chartContainerRef.current.clientWidth,
-      height: height || 150,
+      height: height || chartContainerRef.current.clientHeight || 100,
       timeScale: {
         visible: false,
         shiftVisibleRangeOnNewBar: false,
@@ -140,41 +216,41 @@ const IndicatorPane = ({
   useEffect(() => {
     if (!chartRef.current) return
 
-    // Handle main series
-    if (mainSeries) {
-        const mainSeriesType = mainSeries.displayType === 'line' ? LineSeries : HistogramSeries
-        if (!mainSeriesRef.current || mainSeriesRef.current.seriesType() !== (mainSeries.displayType === 'line' ? 'Line' : 'Histogram')) {
+    // Handle main series (use effectiveMainSeries which includes derived data from IndicatorOutput)
+    if (effectiveMainSeries) {
+        const mainSeriesType = effectiveMainSeries.displayType === 'line' ? LineSeries : HistogramSeries
+        if (!mainSeriesRef.current || mainSeriesRef.current.seriesType() !== (effectiveMainSeries.displayType === 'line' ? 'Line' : 'Histogram')) {
             if (mainSeriesRef.current) {
                 chartRef.current.removeSeries(mainSeriesRef.current)
             }
             mainSeriesRef.current = chartRef.current.addSeries(
-                mainSeriesType, 
+                mainSeriesType,
                 {
-                    color: mainSeries.color,
-                    lineWidth: mainSeries.lineWidth ?? 2,
-                    visible: mainSeries.visible ?? true,
+                    color: effectiveMainSeries.color,
+                    lineWidth: effectiveMainSeries.lineWidth ?? 2,
+                    visible: effectiveMainSeries.visible ?? true,
                     lastValueVisible: false,
                     priceLineVisible: false,
                 }
             )
         } else {
             mainSeriesRef.current.applyOptions({
-                color: mainSeries.color,
-                lineWidth: mainSeries.lineWidth ?? 2,
-                visible: mainSeries.visible ?? true,
+                color: effectiveMainSeries.color,
+                lineWidth: effectiveMainSeries.lineWidth ?? 2,
+                visible: effectiveMainSeries.visible ?? true,
                 lastValueVisible: false,
                 priceLineVisible: false,
             })
         }
-        mainSeriesRef.current.setData(mainSeries.data)
+        mainSeriesRef.current.setData(effectiveMainSeries.data)
     } else if (mainSeriesRef.current) {
         chartRef.current.removeSeries(mainSeriesRef.current)
         mainSeriesRef.current = null
     }
 
     // Handle additional series
-    const currentAdditionalKeys = new Set(additionalSeries.map((s, i) => s.id || `extra-${i}`))
-    
+    const currentAdditionalKeys = new Set(effectiveAdditionalSeries.map((s) => s.id))
+
     additionalSeriesRefs.current.forEach((s, key) => {
         if (!currentAdditionalKeys.has(key)) {
             chartRef.current.removeSeries(s)
@@ -182,10 +258,10 @@ const IndicatorPane = ({
         }
     })
 
-    additionalSeries.forEach((s, i) => {
-        const key = s.id || `extra-${i}`
+    effectiveAdditionalSeries.forEach((s) => {
+        const key = s.id
         let addedSeries = additionalSeriesRefs.current.get(key)
-        
+
         if (!addedSeries) {
             addedSeries = chartRef.current.addSeries(
                 s.displayType === 'line' ? LineSeries : HistogramSeries,
@@ -213,14 +289,14 @@ const IndicatorPane = ({
     // Handle price lines (Thresholds)
     // Attach to main series if it exists, otherwise to the first additional series
     const targetSeries = mainSeriesRef.current || (additionalSeriesRefs.current.size > 0 ? additionalSeriesRefs.current.values().next().value : null)
-    
+
     if (targetSeries) {
         priceLinesRef.current.forEach(pl => {
             try { targetSeries.removePriceLine(pl) } catch(e) {}
         })
         priceLinesRef.current = []
 
-        priceLines.forEach(pl => {
+        effectivePriceLines.forEach(pl => {
             const line = targetSeries.createPriceLine({
                 price: pl.value,
                 color: pl.color,
@@ -232,7 +308,7 @@ const IndicatorPane = ({
             priceLinesRef.current.push(line)
         })
     }
-  }, [mainSeries, additionalSeries, priceLines])
+  }, [effectiveMainSeries, effectiveAdditionalSeries, effectivePriceLines])
 
   useEffect(() => {
     if (!chartRef.current) return
@@ -257,8 +333,11 @@ const IndicatorPane = ({
   }, [scaleRanges])
 
   useEffect(() => {
-    if (chartRef.current && width && height) {
-        chartRef.current.applyOptions({ width, height })
+    if (chartRef.current) {
+      const options: any = {}
+      if (width) options.width = width
+      if (height) options.height = height
+      chartRef.current.applyOptions(options)
     }
   }, [width, height])
 

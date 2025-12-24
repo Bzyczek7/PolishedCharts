@@ -1,29 +1,28 @@
-import asyncio
-from sqlalchemy import select
 from app.db.session import AsyncSessionLocal
-from app.models.symbol import Symbol
-from app.models.candle import Candle
-from datetime import datetime, timezone
+from sqlalchemy import text
+import asyncio
 
-async def check():
+async def cleanup_duplicates():
     async with AsyncSessionLocal() as db:
-        res = await db.execute(select(Symbol).filter(Symbol.ticker == "IBM"))
-        s = res.scalars().first()
-        if not s:
-            print("IBM not found")
-            return
-            
-        stmt = select(Candle).where(
-            Candle.symbol_id == s.id,
-            Candle.interval == "1d",
-            Candle.timestamp >= datetime(2025, 7, 25, tzinfo=timezone.utc),
-            Candle.timestamp <= datetime(2025, 8, 5, tzinfo=timezone.utc)
-        ).order_by(Candle.timestamp.asc())
-        
-        res = await db.execute(stmt)
-        candles = res.scalars().all()
-        for c in candles:
-            print(f"ID: {c.id}, TS: {c.timestamp}, O: {c.open}, C: {c.close}")
+        print("Cleaning up duplicate candles...")
+        # Use the same logic as the migration but more targeted
+        await db.execute(text("""
+            DELETE FROM candle
+            WHERE (symbol_id, interval, timestamp) IN (
+                SELECT symbol_id, interval, timestamp
+                FROM candle
+                GROUP BY symbol_id, interval, timestamp
+                HAVING COUNT(*) > 1
+            )
+            AND ctid NOT IN (
+                SELECT MIN(ctid)
+                FROM candle
+                GROUP BY symbol_id, interval, timestamp
+                HAVING COUNT(*) > 1
+            )
+        """))
+        await db.commit()
+        print("Cleanup complete.")
 
 if __name__ == "__main__":
-    asyncio.run(check())
+    asyncio.run(cleanup_duplicates())

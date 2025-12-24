@@ -15,10 +15,14 @@ export interface Alert {
   id: string
   symbol: string
   condition: string
-  threshold: number
+  threshold: number | null
   status: 'active' | 'triggered' | 'muted'
   createdAt: string
-  history?: { timestamp: string; price: number }[]
+  // Indicator fields
+  indicator_name?: string | null
+  indicator_field?: string | null
+  indicator_params?: Record<string, number | string> | null
+  history?: { timestamp: string; price?: number; indicator_value?: number }[]
   statistics?: {
     triggerCount24h: number
     lastTriggered?: string
@@ -125,6 +129,11 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                         <div className="space-y-1">
                         <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-200">{alert.symbol}</span>
+                            {alert.indicator_name && (
+                            <Badge variant="outline" className="text-[10px] uppercase h-4 px-1 text-blue-400 border-blue-500/20 bg-blue-500/5">
+                                {alert.indicator_name.toUpperCase()}
+                            </Badge>
+                            )}
                             <Badge variant="outline" className={cn(
                             "text-[10px] uppercase h-4 px-1",
                             alert.status === 'active' ? "text-emerald-500 border-emerald-500/20 bg-emerald-500/5" :
@@ -135,7 +144,11 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                             </Badge>
                         </div>
                         <p className="text-xs text-slate-400 leading-relaxed">
-                            {alert.condition.replace('_', ' ')} @ {alert.threshold}
+                            {alert.indicator_name
+                            ? `${alert.indicator_name.toUpperCase()}${alert.indicator_field ? `.${alert.indicator_field}` : ''}: ${alert.condition.replace('indicator_', '').replace('_', ' ')}`
+                            : alert.condition.replace('_', ' ')
+                            }
+                            {alert.threshold !== null && alert.threshold !== undefined && ` @ ${alert.threshold}`}
                         </p>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -190,7 +203,14 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                                 {alert.history.map((h, i) => (
                                 <div key={i} className="flex justify-between text-[10px] py-1 border-b border-slate-800/30 last:border-0">
                                     <span className="text-slate-400">{new Date(h.timestamp).toLocaleString()}</span>
-                                    <span className="text-slate-200 font-mono">${h.price}</span>
+                                    <div className="flex gap-2">
+                                    {h.price !== undefined && h.price !== null && (
+                                        <span className="text-slate-200 font-mono">${h.price}</span>
+                                    )}
+                                    {h.indicator_value !== undefined && h.indicator_value !== null && (
+                                        <span className="text-blue-400 font-mono">{h.indicator_value.toFixed(2)}</span>
+                                    )}
+                                    </div>
                                 </div>
                                 ))}
                             </div>

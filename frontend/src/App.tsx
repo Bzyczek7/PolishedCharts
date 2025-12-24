@@ -5,28 +5,37 @@ import Toolbar from './components/Toolbar'
 import Watchlist from './components/Watchlist'
 import AlertsView from './components/AlertsView'
 import ChartComponent from './components/ChartComponent'
+import { OHLCDisplayWithTime } from './components/chart/OHLCDisplay'
 import type { Alert } from './components/AlertsList'
 import type { Layout as LayoutType } from './components/Toolbar'
 import IndicatorPane from './components/IndicatorPane'
 import { loadLayouts, saveLayouts, loadWatchlist, saveWatchlist, loadAlerts, saveAlerts } from './services/layoutService'
 import { getCandles } from './api/candles'
 import type { Candle } from './api/candles'
-import { getTDFI, getcRSI, getADXVMA } from './api/indicators'
-import type { ADXVMAOutput, cRSIOutput, TDFIOutput } from './api/indicators'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { formatDataForChart } from './lib/chartUtils'
-import { splitSeriesByThresholds } from './lib/indicatorTransform'
+import { IndicatorProvider, useIndicatorContext } from './contexts/IndicatorContext'
+import { IndicatorDialog } from './components/indicators/IndicatorDialog'
+import { useIndicatorData } from './hooks/useIndicatorData'
+import type { IndicatorOutput } from './components/types/indicators'
 import type { Time, IRange } from 'lightweight-charts'
+import { getLatestPrices } from './api/watchlist'
+import { useWebSocket } from './hooks/useWebSocket';
 
-function App() {
-  const [symbol, setSymbol] = useState('IBM')
-  const [interval, setInterval] = useState('1d')
+interface AppContentProps {
+  symbol: string
+  setSymbol: (symbol: string) => void
+}
+
+function AppContent({ symbol, setSymbol }: AppContentProps) {
+  const [chartInterval, setChartInterval] = useState('1d')
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
   const mainViewportRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [mainTimeScale, setMainTimeScale] = useState<any>(null)
   const indicatorTimeScalesRef = useRef<Map<string, any>>(new Map())
+  const { connect, disconnect, lastMessage } = useWebSocket();
 
   const [watchlist, setWatchlist] = useState(() => {
     const symbols = loadWatchlist()
@@ -52,55 +61,46 @@ function App() {
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const lastFetchedToDateRef = useRef<string | null>(null)
   const [visibleRange, setVisibleRange] = useState<IRange<Time> | null>(null)
-  const [tdfiData, setTdfiData] = useState<TDFIOutput | null>(null)
-  const [crsiData, setCrsiData] = useState<cRSIOutput | null>(null)
-  const [adxvmaData, setAdxvmaData] = useState<ADXVMAOutput | null>(null)
   const [crosshairTime, setCrosshairTime] = useState<number | null>(null)
+  const [crosshairCandle, setCrosshairCandle] = useState<Candle | null>(null)
   const [indicatorSettings, setIndicatorSettings] = useState<Record<string, { visible: boolean; series: Record<string, boolean>; showLevels: boolean }>>({})
+  const [isInitialLoading, setIsInitialLoading] = useState(true) // T101: Initial loading state
+  const [error, setError] = useState<string | null>(null) // T102: Error state
   const mainChartRef = useRef<any>(null)
   const indicatorChartsRef = useRef<Map<string, { chart: any; series: any }>>(new Map())
 
-  // Main crosshair move handler
-  const handleMainCrosshairMove = useCallback((param: any) => {
-    // ignore non-pointer / programmatic moves to avoid jitter during scroll
-    if (!param?.sourceEvent) return
+  // Use the new indicator system
+  const { indicators, addIndicator } = useIndicatorContext()
+  const indicatorDataMap = useIndicatorData(indicators, symbol, chartInterval)
 
-    const t = param?.time
-    if (!t) {
-      indicatorChartsRef.current.forEach(({ chart }) => {
-        try {
-          if (chart.clearCrosshairPosition) {
-            chart.clearCrosshairPosition();
-          } else {
-            chart.clearCrosshair && chart.clearCrosshair();
-          }
-        } catch(e) {}
-      })
-      return
-    }
+  // Effect to automatically add new indicators to the active layout
+  useEffect(() => {
+    if (indicators.length > 0 && activeLayout) {
+      // Get all indicator names from the context
+      const contextIndicatorNames = indicators.map(ind => ind.indicatorType.name.toLowerCase());
 
-    setCrosshairTime(t)
+      // Find indicators that are in the context but not in the active layout
+      const missingFromActiveLayout = contextIndicatorNames.filter(name =>
+        !activeLayout.activeIndicators.includes(name)
+      );
 
-    // tdfi
-    const tdfiEntry = indicatorChartsRef.current.get('tdfi')
-    if (tdfiEntry) {
-      try {
-        if (tdfiEntry.chart.setCrosshairPosition) {
-          tdfiEntry.chart.setCrosshairPosition(0, t); // Using 0 as y-value placeholder
+      // Add missing indicators to the active layout
+      if (missingFromActiveLayout.length > 0) {
+        const updated: LayoutType = {
+          ...activeLayout,
+          activeIndicators: [...activeLayout.activeIndicators, ...missingFromActiveLayout]
+        };
+
+        setActiveLayout(updated);
+
+        if (activeLayout.id !== 'default') {
+          const updatedLayouts = layouts.map(l => l.id === updated.id ? updated : l);
+          setLayouts(updatedLayouts);
+          saveLayouts(updatedLayouts);
         }
-      } catch(e) {}
+      }
     }
-
-    // crsi
-    const crsiEntry = indicatorChartsRef.current.get('crsi')
-    if (crsiEntry) {
-      try {
-        if (crsiEntry.chart.setCrosshairPosition) {
-          crsiEntry.chart.setCrosshairPosition(0, t); // Using 0 as y-value placeholder
-        }
-      } catch(e) {}
-    }
-  }, [])
+  }, [indicators, activeLayout, layouts]);
 
   const toggleIndicatorVisibility = useCallback((indicatorId: string) => {
     setIndicatorSettings(prev => ({
@@ -181,20 +181,144 @@ function App() {
     saveAlerts(alerts)
   }, [alerts])
 
+  // Periodically update watchlist with real-time data
+  useEffect(() => {
+    if (watchlist.length === 0) return; // Don't start timer if no symbols
+
+    const updateWatchlistPrices = async () => {
+      try {
+        const symbols = watchlist.map(item => item.symbol);
+        const latestPrices = await getLatestPrices(symbols);
+
+        setWatchlist(prevWatchlist => {
+          const updatedWatchlist = [...prevWatchlist];
+
+          for (const priceData of latestPrices) {
+            const index = updatedWatchlist.findIndex(item => item.symbol === priceData.symbol);
+            if (index !== -1 && !priceData.error) {
+              updatedWatchlist[index] = {
+                symbol: priceData.symbol,
+                price: priceData.price,
+                change: priceData.change,
+                changePercent: priceData.changePercent
+              };
+            }
+          }
+
+          return updatedWatchlist;
+        });
+      } catch (error) {
+        console.error('Error updating watchlist prices:', error);
+      }
+    };
+
+    // Update watchlist every 30 seconds
+    const intervalId = setInterval(updateWatchlistPrices, 30000);
+
+    // Initial update
+    updateWatchlistPrices();
+
+    return () => clearInterval(intervalId);
+  }, [watchlist])
+
+  useEffect(() => {
+    // Connect to websocket for real-time updates
+    if (symbol && chartInterval) {
+        const wsUrl = `ws://localhost:8000/api/v1/candles/ws/${symbol}?interval=${chartInterval}`;
+        connect(wsUrl);
+    }
+    return () => {
+        disconnect();
+    };
+  }, [symbol, chartInterval, connect, disconnect]);
+
+  useEffect(() => {
+    if (lastMessage) {
+      const newCandle = JSON.parse(lastMessage.data);
+      setCandles(prevCandles => {
+        // Create a new array with the updated candle
+        const updatedCandles = [...prevCandles];
+        const existingCandleIndex = updatedCandles.findIndex(c => c.timestamp === newCandle.timestamp);
+
+        if (existingCandleIndex !== -1) {
+          // Update existing candle
+          updatedCandles[existingCandleIndex] = newCandle;
+        } else {
+          // Add new candle
+          updatedCandles.push(newCandle);
+        }
+
+        // Sort candles by timestamp to ensure they are in order
+        return updatedCandles.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      });
+    }
+  }, [lastMessage]);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      // Cmd/Ctrl+K: Open search
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setIsSearchOpen((open) => !open)
       }
+      // Cmd/Ctrl+I: Open indicators
       if (e.key === "i" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         setIsIndicatorsOpen((open) => !open)
       }
+      // T095, T096: Plus/Equals key to zoom in, Minus to zoom out
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault()
+        // Zoom in by reducing visible range
+        if (mainTimeScale) {
+          const currentRange = mainTimeScale.getVisibleLogicalRange()
+          if (currentRange) {
+            const rangeWidth = currentRange.to - currentRange.from
+            const newRangeWidth = rangeWidth * 0.8 // Zoom in by 20%
+            const center = (currentRange.from + currentRange.to) / 2
+            mainTimeScale.setVisibleLogicalRange({
+              from: center - newRangeWidth / 2,
+              to: center + newRangeWidth / 2
+            })
+          }
+        }
+      }
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault()
+        // Zoom out by increasing visible range
+        if (mainTimeScale) {
+          const currentRange = mainTimeScale.getVisibleLogicalRange()
+          if (currentRange) {
+            const rangeWidth = currentRange.to - currentRange.from
+            const newRangeWidth = rangeWidth * 1.2 // Zoom out by 20%
+            const center = (currentRange.from + currentRange.to) / 2
+            mainTimeScale.setVisibleLogicalRange({
+              from: center - newRangeWidth / 2,
+              to: center + newRangeWidth / 2
+            })
+          }
+        }
+      }
+      // T097: R or 0 to reset zoom
+      if (e.key === "r" || e.key === "R" || (e.key === "0" && !e.ctrlKey && !e.metaKey)) {
+        e.preventDefault()
+        if (mainTimeScale) {
+          mainTimeScale.fitContent()
+        }
+      }
+      // T098: Escape to exit drawing mode (if implemented)
+      if (e.key === "Escape") {
+        // This will be used when drawing tools are implemented
+        // For now, just ensure no modal is open
+        if (isSearchOpen) setIsSearchOpen(false)
+        if (isIndicatorsOpen) setIsIndicatorsOpen(false)
+      }
+      // T099: C to toggle crosshair (handled by lightweight-charts natively)
+      // The crosshair visibility is managed by lightweight-charts internal state
     }
     window.addEventListener("keydown", down)
     return () => window.removeEventListener("keydown", down)
-  }, [])
+  }, [mainTimeScale, isSearchOpen, isIndicatorsOpen])
 
   useEffect(() => {
     const saved = loadLayouts()
@@ -216,30 +340,36 @@ function App() {
     // Reset pagination state when symbol or interval changes
     setHasMoreHistory(true)
     lastFetchedToDateRef.current = null
-    
+    setIsInitialLoading(true) // T101: Set loading state
+    setError(null) // T102: Clear error state
+
     const fetchData = async () => {
         try {
             const to = new Date().toISOString()
             const fromDate = new Date()
-            fromDate.setDate(fromDate.getDate() - 30) // 30 days default
+            // Set lookback based on interval: 2 years for daily, 4 years for weekly
+            const daysBack = chartInterval === '1d' ? 730 : chartInterval === '1wk' ? 1460 : 365
+            fromDate.setDate(fromDate.getDate() - daysBack)
             const from = fromDate.toISOString()
 
-            const [candleData, tdfi, crsi, adxvma] = await Promise.all([
-                getCandles(symbol, interval, from, to).catch(() => []),
-                getTDFI(symbol, interval).catch(() => null),
-                getcRSI(symbol, interval).catch(() => null),
-                getADXVMA(symbol, interval).catch(() => null)
-            ])
+            // Only fetch candles - indicator data is fetched by useIndicatorData hook
+            const candleData = await getCandles(symbol, chartInterval, from, to).catch(() => [])
             setCandles(candleData)
-            setTdfiData(tdfi)
-            setCrsiData(crsi)
-            setAdxvmaData(adxvma)
+
+            // T102: Check if we got valid data
+            if (candleData.length === 0) {
+                setError(`No data available for ${symbol}`)
+            }
         } catch (e) {
             console.error('Failed to fetch data', e)
+            // T102: Set error state
+            setError(`Failed to load data for ${symbol}. Please try again.`)
+        } finally {
+            setIsInitialLoading(false) // T101: Clear loading state
         }
     }
     fetchData()
-  }, [symbol, interval])
+  }, [symbol, chartInterval])
 
   const handleSymbolSelect = useCallback((newSymbol: string) => {
     setSymbol(newSymbol)
@@ -306,211 +436,117 @@ function App() {
     }
   }, [])
 
-  const mainHeight = Math.max(dimensions.height * 0.6, 300)
-  // Calculate indicator height to use all remaining space
-  const remainingHeight = Math.max(dimensions.height - mainHeight, 120)
-  const indicatorHeight = Math.max(remainingHeight / Math.max(activeLayout?.activeIndicators.filter((i: string) => ['tdfi', 'crsi'].includes(i)).length || 1, 1), 120)
+  // Separate overlay indicators from pane indicators
+  const overlayIndicators = useMemo(() => {
+    return indicators.filter(ind => ind.indicatorType.category === 'overlay')
+  }, [indicators])
 
+  const paneIndicators = useMemo(() => {
+    return indicators.filter(ind => ind.indicatorType.category === 'oscillator')
+  }, [indicators])
 
-  const adxvmaOverlay = useMemo(() => {
-    if (!activeLayout?.activeIndicators?.includes('adxvma') || !adxvmaData) return []
+  // Calculate chart height: expand to fill space when no oscillator panes, otherwise use 60%
+  const visiblePaneCount = paneIndicators.filter(ind => {
+    const data = indicatorDataMap[ind.id]
+    return data && ind.displaySettings.visible && indicatorSettings[ind.id]?.visible !== false
+  }).length
 
-    if (indicatorSettings['adxvma']?.visible === false) return [];
+  const mainHeight = visiblePaneCount === 0
+    ? Math.max(dimensions.height - 40, 300)  // Full height minus padding, minimum 300px
+    : Math.max(dimensions.height * 0.6, 300)
 
-    // Use formatDataForChart to get properly formatted data points
-    const formattedData = formatDataForChart(adxvmaData.timestamps, adxvmaData.adxvma);
-
-    // Create points with trend-based colors
-    const coloredData = [];
-    for (let i = 0; i < formattedData.length; i++) {
-      // Determine trend based on comparison with previous value
-      let trend = 'neutral';
-      if (i > 0) {
-        if (formattedData[i].value > formattedData[i - 1].value) {
-          trend = 'up';
-        } else if (formattedData[i].value < formattedData[i - 1].value) {
-          trend = 'down';
+  // Format overlay indicators for ChartComponent
+  const overlays = useMemo(() => {
+    return overlayIndicators
+      .filter(ind => indicatorSettings[ind.id]?.visible !== false)
+      .map(ind => {
+        const data = indicatorDataMap[ind.id]
+        if (!data) {
+          // Indicator data is not yet available, return null for now
+          // The indicator will appear once data is loaded
+          return null;
         }
-      }
 
-      // Determine color based on trend
-      let color;
-      switch (trend) {
-        case 'up': color = '#00ff00'; break; // Green for up trend
-        case 'down': color = '#ef4444'; break; // Red for down trend
-        case 'neutral': color = '#eab308'; break; // Yellow for neutral
-      }
+        // Get the first series from the indicator data
+        const firstSeries = data.metadata.series_metadata[0]
+        if (!firstSeries) return null
 
-      coloredData.push({
-        time: formattedData[i].time, // Unix timestamp
-        value: formattedData[i].value,
-        color: color
-      });
-    }
+        const seriesData = data.data[firstSeries.field]
+        if (!seriesData) return null
 
-    return [
-      {
-        id: 'adxvma',
-        data: coloredData,
-        color: "#eab308", // Default color
-        lineWidth: 3
-      }
-    ];
-  }, [activeLayout?.activeIndicators, adxvmaData, indicatorSettings])
-
-  const tdfiPaneProps = useMemo(() => {
-    if (!activeLayout?.activeIndicators?.includes('tdfi') || !tdfiData) return null
-
-    const isVisible = indicatorSettings['tdfi']?.visible !== false;
-    const rawData = formatDataForChart(tdfiData.timestamps, tdfiData.tdfi);
-
-    if (tdfiData.metadata.color_mode === 'threshold' && tdfiData.metadata.thresholds) {
-        const { above, neutral, below } = splitSeriesByThresholds(rawData, {
-            high: tdfiData.metadata.thresholds.high,
-            low: tdfiData.metadata.thresholds.low
-        });
-
-        // 3-series ONLY - no mainSeries, no extra metadata series
-        return {
-            visible: isVisible,
-            additionalSeries: [
-                {
-                    id: 'tdfi-neutral',
-                    data: neutral,
-                    displayType: 'line' as const,
-                    color: tdfiData.metadata.color_schemes.neutral || "#64748b",
-                    lineWidth: 2,
-                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
-                },
-                {
-                    id: 'tdfi-above',
-                    data: above,
-                    displayType: 'line' as const,
-                    color: tdfiData.metadata.color_schemes.above || "#00ff00",
-                    lineWidth: 2,
-                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
-                },
-                {
-                    id: 'tdfi-below',
-                    data: below,
-                    displayType: 'line' as const,
-                    color: tdfiData.metadata.color_schemes.below || "#ff0000",
-                    lineWidth: 2,
-                    visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
-                }
-            ],
-            priceLines: indicatorSettings['tdfi']?.showLevels !== false
-                ? tdfiData.metadata.reference_levels?.map(rl => ({
-                    value: rl.value,
-                    color: rl.line_color,
-                    label: rl.line_label
-                }))
-                : [],
-            scaleRanges: tdfiData.metadata.scale_ranges
-        }
-    }
-
-    // FALLBACK: single series only
-    return {
-        visible: isVisible,
-        mainSeries: {
-            data: rawData,
-            displayType: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.display_type || "histogram" as const,
-            color: tdfiData.metadata.series_metadata?.find(s => s.field === 'tdfi')?.line_color || tdfiData.metadata.color_schemes.neutral || "#64748b",
-            visible: indicatorSettings['tdfi']?.series?.['tdfi'] !== false
-        },
-        priceLines: indicatorSettings['tdfi']?.showLevels !== false
-            ? tdfiData.metadata.reference_levels?.map(rl => ({
-                value: rl.value,
-                color: rl.line_color,
-                label: rl.line_label
-            }))
-            : [],
-        scaleRanges: tdfiData.metadata.scale_ranges
-    }
-  }, [activeLayout?.activeIndicators, tdfiData, indicatorSettings])
-
-  const crsiPaneProps = useMemo(() => {
-    if (!activeLayout?.activeIndicators?.includes('crsi') || !crsiData) return null
-
-    const isVisible = indicatorSettings['crsi']?.visible !== false;
-    const rawData = formatDataForChart(crsiData.timestamps, crsiData.crsi);
-
-    if (crsiData.metadata.color_mode === 'threshold' && crsiData.metadata.thresholds) {
-        const { above, neutral, below } = splitSeriesByThresholds(rawData, {
-            high: crsiData.metadata.thresholds.high,
-            low: crsiData.metadata.thresholds.low
-        });
+        // Format data for ChartComponent - convert timestamps to strings
+        const timestampStrings = data.timestamps.map(t => String(t))
+        const formattedData = formatDataForChart(timestampStrings, seriesData)
 
         return {
-            visible: isVisible,
-            additionalSeries: [
-                {
-                    id: 'crsi-neutral',
-                    data: neutral,
-                    displayType: 'line' as const,
-                    color: crsiData.metadata.color_schemes.neutral || "#4CAF50",
-                    lineWidth: 2,
-                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
-                },
-                {
-                    id: 'crsi-above',
-                    data: above,
-                    displayType: 'line' as const,
-                    color: crsiData.metadata.color_schemes.above || "#ef4444",
-                    lineWidth: 2,
-                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
-                },
-                {
-                    id: 'crsi-below',
-                    data: below,
-                    displayType: 'line' as const,
-                    color: crsiData.metadata.color_schemes.below || "#22c55e",
-                    lineWidth: 2,
-                    visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
-                }
-            ],
-            priceLines: indicatorSettings['crsi']?.showLevels !== false
-                ? crsiData.metadata.reference_levels?.map(rl => ({
-                    value: rl.value,
-                    color: rl.line_color,
-                    label: rl.line_label
-                }))
-                : [],
-            scaleRanges: crsiData.metadata.scale_ranges
+          id: ind.id,
+          data: formattedData,
+          color: firstSeries.line_color,
+          lineWidth: firstSeries.line_width,
         }
+      })
+      .filter(Boolean) as Array<{ id: string; data: { time: number; value: number }[]; color: string; lineWidth: number }>
+  }, [overlayIndicators, indicatorDataMap, indicatorSettings])
+
+  // Main crosshair move handler
+  const handleMainCrosshairMove = useCallback((param: any) => {
+    // ignore non-pointer / programmatic moves to avoid jitter during scroll
+    if (!param?.sourceEvent) return
+
+    const t = param?.time
+    if (!t) {
+      indicatorChartsRef.current.forEach(({ chart }) => {
+        try {
+          chart.clearCrosshairPosition?.()
+        } catch(e) {}
+      })
+      setCrosshairCandle(null)
+      return
     }
 
-    return {
-        visible: isVisible,
-        mainSeries: {
-            data: rawData,
-            displayType: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.display_type || "line" as const,
-            color: crsiData.metadata.series_metadata?.find(s => s.field === 'crsi')?.line_color || crsiData.metadata.color_schemes.neutral || "#4CAF50",
-            visible: indicatorSettings['crsi']?.series?.['crsi'] !== false
-        },
-        additionalSeries: crsiData.metadata.series_metadata?.filter(s => s.field !== 'crsi').map(s => ({
-            id: s.field,
-            data: formatDataForChart(crsiData.timestamps, (crsiData as any)[s.field]),
-            displayType: (s.display_type as any) || "line",
-            color: s.line_color,
-            lineWidth: s.line_width,
-            visible: indicatorSettings['crsi']?.series?.[s.field] !== false
-        })),
-        priceLines: indicatorSettings['crsi']?.showLevels !== false
-            ? crsiData.metadata.reference_levels?.map(rl => ({
-                value: rl.value,
-                color: rl.line_color,
-                label: rl.line_label
-            }))
-            : [],
-        scaleRanges: crsiData.metadata.scale_ranges
-    }
-  }, [activeLayout?.activeIndicators, crsiData, indicatorSettings])
+    setCrosshairTime(t)
+
+    // Find the candle at the crosshair time for OHLCDisplay
+    const matchedCandle = candles.find(c => {
+      const candleTime = Math.floor(new Date(c.timestamp).getTime() / 1000)
+      return candleTime === t
+    })
+    setCrosshairCandle(matchedCandle || null)
+
+    // Sync crosshair to all dynamic indicator panes
+    paneIndicators.forEach(ind => {
+      const entry = indicatorChartsRef.current.get(ind.id)
+      if (!entry) return
+
+      const data = indicatorDataMap[ind.id]
+      if (!data) return
+
+      // Find the value at the crosshair time
+      const firstSeries = data.metadata.series_metadata[0]
+      if (!firstSeries) return
+
+      const seriesData = data.data[firstSeries.field]
+      if (!seriesData) return
+
+      // Find the value at the timestamp
+      const timestampIndex = data.timestamps.indexOf(t as unknown as number)
+      if (timestampIndex === -1) return
+
+      const v = seriesData[timestampIndex]
+      if (v !== null && v !== undefined) {
+        entry.chart.setCrosshairPosition(v, t, entry.series)
+      } else {
+        entry.chart.clearCrosshairPosition?.()
+      }
+    })
+  }, [paneIndicators, indicatorDataMap, candles])
 
   const handleIntervalSelect = useCallback((newInterval: string) => {
-    setInterval(newInterval.toLowerCase())
+    setChartInterval(newInterval.toLowerCase())
   }, [])
+
+  // Ref to avoid circular dependency in handleVisibleTimeRangeChange
+  const fetchMoreHistoryRef = useRef<any>(null)
 
   const fetchMoreHistory = useCallback(async () => {
     if (isLoading || !hasMoreHistory || candles.length === 0) return
@@ -525,12 +561,14 @@ function App() {
         const to = earliestDate.toISOString()
         
         const fromDate = new Date(earliestDate)
-        fromDate.setDate(fromDate.getDate() - 30) 
+        // Set chunk size based on interval: 2 years for daily, 4 years for weekly
+        const daysBack = chartInterval === '1d' ? 730 : chartInterval === '1wk' ? 1460 : 365
+        fromDate.setDate(fromDate.getDate() - daysBack)
         const from = fromDate.toISOString()
         
         console.log(`Fetching more history for ${symbol}: ${from} to ${to}`)
-        const moreCandles = await getCandles(symbol, interval, from, to)
-        
+        const moreCandles = await getCandles(symbol, chartInterval, from, to)
+
         if (moreCandles.length > 0) {
             setCandles(prev => {
                 const combined = [...moreCandles, ...prev]
@@ -539,6 +577,7 @@ function App() {
                 )
                 return unique.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
             })
+            // Note: Indicators are automatically refreshed by useIndicatorData when symbol/interval changes
         } else {
             console.log(`No more history found for ${symbol} before ${to}`)
             setHasMoreHistory(false)
@@ -548,7 +587,12 @@ function App() {
     } finally {
         setIsLoading(false)
     }
-  }, [isLoading, hasMoreHistory, candles, symbol, interval])
+  }, [isLoading, hasMoreHistory, candles, symbol, chartInterval])
+
+  // Keep ref updated
+  useEffect(() => {
+    fetchMoreHistoryRef.current = fetchMoreHistory
+  }, [fetchMoreHistory])
 
   const handleVisibleTimeRangeChange = useCallback((range: IRange<Time> | null) => {
     if (!range) return
@@ -562,14 +606,15 @@ function App() {
         const threshold = earliestLoaded + (loadedDuration * 0.2)
         
         if (Number(range.from) <= threshold) {
-            fetchMoreHistory()
+            fetchMoreHistoryRef.current?.()
         }
     }
-  }, [candles, isLoading, hasMoreHistory, fetchMoreHistory])
+  }, [candles, isLoading, hasMoreHistory])
 
   return (
-    <TooltipProvider>
-        <Layout
+    <>
+      <TooltipProvider>
+          <Layout
             alertsBadgeCount={triggeredCount}
             watchlistContent={
                 <Watchlist 
@@ -596,7 +641,7 @@ function App() {
 
                 <Toolbar
                     symbol={symbol}
-                    interval={interval}
+                    interval={chartInterval}
                     onIntervalSelect={handleIntervalSelect}
                     onSymbolClick={() => setIsSearchOpen(true)}
                     onIndicatorsClick={() => setIsIndicatorsOpen(true)}
@@ -611,115 +656,121 @@ function App() {
                     onToggleLevelsVisibility={toggleLevelsVisibility}
                 />
 
-                {dimensions.width > 0 && dimensions.height > 0 ? (
-                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                        <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 border-b-0 border-slate-800 relative min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        <div className="bg-[#131722] px-2 py-1 flex items-center justify-between">
+                            <OHLCDisplayWithTime candle={crosshairCandle} interval={chartInterval} />
+                        </div>
+                        <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 border-b-0 border-slate-800 relative min-h-0 overflow-hidden w-full">
+                            {/* T101: Loading state - spinner while fetching initial data */}
+                            {isInitialLoading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                    <div className="flex flex-col items-center gap-3">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                                        <span className="text-slate-400 text-sm">Loading chart data...</span>
+                                    </div>
+                                </div>
+                            )}
+                            {/* T102: Error state - show error message */}
+                            {error && !isInitialLoading && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                    <div className="flex flex-col items-center gap-3 text-center px-4">
+                                        <div className="text-red-400 text-sm font-medium">{error}</div>
+                                        <button
+                                            onClick={() => {
+                                                setError(null)
+                                                // Trigger refetch by changing symbol then changing back
+                                                const currentSymbol = symbol
+                                                setSymbol('')
+                                                setTimeout(() => setSymbol(currentSymbol), 0)
+                                            }}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                                        >
+                                            Retry
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <ChartComponent
-                                key={`${symbol}-${interval}`}
+                                key={`${symbol}-${chartInterval}`}
                                 symbol={symbol}
                                 candles={candles}
                                 width={dimensions.width}
                                 height={mainHeight}
                                 onTimeScaleInit={setMainTimeScale}
                                 onCrosshairMove={handleMainCrosshairMove}
-                                overlays={adxvmaOverlay}
+                                overlays={overlays}
                                 onVisibleTimeRangeChange={handleVisibleTimeRangeChange}
+                                showVolume={true}
+                                showLastPrice={true}
                             />
                         </div>
 
-                        <div className="flex flex-col gap-0 flex-1 min-h-0">
-                            {tdfiPaneProps && !crsiPaneProps && (  // Only TDFI active
-                                <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
-                                    <IndicatorPane
-                                        name="TDFI"
-                                        symbol={symbol}
-                                        interval={interval}
-                                        width={dimensions.width}
-                                        height={undefined} // Let the container determine the height
-                                        onTimeScaleInit={(ts) => {
-                                            if (ts) {
-                                                indicatorTimeScalesRef.current.set('tdfi', ts)
-                                                if (mainTimeScale) {
-                                                    const range = mainTimeScale.getVisibleLogicalRange()
-                                                    if (range) ts.setVisibleLogicalRange(range)
-                                                }
-                                            } else {
-                                                indicatorTimeScalesRef.current.delete('tdfi')
-                                            }
-                                        }}
-                                        onChartInit={(chart, series) => {
-                                            indicatorChartsRef.current.set('tdfi', { chart, series });
-                                        }}
-                                        candles={candles}
-                                        {...tdfiPaneProps}
-                                    />
-                                </div>
-                            )}
-                            {tdfiPaneProps && crsiPaneProps && (  // Both TDFI and cRSI active - TDFI doesn't have rounded corners
-                                <div className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800">
-                                    <IndicatorPane
-                                        name="TDFI"
-                                        symbol={symbol}
-                                        interval={interval}
-                                        width={dimensions.width}
-                                        height={undefined} // Let the container determine the height
-                                        onTimeScaleInit={(ts) => {
-                                            if (ts) {
-                                                indicatorTimeScalesRef.current.set('tdfi', ts)
-                                                if (mainTimeScale) {
-                                                    const range = mainTimeScale.getVisibleLogicalRange()
-                                                    if (range) ts.setVisibleLogicalRange(range)
-                                                }
-                                            } else {
-                                                indicatorTimeScalesRef.current.delete('tdfi')
-                                            }
-                                        }}
-                                        onChartInit={(chart, series) => {
-                                            indicatorChartsRef.current.set('tdfi', { chart, series });
-                                        }}
-                                        candles={candles}
-                                        {...tdfiPaneProps}
-                                    />
-                                </div>
-                            )}
+                        {/* Dynamically render indicator panes */}
+                        {paneIndicators.length > 0 && (
+                            <div className="flex flex-col gap-0 flex-1 min-h-0 w-full">
+                                {paneIndicators.map((ind, index) => {
+                                    const data = indicatorDataMap[ind.id]
+                                    const isVisible = ind.displaySettings.visible && indicatorSettings[ind.id]?.visible !== false
+                                    const isLast = index === paneIndicators.length - 1
 
-                            {crsiPaneProps && (
-                                <div className="flex-1 bg-slate-900 rounded-b-lg p-1 border border-t-0 border-slate-800">
-                                    <IndicatorPane
-                                        name="cRSI"
-                                        symbol={symbol}
-                                        interval={interval}
-                                        width={dimensions.width}
-                                        height={undefined} // Let the container determine the height
-                                        onTimeScaleInit={(ts) => {
-                                            if (ts) {
-                                                indicatorTimeScalesRef.current.set('crsi', ts)
-                                                if (mainTimeScale) {
-                                                    const range = mainTimeScale.getVisibleLogicalRange()
-                                                    if (range) ts.setVisibleLogicalRange(range)
-                                                }
-                                            } else {
-                                                indicatorTimeScalesRef.current.delete('crsi')
-                                            }
-                                        }}
-                                        onChartInit={(chart, series) => {
-                                            indicatorChartsRef.current.set('crsi', { chart, series });
-                                        }}
-                                        candles={candles}
-                                        {...crsiPaneProps}
-                                    />
-                                </div>
-                            )}
-                        </div>
+                                    if (!isVisible) return null
+                                    // Don't filter out indicators that don't have data yet - they might be loading
+
+                                    return (
+                                        <div
+                                            key={ind.id}
+                                            className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800 w-full"
+                                            style={{ borderRadius: isLast ? '0 0 0.5rem 0.5rem' : '0' }}
+                                        >
+                                            <IndicatorPane
+                                                name={ind.name}
+                                                symbol={symbol}
+                                                interval={chartInterval}
+                                                width={dimensions.width}
+                                                height={undefined}
+                                                onTimeScaleInit={(ts) => {
+                                                    if (ts) {
+                                                        indicatorTimeScalesRef.current.set(ind.id, ts)
+                                                        if (mainTimeScale) {
+                                                            const range = mainTimeScale.getVisibleLogicalRange()
+                                                            if (range) ts.setVisibleLogicalRange(range)
+                                                        }
+                                                    } else {
+                                                        indicatorTimeScalesRef.current.delete(ind.id)
+                                                    }
+                                                }}
+                                                onChartInit={(chart, series) => {
+                                                    indicatorChartsRef.current.set(ind.id, { chart, series });
+                                                }}
+                                                candles={candles}
+                                                indicatorData={data}
+                                            />
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </div>
-                ) : (
-                    <div className="flex-1 flex items-center justify-center text-slate-500">
-                        Initializing viewport...
-                    </div>
-                )}
             </div>
         </Layout>
-    </TooltipProvider>
+
+        <IndicatorDialog
+          open={isIndicatorsOpen}
+          onOpenChange={setIsIndicatorsOpen}
+        />
+      </TooltipProvider>
+    </>
+  )
+}
+
+// Main App component - manages symbol state and wraps with IndicatorProvider
+function App() {
+  const [symbol, setSymbol] = useState('IBM')
+
+  return (
+    <IndicatorProvider symbol={symbol}>
+      <AppContent symbol={symbol} setSymbol={setSymbol} />
+    </IndicatorProvider>
   )
 }
 

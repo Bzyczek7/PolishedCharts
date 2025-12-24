@@ -4,6 +4,23 @@ from typing import Optional
 
 # Removed: from stock_indicators import indicators # Import from stock_indicators
 
+def calculate_sma(df: pd.DataFrame, period: int = 20, price_col: str = 'close') -> pd.DataFrame:
+    """
+    Calculate Simple Moving Average (SMA).
+
+    Args:
+        df: DataFrame with price data
+        period: Number of periods for the moving average (default: 20)
+        price_col: Column name to use for price (default: 'close')
+
+    Returns:
+        DataFrame with SMA column added
+    """
+    df = df.copy()
+    df['sma'] = df[price_col].rolling(window=period).mean()
+    return df
+
+
 def calculate_tdfi(
     df: pd.DataFrame, 
     lookback: int = 13,

@@ -19,7 +19,7 @@ describe('Indicators API', () => {
 
     const result = await getTDFI('IBM')
     
-    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/tdfi')
+    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/tdfi', { params: { interval: '1d' } })
     expect(result).toEqual(mockData)
   })
 
@@ -34,7 +34,7 @@ describe('Indicators API', () => {
 
     const result = await getcRSI('IBM')
     
-    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/crsi')
+    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/crsi', { params: { interval: '1d' } })
     expect(result).toEqual(mockData)
   })
 
@@ -47,7 +47,7 @@ describe('Indicators API', () => {
 
     const result = await getADXVMA('IBM')
     
-    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/adxvma')
+    expect(client.get).toHaveBeenCalledWith('/indicators/IBM/adxvma', { params: { interval: '1d' } })
     expect(result).toEqual(mockData)
   })
 })

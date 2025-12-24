@@ -1,0 +1,216 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Candles API
+  description: API for fetching and managing candlestick market data
+  version: 1.0.0
+
+tags:
+  - name: candles
+    description: Candlestick data operations
+
+paths:
+  /api/v1/candles/{symbol}:
+    get:
+      tags: [candles]
+      summary: Get candles for a symbol
+      description: Retrieves historical candlestick data for a given symbol and interval
+      operationId: getCandles
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stock ticker symbol (e.g., AAPL, SPY)
+          example: AAPL
+        - name: interval
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo]
+          description: Time interval for candles
+          example: 1h
+        - name: start
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Start datetime (ISO 8601, UTC)
+          example: "2024-01-01T00:00:00Z"
+        - name: end
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: End datetime (ISO 8601, UTC)
+          example: "2024-12-31T23:59:59Z"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+          description: Maximum number of candles to return
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Candle'
+        '400':
+          description: Bad request (invalid parameters)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No data available for symbol
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Rate limit exceeded from provider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/candles/backfill:
+    post:
+      tags: [candles]
+      summary: Trigger backfill for historical data
+      description: Initiates a backfill job to fetch historical candles for a symbol/interval
+      operationId: backfillCandles
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BackfillRequest'
+      responses:
+        '202':
+          description: Backfill job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackfillResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Candle:
+      type: object
+      required:
+        - symbol
+        - timestamp
+        - interval
+        - open
+        - high
+        - low
+        - close
+      properties:
+        symbol:
+          type: string
+          description: Stock ticker symbol
+          example: AAPL
+        timestamp:
+          type: string
+          format: date-time
+          description: Candle timestamp in UTC
+          example: "2024-12-23T14:30:00Z"
+        interval:
+          type: string
+          description: Time interval
+          example: 1h
+        open:
+          type: number
+          format: float
+          description: Opening price
+          example: 195.50
+        high:
+          type: number
+          format: float
+          description: Highest price
+          example: 197.80
+        low:
+          type: number
+          format: float
+          description: Lowest price
+          example: 195.20
+        close:
+          type: number
+          format: float
+          description: Closing price
+          example: 197.15
+        volume:
+          type: integer
+          description: Trading volume
+          example: 45678900
+          nullable: true
+
+    BackfillRequest:
+      type: object
+      required:
+        - symbol
+        - interval
+      properties:
+        symbol:
+          type: string
+          description: Stock ticker symbol
+          example: AAPL
+        interval:
+          type: string
+          enum: [1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo]
+          description: Time interval
+          example: 1h
+        start:
+          type: string
+          format: date-time
+          description: Start datetime (optional, defaults to max lookback)
+          example: "2024-01-01T00:00:00Z"
+        end:
+          type: string
+          format: date-time
+          description: End datetime (optional, defaults to now)
+          example: "2024-12-23T23:59:59Z"
+
+    BackfillResponse:
+      type: object
+      properties:
+        job_id:
+          type: integer
+          description: Backfill job ID
+          example: 123
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+          description: Job status
+          example: pending
+        message:
+          type: string
+          description: Status message
+          example: "Backfill job queued successfully"
+
+    Error:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message
+          example: "Rate limit exceeded. Retrying in 30 seconds."

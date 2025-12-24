@@ -1,0 +1,344 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Indicators API
+  description: API endpoints for calculating and retrieving technical indicators with rich metadata
+  version: 1.0.0
+
+paths:
+  /api/v1/indicators:
+    get:
+      summary: List all available indicators
+      description: Returns a list of all registered indicators with their metadata
+      tags:
+        - Indicators
+      responses:
+        '200':
+          description: List of available indicators
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indicators:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IndicatorInfo'
+
+  /api/v1/indicators/{symbol}/{indicator_name}:
+    get:
+      summary: Calculate indicator for symbol
+      description: Calculates the specified indicator for the given symbol and interval
+      tags:
+        - Indicators
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: AAPL
+          description: Stock ticker symbol
+        - name: indicator_name
+          in: path
+          required: true
+          schema:
+            type: string
+          example: crsi
+          description: Name of the indicator to calculate
+        - name: interval
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ['1m', '5m', '15m', '1h', '4h', '1d']
+            default: '1d'
+          description: Candle interval
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 1000
+            minimum: 1
+            maximum: 10000
+          description: Maximum number of data points to return
+        - name: params
+          in: query
+          required: false
+          schema:
+            type: object
+            additionalProperties: true
+          description: Indicator-specific parameters (JSON object)
+          example: '{"period": 14, "smooth": 3}'
+      responses:
+        '200':
+          description: Indicator calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorOutput'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Indicator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Calculation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/indicators/supported:
+    get:
+      summary: Get supported indicators with metadata
+      description: Returns detailed metadata for all supported indicators
+      tags:
+        - Indicators
+      responses:
+        '200':
+          description: Supported indicators with metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indicators:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/IndicatorMetadata'
+
+components:
+  schemas:
+    IndicatorInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: crsi
+        description:
+          type: string
+          example: Cyclic RSI with dynamic bands
+        display_type:
+          type: string
+          enum: [overlay, pane]
+          example: pane
+        category:
+          type: string
+          enum: [overlay, oscillator, momentum, trend, volatility]
+          example: oscillator
+        parameters:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ParameterDefinition'
+      required:
+        - name
+        - description
+        - display_type
+        - category
+
+    ParameterDefinition:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [integer, float, string, boolean]
+          example: integer
+        default:
+          type: number
+          example: 14
+        min:
+          type: number
+          example: 2
+        max:
+          type: number
+          example: 100
+        description:
+          type: string
+          example: RSI period for calculation
+
+    IndicatorOutput:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: AAPL
+        interval:
+          type: string
+          example: 1d
+        timestamps:
+          type: array
+          items:
+            type: integer
+          description: Unix timestamps in seconds
+          example: [1704067200, 1704153600, 1704240000]
+        data:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: number
+              nullable: true
+          description: Field name -> array of values
+          example:
+            crsi: [null, 65.5, 72.3]
+            upper_band: [null, 70.0, 70.0]
+            lower_band: [null, 30.0, 30.0]
+        metadata:
+          $ref: '#/components/schemas/IndicatorMetadata'
+        calculated_at:
+          type: string
+          format: date-time
+          example: '2025-12-24T10:00:00Z'
+        data_points:
+          type: integer
+          example: 3
+      required:
+        - symbol
+        - interval
+        - timestamps
+        - data
+        - metadata
+        - calculated_at
+        - data_points
+
+    IndicatorMetadata:
+      type: object
+      properties:
+        display_type:
+          type: string
+          enum: [overlay, pane]
+        color_mode:
+          type: string
+          enum: [single, threshold, gradient]
+        color_schemes:
+          type: object
+          additionalProperties:
+            type: string
+            pattern: '^#[0-9A-Fa-f]{6}$'
+          example:
+            bullish: '#00bcd4'
+            bearish: '#ef5350'
+            neutral: '#b2ebf2'
+        thresholds:
+          $ref: '#/components/schemas/ThresholdsConfig'
+        scale_ranges:
+          $ref: '#/components/schemas/ScaleRangesConfig'
+        series_metadata:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeriesMetadata'
+        reference_levels:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReferenceLevel'
+      required:
+        - display_type
+        - color_mode
+        - color_schemes
+        - series_metadata
+
+    ThresholdsConfig:
+      type: object
+      properties:
+        high:
+          type: number
+          example: 0.05
+        low:
+          type: number
+          example: -0.05
+      required:
+        - high
+        - low
+
+    ScaleRangesConfig:
+      type: object
+      properties:
+        min:
+          type: number
+          example: 0
+        max:
+          type: number
+          example: 100
+        auto:
+          type: boolean
+          default: false
+      required:
+        - min
+        - max
+
+    SeriesMetadata:
+      type: object
+      properties:
+        field:
+          type: string
+          example: crsi
+        role:
+          type: string
+          enum: [main, signal, band, histogram]
+        label:
+          type: string
+          example: cRSI
+        line_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#00bcd4'
+        line_style:
+          type: string
+          enum: [solid, dashed, dotted]
+          default: solid
+        line_width:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+        display_type:
+          type: string
+          enum: [line, histogram, area]
+          default: line
+      required:
+        - field
+        - role
+        - label
+        - line_color
+
+    ReferenceLevel:
+      type: object
+      properties:
+        value:
+          type: number
+          example: 70
+        line_color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          example: '#b2ebf2'
+        line_label:
+          type: string
+          example: '70'
+        line_style:
+          type: string
+          enum: [solid, dashed]
+          default: dashed
+      required:
+        - value
+        - line_color
+        - line_label
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Invalid indicator parameters
+        detail:
+          type: string
+          example: Period must be between 2 and 100
+      required:
+        - error

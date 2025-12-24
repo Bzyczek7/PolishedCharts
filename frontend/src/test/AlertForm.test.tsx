@@ -20,8 +20,10 @@ describe('AlertForm', () => {
     await waitFor(() => {
       expect(createAlert).toHaveBeenCalledWith({
         symbol_id: 1,
-        condition: 'price_above',
+        condition: 'above',
         threshold: 150,
+        cooldown: undefined,
+        is_active: true
       })
     })
     

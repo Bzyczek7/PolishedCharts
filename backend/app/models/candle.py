@@ -11,3 +11,7 @@ class Candle(Base):
     low = Column(Float, nullable=False)
     close = Column(Float, nullable=False)
     volume = Column(Integer)
+
+    __table_args__ = (
+        UniqueConstraint('symbol_id', 'timestamp', 'interval', name='uix_candle_symbol_timestamp_interval'),
+    )

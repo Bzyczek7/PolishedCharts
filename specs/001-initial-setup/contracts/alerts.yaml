@@ -1,0 +1,354 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Alerts API
+  description: API for managing price alerts and viewing alert triggers
+  version: 1.0.0
+
+tags:
+  - name: alerts
+    description: Alert management operations
+
+paths:
+  /api/v1/alerts:
+    get:
+      tags: [alerts]
+      summary: List all alerts
+      description: Retrieves all alerts for the current user
+      operationId: listAlerts
+      parameters:
+        - name: symbol_id
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Filter by symbol ID
+        - name: is_active
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Alert'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      tags: [alerts]
+      summary: Create a new alert
+      description: Creates a new price alert for a symbol
+      operationId: createAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCreate'
+      responses:
+        '201':
+          description: Alert created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '400':
+          description: Bad request (invalid alert parameters)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/alerts/{alert_id}:
+    get:
+      tags: [alerts]
+      summary: Get an alert by ID
+      description: Retrieves a specific alert
+      operationId: getAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Alert ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [alerts]
+      summary: Update an alert
+      description: Updates an existing alert's properties
+      operationId: updateAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Alert ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertUpdate'
+      responses:
+        '200':
+          description: Alert updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [alerts]
+      summary: Delete an alert
+      description: Permanently deletes an alert
+      operationId: deleteAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Alert ID
+      responses:
+        '204':
+          description: Alert deleted successfully
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/alerts/{alert_id}/triggers:
+    get:
+      tags: [alerts]
+      summary: Get alert trigger history
+      description: Retrieves the history of when an alert has triggered
+      operationId: getAlertTriggers
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Alert ID
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          description: Maximum number of triggers to return
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertTrigger'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/alerts/triggers:
+    get:
+      tags: [alerts]
+      summary: Get all recent alert triggers
+      description: Retrieves recent alert triggers across all alerts
+      operationId: getAllAlertTriggers
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 50
+          description: Maximum number of triggers to return
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertTrigger'
+
+components:
+  schemas:
+    Alert:
+      type: object
+      required:
+        - id
+        - symbol_id
+        - condition
+        - threshold
+        - is_active
+        - created_at
+      properties:
+        id:
+          type: integer
+          description: Alert ID
+          example: 1
+        symbol_id:
+          type: integer
+          description: Reference to Symbol
+          example: 5
+        condition:
+          type: string
+          enum: [above, below, crosses_up, crosses_down]
+          description: Alert condition type
+          example: crosses_up
+        threshold:
+          type: number
+          format: float
+          description: Target price
+          example: 200.00
+        is_active:
+          type: boolean
+          description: Whether the alert is enabled
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: When the alert was created (UTC)
+          example: "2024-12-23T10:30:00Z"
+        cooldown:
+          type: integer
+          description: Cooldown period in seconds (optional)
+          example: 300
+          nullable: true
+
+    AlertCreate:
+      type: object
+      required:
+        - symbol_id
+        - condition
+        - threshold
+      properties:
+        symbol_id:
+          type: integer
+          description: Reference to Symbol
+          example: 5
+        condition:
+          type: string
+          enum: [above, below, crosses_up, crosses_down]
+          description: Alert condition type
+          example: crosses_up
+        threshold:
+          type: number
+          format: float
+          minimum: 0
+          description: Target price (must be positive)
+          example: 200.00
+        is_active:
+          type: boolean
+          description: Whether the alert is enabled
+          default: true
+        cooldown:
+          type: integer
+          minimum: 0
+          description: Cooldown period in seconds (optional)
+
+    AlertUpdate:
+      type: object
+      properties:
+        condition:
+          type: string
+          enum: [above, below, crosses_up, crosses_down]
+          description: Alert condition type
+        threshold:
+          type: number
+          format: float
+          minimum: 0
+          description: Target price
+        is_active:
+          type: boolean
+          description: Whether the alert is enabled
+        cooldown:
+          type: integer
+          minimum: 0
+          description: Cooldown period in seconds
+
+    AlertTrigger:
+      type: object
+      required:
+        - id
+        - alert_id
+        - triggered_at
+        - observed_price
+      properties:
+        id:
+          type: integer
+          description: Trigger ID
+          example: 42
+        alert_id:
+          type: integer
+          description: Reference to Alert
+          example: 1
+        triggered_at:
+          type: string
+          format: date-time
+          description: When the alert triggered (UTC)
+          example: "2024-12-23T15:45:00Z"
+        observed_price:
+          type: number
+          format: float
+          description: The price that triggered the alert
+          example: 200.50
+
+    Error:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message
+          example: "Alert not found"

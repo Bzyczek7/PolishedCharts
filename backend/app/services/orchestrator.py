@@ -1,10 +1,12 @@
 import logging
 import asyncio
+import math
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.candles import CandleService
 from app.services.providers import YFinanceProvider, AlphaVantageProvider
+from app.services.gap_detector import GapDetector
 
 logger = logging.getLogger(__name__)
 
@@ -43,36 +45,36 @@ class DataOrchestrator:
         # 1. Identify Gaps (only if not local_only)
         if not local_only:
             gaps = await self.candle_service.find_gaps(db, symbol_id, ticker, interval, start, end)
-            
+
             if gaps:
                 logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
-                
+
                 # Check if total missing bars exceed hard cap
                 total_missing = 0
                 from app.core.intervals import get_interval_delta
                 delta = get_interval_delta(interval)
                 for g_start, g_end in gaps:
                     total_missing += (g_end - g_start) / delta + 1
-                
+
                 HARD_CAP = 10000 # Increased to allow more history in dynamic fills
                 if total_missing > HARD_CAP:
                     logger.warning(f"Gap size {total_missing} exceeds hard cap of {HARD_CAP}. Skipping dynamic fill.")
                     # In Phase 3/4 we might return 'needs_backfill: True'
                 else:
-                    # Optimize: Instead of filling each gap individually, 
+                    # Optimize: Instead of filling each gap individually,
                     # find the total range covering all gaps and fetch it once.
                     all_gap_starts = [g[0] for g in gaps]
                     all_gap_ends = [g[1] for g in gaps]
-                    
+
                     fill_start = min(all_gap_starts)
                     fill_end = max(all_gap_ends)
-                    
+
                     # Ensure aware
                     if fill_start.tzinfo is None:
                         fill_start = fill_start.replace(tzinfo=timezone.utc)
                     if fill_end.tzinfo is None:
                         fill_end = fill_end.replace(tzinfo=timezone.utc)
-                        
+
                     logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
                     try:
                         # Timeout protection: don't hang the API request for more than 10s
@@ -100,25 +102,27 @@ class DataOrchestrator:
         
         result = await db.execute(stmt)
         candles = result.scalars().all()
-        
-        import math
-        def clean_price(val):
-            if val is None or not math.isfinite(val):
-                return None
-            return float(val)
 
-        return [
-            {
-                "timestamp": c.timestamp,
-                "open": clean_price(c.open),
-                "high": clean_price(c.high),
-                "low": clean_price(c.low),
-                "close": clean_price(c.close),
-                "volume": int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else None,
-                "interval": c.interval,
-                "ticker": ticker
-            } for c in candles
-        ]
+        # Filter out candles with invalid price data
+        valid_candles = []
+        for c in candles:
+            # Check if any of the price values are invalid
+            if (c.open is not None and math.isfinite(c.open) and
+                c.high is not None and math.isfinite(c.high) and
+                c.low is not None and math.isfinite(c.low) and
+                c.close is not None and math.isfinite(c.close)):
+                valid_candles.append({
+                    "timestamp": c.timestamp,
+                    "open": float(c.open),
+                    "high": float(c.high),
+                    "low": float(c.low),
+                    "close": float(c.close),
+                    "volume": int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else 0,  # Use 0 instead of None for volume
+                    "interval": c.interval,
+                    "ticker": ticker
+                })
+
+        return valid_candles
 
     async def fetch_and_save(
         self, 

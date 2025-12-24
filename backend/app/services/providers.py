@@ -5,7 +5,7 @@ import yfinance as yf
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from abc import ABC, abstractmethod
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, wait_random_exponential
 from app.services.rate_limiter import RateLimiter, rate_limit
 
 logger = logging.getLogger(__name__)
@@ -104,7 +104,7 @@ class YFinanceProvider(MarketDataProvider):
         """
         @retry(
             stop=stop_after_attempt(max_retries),
-            wait=wait_exponential(multiplier=1, min=2, max=10),
+            wait=wait_random_exponential(multiplier=1, max=30),
             retry=retry_if_exception_type(Exception),
             reraise=True
         )
@@ -163,44 +163,87 @@ class YFinanceProvider(MarketDataProvider):
                 df = ticker.history(period=p, interval=interval)
             return df
 
-        df = await loop.run_in_executor(None, _fetch)
+        try:
+            # Add retry mechanism with exponential backoff for network issues
+            import time
+            import random
+            max_retries = 3
+            retry_count = 0
 
-        if df is None or df.empty:
+            while retry_count < max_retries:
+                try:
+                    df = await loop.run_in_executor(None, _fetch)
+                    break  # Success, exit retry loop
+                except Exception as fetch_error:
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        logger.error(f"Failed to fetch data from yfinance for {symbol} after {max_retries} retries: {fetch_error}")
+                        return []
+
+                    wait_time = (2 ** retry_count) + random.uniform(0.1, 0.5)  # Exponential backoff with jitter
+                    logger.warning(f"Retry {retry_count}/{max_retries} for {symbol} after error: {fetch_error}. Waiting {wait_time:.2f}s...")
+                    await asyncio.sleep(wait_time)
+
+            if df is None or df.empty:
+                logger.warning(f"No data returned from yfinance for {symbol}")
+                return []
+
+            if isinstance(df.columns, pd.MultiIndex):
+                try:
+                    df = df.xs(symbol, axis=1, level=1)
+                except (KeyError, ValueError):
+                    df.columns = df.columns.get_level_values(0)
+
+            candles = []
+            for timestamp, row in df.iterrows():
+                try:
+                    # Ensure timestamp is aware UTC and rounded to midnight for non-intraday
+                    dt = timestamp.to_pydatetime()
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    else:
+                        dt = dt.astimezone(timezone.utc)
+
+                    # Normalize to midnight for 1d+ intervals
+                    if interval in ["1d", "1wk", "1w", "1mo", "3mo"]:
+                        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+                    if interval in ["1wk", "1w"]:
+                        # Normalize to Monday 00:00
+                        dt = dt - timedelta(days=dt.weekday())
+                    elif interval == "1mo":
+                        # Normalize to 1st of the month 00:00
+                        dt = dt.replace(day=1)
+
+                    vol = row.get('Volume')
+                    vol = int(vol) if vol is not None and not pd.isna(vol) else None
+
+                    # Ensure all required values are not NaN before adding
+                    open_val = row.get('Open')
+                    high_val = row.get('High')
+                    low_val = row.get('Low')
+                    close_val = row.get('Close')
+
+                    if all(pd.notna(v) for v in [open_val, high_val, low_val, close_val]):
+                        candles.append({
+                            "timestamp": dt,
+                            "open": float(open_val),
+                            "high": float(high_val),
+                            "low": float(low_val),
+                            "close": float(close_val),
+                            "volume": vol
+                        })
+                except Exception as e:
+                    logger.warning(f"Error processing row for {symbol}: {e}")
+                    continue
+
+            logger.info(f"Successfully fetched {len(candles)} candles for {symbol}")
+            return candles
+        except Exception as e:
+            logger.error(f"Error fetching data from yfinance for {symbol}: {e}")
+            import traceback
+            traceback.print_exc()
             return []
-
-        if isinstance(df.columns, pd.MultiIndex):
-            try:
-                df = df.xs(symbol, axis=1, level=1)
-            except (KeyError, ValueError):
-                df.columns = df.columns.get_level_values(0)
-
-        candles = []
-        for timestamp, row in df.iterrows():
-            try:
-                dt = timestamp.to_pydatetime()
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                else:
-                    dt = dt.astimezone(timezone.utc)
-                
-                if interval == "1d":
-                    dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                
-                vol = row['Volume']
-                vol = int(vol) if not pd.isna(vol) else None
-
-                candles.append({
-                    "timestamp": dt,
-                    "open": float(row['Open']),
-                    "high": float(row['High']),
-                    "low": float(row['Low']),
-                    "close": float(row['Close']),
-                    "volume": vol
-                })
-            except Exception:
-                continue
-
-        return candles
 
     def _get_default_lookback(self, interval: str) -> timedelta:
         mapping = {
