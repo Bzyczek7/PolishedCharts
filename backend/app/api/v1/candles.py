@@ -57,56 +57,63 @@ def get_incremental_worker(db: AsyncSession = Depends(get_db), orchestrator: Dat
 
 # --- Helper Functions ---
 
-async def _get_price_for_symbol(symbol_str: str, interval: str, db: AsyncSession, orchestrator: DataOrchestrator):
-    """Helper to get price for a single symbol, used by get_latest_prices."""
+async def _get_price_for_symbol(symbol_str: str, interval: str, orchestrator: DataOrchestrator):
+    """
+    Helper to get price for a single symbol, used by get_latest_prices.
+
+    Creates its own database session to avoid concurrency issues with asyncio.gather.
+    """
     from sqlalchemy import desc
-    result = await db.execute(select(Symbol).where(Symbol.ticker == symbol_str))
-    symbol_obj = result.scalars().first()
+    from app.db.session import AsyncSessionLocal
 
-    if not symbol_obj:
-        return {"symbol": symbol_str, "error": "Symbol not found"}
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(Symbol).where(Symbol.ticker == symbol_str))
+        symbol_obj = result.scalars().first()
 
-    try:
-        latest_candle_q = await db.execute(
-            select(Candle).where(Candle.symbol_id == symbol_obj.id, Candle.interval == interval)
-            .order_by(desc(Candle.timestamp)).limit(1)
-        )
-        latest_candle = latest_candle_q.scalars().first()
+        if not symbol_obj:
+            return {"symbol": symbol_str, "error": "Symbol not found"}
 
-        if latest_candle:
-            prev_candle_q = await db.execute(
-                select(Candle).where(Candle.symbol_id == symbol_obj.id, Candle.interval == interval, 
-                                     Candle.timestamp < latest_candle.timestamp)
+        try:
+            latest_candle_q = await db.execute(
+                select(Candle).where(Candle.symbol_id == symbol_obj.id, Candle.interval == interval)
                 .order_by(desc(Candle.timestamp)).limit(1)
             )
-            prev_candle = prev_candle_q.scalars().first()
-            change = latest_candle.close - prev_candle.close if prev_candle else 0
-            change_percent = (change / prev_candle.close) * 100 if prev_candle and prev_candle.close else 0
-            return {
-                "symbol": symbol_str, "price": latest_candle.close, "change": round(change, 4),
-                "changePercent": round(change_percent, 4), "timestamp": latest_candle.timestamp.isoformat()
-            }
-        
-        # Fallback to provider if no data in DB
-        latest_data = await orchestrator.get_candles(
-            db=db, symbol_id=symbol_obj.id, ticker=symbol_str, interval=interval,
-            start=None, end=None, local_only=False
-        )
-        if latest_data:
-            latest = latest_data[-1]
-            prev = latest_data[-2] if len(latest_data) > 1 else None
-            change = latest["close"] - prev["close"] if prev else 0
-            change_percent = (change / prev["close"]) * 100 if prev and prev["close"] != 0 else 0
-            ts_val = latest["timestamp"]
-            ts_str = ts_val.isoformat() if hasattr(ts_val, 'isoformat') else str(ts_val)
-            return {
-                "symbol": symbol_str, "price": latest["close"], "change": round(change, 4),
-                "changePercent": round(change_percent, 4), "timestamp": ts_str
-            }
-        return {"symbol": symbol_str, "error": "No data available"}
+            latest_candle = latest_candle_q.scalars().first()
 
-    except Exception as e:
-        return {"symbol": symbol_str, "error": str(e)}
+            if latest_candle:
+                prev_candle_q = await db.execute(
+                    select(Candle).where(Candle.symbol_id == symbol_obj.id, Candle.interval == interval,
+                                         Candle.timestamp < latest_candle.timestamp)
+                    .order_by(desc(Candle.timestamp)).limit(1)
+                )
+                prev_candle = prev_candle_q.scalars().first()
+                change = latest_candle.close - prev_candle.close if prev_candle else 0
+                change_percent = (change / prev_candle.close) * 100 if prev_candle and prev_candle.close else 0
+                return {
+                    "symbol": symbol_str, "price": latest_candle.close, "change": round(change, 4),
+                    "changePercent": round(change_percent, 4), "timestamp": latest_candle.timestamp.isoformat()
+                }
+
+            # Fallback to provider if no data in DB
+            latest_data = await orchestrator.get_candles(
+                db=db, symbol_id=symbol_obj.id, ticker=symbol_str, interval=interval,
+                start=None, end=None, local_only=False
+            )
+            if latest_data:
+                latest = latest_data[-1]
+                prev = latest_data[-2] if len(latest_data) > 1 else None
+                change = latest["close"] - prev["close"] if prev else 0
+                change_percent = (change / prev["close"]) * 100 if prev and prev["close"] != 0 else 0
+                ts_val = latest["timestamp"]
+                ts_str = ts_val.isoformat() if hasattr(ts_val, 'isoformat') else str(ts_val)
+                return {
+                    "symbol": symbol_str, "price": latest["close"], "change": round(change, 4),
+                    "changePercent": round(change_percent, 4), "timestamp": ts_str
+                }
+            return {"symbol": symbol_str, "error": "No data available"}
+
+        except Exception as e:
+            return {"symbol": symbol_str, "error": str(e)}
 
 # --- API Endpoints ---
 
@@ -168,13 +175,21 @@ async def update_latest(
 async def get_latest_prices(
     symbols: str,
     interval: str = Query("1d", description="Timeframe for latest data (default: 1d)"),
-    db: AsyncSession = Depends(get_db),
     orchestrator: DataOrchestrator = Depends(get_orchestrator)
 ):
+    import asyncio
     symbol_list = [s.strip().upper() for s in symbols.split(',')]
-    tasks = [_get_price_for_symbol(s, interval, db, orchestrator) for s in symbol_list]
-    results = await asyncio.gather(*tasks)
-    return results
+    # Each task creates its own database session to avoid concurrency issues
+    tasks = [_get_price_for_symbol(s, interval, orchestrator) for s in symbol_list]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    # Handle any exceptions that occurred during concurrent execution
+    formatted_results = []
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            formatted_results.append({"symbol": symbol_list[i], "error": str(result)})
+        else:
+            formatted_results.append(result)
+    return formatted_results
 
 @router.websocket("/ws/{symbol}")
 async def websocket_endpoint(

@@ -103,7 +103,7 @@ export function useIndicators(currentSymbol: string) {
   }, [indicatorMetadataCache]);
 
   // T039 [US2]: Implement loadIndicatorsForSymbol function
-  const loadIndicatorsForSymbol = useCallback(async (symbol: string) => {
+  const loadIndicatorsForSymbol = useCallback((symbol: string) => {
     const stored = loadIndicatorsFromStorage();
     const symbolState = stored[symbol];
 
@@ -114,55 +114,62 @@ export function useIndicators(currentSymbol: string) {
         (ind.indicatorType.category !== 'overlay' && ind.indicatorType.category !== 'oscillator')
       );
 
-      let updatedIndicators = [...symbolState.indicators];
-
       // If there are indicators with missing categories, fetch the correct metadata
       if (indicatorsWithMissingCategories.length > 0) {
-        try {
-          // Get indicator metadata (from cache or API)
-          const indicatorMap = await fetchAndCacheIndicatorMetadata();
-
-          // Update indicators with missing categories
-          updatedIndicators = symbolState.indicators.map(ind => {
-            if (!ind.indicatorType.category ||
-                (ind.indicatorType.category !== 'overlay' && ind.indicatorType.category !== 'oscillator')) {
-              // Find the correct metadata for this indicator
-              const metadata = indicatorMap.get(ind.indicatorType.name);
-              if (metadata && metadata.category) {
-                // Update the indicator with the correct category
-                return {
-                  ...ind,
-                  indicatorType: {
-                    ...ind.indicatorType,
-                    category: metadata.category
-                  }
-                };
+        // Fetch all indicator metadata from the backend in the background
+        fetchAndCacheIndicatorMetadata()
+          .then(indicatorMap => {
+            // Update indicators with missing categories
+            const updatedIndicators = symbolState.indicators.map(ind => {
+              if (!ind.indicatorType.category ||
+                  (ind.indicatorType.category !== 'overlay' && ind.indicatorType.category !== 'oscillator')) {
+                // Find the correct metadata for this indicator
+                const metadata = indicatorMap.get(ind.indicatorType.name);
+                if (metadata && metadata.category) {
+                  // Update the indicator with the correct category
+                  return {
+                    ...ind,
+                    indicatorType: {
+                      ...ind.indicatorType,
+                      category: metadata.category
+                    }
+                  };
+                }
               }
-            }
-            return ind;
+              return ind;
+            });
+
+            // Update the stored data with corrected indicators
+            const updatedStored = { ...stored };
+            updatedStored[symbol] = {
+              ...symbolState,
+              indicators: updatedIndicators
+            };
+            saveIndicatorsToStorage(updatedStored);
+
+            // Update the state with corrected indicators
+            setIndicators(updatedIndicators);
+            setActiveIndicatorId(symbolState.activeIndicatorId);
+            setIsLoaded(true);
+          })
+          .catch(error => {
+            console.error('Error updating indicator categories:', error);
+            // If there's an error, still use the original indicators
+            setIndicators(symbolState.indicators);
+            setActiveIndicatorId(symbolState.activeIndicatorId);
+            setIsLoaded(true);
           });
-
-          // Update the stored data with corrected indicators
-          const updatedStored = { ...stored };
-          updatedStored[symbol] = {
-            ...symbolState,
-            indicators: updatedIndicators
-          };
-          saveIndicatorsToStorage(updatedStored);
-        } catch (error) {
-          console.error('Error updating indicator categories:', error);
-          // If there's an error, still use the original indicators
-          updatedIndicators = symbolState.indicators;
-        }
+      } else {
+        // No indicators need category updates, proceed normally
+        setIndicators(symbolState.indicators);
+        setActiveIndicatorId(symbolState.activeIndicatorId);
+        setIsLoaded(true);
       }
-
-      setIndicators(updatedIndicators);
-      setActiveIndicatorId(symbolState.activeIndicatorId);
     } else {
       setIndicators([]);
       setActiveIndicatorId(null);
+      setIsLoaded(true);
     }
-    setIsLoaded(true);
   }, [fetchAndCacheIndicatorMetadata]);
 
   // T040 [US2]: Implement saveIndicatorsForSymbol function
@@ -178,10 +185,7 @@ export function useIndicators(currentSymbol: string) {
   // Load indicators when symbol changes
   useEffect(() => {
     if (currentSymbol) {
-      const loadIndicators = async () => {
-        await loadIndicatorsForSymbol(currentSymbol);
-      };
-      loadIndicators();
+      loadIndicatorsForSymbol(currentSymbol);
     }
   }, [currentSymbol, loadIndicatorsForSymbol]);
 

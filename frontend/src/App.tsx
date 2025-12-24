@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import './App.css'
 import Layout from './components/Layout'
-import Toolbar from './components/Toolbar'
+import Toolbar, { type DataMode } from './components/Toolbar'
 import Watchlist from './components/Watchlist'
 import AlertsView from './components/AlertsView'
 import ChartComponent from './components/ChartComponent'
@@ -19,8 +19,10 @@ import { IndicatorDialog } from './components/indicators/IndicatorDialog'
 import { useIndicatorData } from './hooks/useIndicatorData'
 import type { IndicatorOutput } from './components/types/indicators'
 import type { Time, IRange } from 'lightweight-charts'
-import { getLatestPrices } from './api/watchlist'
-import { useWebSocket } from './hooks/useWebSocket';
+import { useWebSocket } from './hooks/useWebSocket'
+import { CandleDataProvider } from './components/CandleDataProvider'
+import { WatchlistDataProvider } from './components/WatchlistDataProvider'
+import type { WatchlistItem } from './api/watchlist'
 
 interface AppContentProps {
   symbol: string
@@ -29,6 +31,7 @@ interface AppContentProps {
 
 function AppContent({ symbol, setSymbol }: AppContentProps) {
   const [chartInterval, setChartInterval] = useState('1d')
+  const [dataMode, setDataMode] = useState<DataMode>('websocket') // T026: Data mode toggle state
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
   const mainViewportRef = useRef<HTMLDivElement>(null)
@@ -37,14 +40,14 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   const indicatorTimeScalesRef = useRef<Map<string, any>>(new Map())
   const { connect, disconnect, lastMessage } = useWebSocket();
 
-  const [watchlist, setWatchlist] = useState(() => {
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>(() => {
     const symbols = loadWatchlist()
     return symbols.map(s => {
         const charSum = s.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         const basePrice = 100 + (charSum % 200);
         const change = (charSum % 10) - 5;
         const changePercent = (change / basePrice) * 100;
-        
+
         return {
             symbol: s,
             price: basePrice,
@@ -68,27 +71,39 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   const [error, setError] = useState<string | null>(null) // T102: Error state
   const mainChartRef = useRef<any>(null)
   const indicatorChartsRef = useRef<Map<string, { chart: any; series: any }>>(new Map())
+  // T072: Store the polling refresh function for manual refresh button
+  const candleRefreshRef = useRef<(() => void) | null>(null)
 
   // Use the new indicator system
-  const { indicators, addIndicator } = useIndicatorContext()
+  const { indicators, addIndicator, removeIndicator } = useIndicatorContext()
   const indicatorDataMap = useIndicatorData(indicators, symbol, chartInterval)
 
-  // Effect to automatically add new indicators to the active layout
+  // Effect to automatically sync indicators with the active layout
+  // - Adds new indicators from context to activeLayout.activeIndicators
+  // - Removes indicators from activeLayout.activeIndicators that are no longer in context
   useEffect(() => {
-    if (indicators.length > 0 && activeLayout) {
+    if (activeLayout) {
       // Get all indicator names from the context
       const contextIndicatorNames = indicators.map(ind => ind.indicatorType.name.toLowerCase());
 
-      // Find indicators that are in the context but not in the active layout
+      // Find indicators that are in the context but not in the active layout (to add)
       const missingFromActiveLayout = contextIndicatorNames.filter(name =>
         !activeLayout.activeIndicators.includes(name)
       );
 
-      // Add missing indicators to the active layout
-      if (missingFromActiveLayout.length > 0) {
+      // Find indicators that are in the active layout but not in the context (to remove)
+      const removedFromContext = activeLayout.activeIndicators.filter(name =>
+        !contextIndicatorNames.includes(name)
+      );
+
+      // Update active layout if there are changes
+      if (missingFromActiveLayout.length > 0 || removedFromContext.length > 0) {
         const updated: LayoutType = {
           ...activeLayout,
-          activeIndicators: [...activeLayout.activeIndicators, ...missingFromActiveLayout]
+          activeIndicators: [
+            ...activeLayout.activeIndicators.filter(name => !removedFromContext.includes(name)),
+            ...missingFromActiveLayout
+          ]
         };
 
         setActiveLayout(updated);
@@ -181,56 +196,16 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     saveAlerts(alerts)
   }, [alerts])
 
-  // Periodically update watchlist with real-time data
   useEffect(() => {
-    if (watchlist.length === 0) return; // Don't start timer if no symbols
-
-    const updateWatchlistPrices = async () => {
-      try {
-        const symbols = watchlist.map(item => item.symbol);
-        const latestPrices = await getLatestPrices(symbols);
-
-        setWatchlist(prevWatchlist => {
-          const updatedWatchlist = [...prevWatchlist];
-
-          for (const priceData of latestPrices) {
-            const index = updatedWatchlist.findIndex(item => item.symbol === priceData.symbol);
-            if (index !== -1 && !priceData.error) {
-              updatedWatchlist[index] = {
-                symbol: priceData.symbol,
-                price: priceData.price,
-                change: priceData.change,
-                changePercent: priceData.changePercent
-              };
-            }
-          }
-
-          return updatedWatchlist;
-        });
-      } catch (error) {
-        console.error('Error updating watchlist prices:', error);
-      }
-    };
-
-    // Update watchlist every 30 seconds
-    const intervalId = setInterval(updateWatchlistPrices, 30000);
-
-    // Initial update
-    updateWatchlistPrices();
-
-    return () => clearInterval(intervalId);
-  }, [watchlist])
-
-  useEffect(() => {
-    // Connect to websocket for real-time updates
-    if (symbol && chartInterval) {
+    // Connect to websocket for real-time updates only in WebSocket mode
+    if (dataMode === 'websocket' && symbol && chartInterval) {
         const wsUrl = `ws://localhost:8000/api/v1/candles/ws/${symbol}?interval=${chartInterval}`;
         connect(wsUrl);
     }
     return () => {
         disconnect();
     };
-  }, [symbol, chartInterval, connect, disconnect]);
+  }, [symbol, chartInterval, connect, disconnect, dataMode]);
 
   useEffect(() => {
     if (lastMessage) {
@@ -436,6 +411,18 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     }
   }, [])
 
+  // T026: Toggle between WebSocket and polling modes
+  const handleDataModeToggle = useCallback(() => {
+    setDataMode(prev => prev === 'websocket' ? 'polling' : 'websocket')
+  }, [])
+
+  // T072: Handle manual refresh button click
+  const handleManualRefresh = useCallback(() => {
+    if (dataMode === 'polling' && candleRefreshRef.current) {
+      candleRefreshRef.current()
+    }
+  }, [dataMode])
+
   // Separate overlay indicators from pane indicators
   const overlayIndicators = useMemo(() => {
     return indicators.filter(ind => ind.indicatorType.category === 'overlay')
@@ -617,13 +604,19 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
           <Layout
             alertsBadgeCount={triggeredCount}
             watchlistContent={
-                <Watchlist 
-                    items={watchlist}
-                    onAddClick={() => setIsSearchOpen(true)}
-                    onRemove={(symbols) => setWatchlist(prev => prev.filter(item => !symbols.includes(item.symbol)))}
-                    onSelect={setSymbol}
-                    onReorder={setWatchlist}
-                />
+                <WatchlistDataProvider symbols={watchlist.map(item => item.symbol)}>
+                    {(watchlistState) => (
+                        <Watchlist
+                            items={watchlistState.entries.length > 0 ? watchlistState.entries : watchlist}
+                            onAddClick={() => setIsSearchOpen(true)}
+                            onRemove={(symbols) => setWatchlist(prev => prev.filter(item => !symbols.includes(item.symbol)))}
+                            onSelect={setSymbol}
+                            onReorder={setWatchlist}
+                            isRefreshing={watchlistState.isRefreshing}
+                            lastUpdate={watchlistState.lastUpdate}
+                        />
+                    )}
+                </WatchlistDataProvider>
             }
             alertsContent={
                 <AlertsView
@@ -654,6 +647,34 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                     onToggleIndicatorVisibility={toggleIndicatorVisibility}
                     onToggleSeriesVisibility={toggleSeriesVisibility}
                     onToggleLevelsVisibility={toggleLevelsVisibility}
+                    onRemoveIndicator={(indicatorIdOrName) => {
+                        // indicatorIdOrName can be either:
+                        // 1. A unique pane ID like "indicator-1234567890-abc123"
+                        // 2. A type name like "sma" (from activeLayout.activeIndicators)
+
+                        // First, try to find an indicator with matching ID
+                        const matchingById = indicators.find(ind => ind.id === indicatorIdOrName);
+
+                        if (matchingById) {
+                            // It's a unique ID, remove directly
+                            removeIndicator(indicatorIdOrName);
+                            return;
+                        }
+
+                        // It's a type name, find the first indicator with matching type (case-insensitive)
+                        const matchingByType = indicators.find(ind =>
+                            ind.indicatorType.name.toLowerCase() === indicatorIdOrName.toLowerCase()
+                        );
+
+                        if (matchingByType) {
+                            removeIndicator(matchingByType.id);
+                        } else {
+                            console.warn(`Could not find indicator to remove: ${indicatorIdOrName}`);
+                        }
+                    }}
+                    dataMode={dataMode}
+                    onDataModeToggle={handleDataModeToggle}
+                    onManualRefresh={handleManualRefresh}
                 />
 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -661,55 +682,133 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                             <OHLCDisplayWithTime candle={crosshairCandle} interval={chartInterval} />
                         </div>
                         <div style={{ height: mainHeight }} className="shrink-0 bg-slate-900 border-b-0 border-slate-800 relative min-h-0 overflow-hidden w-full">
-                            {/* T101: Loading state - spinner while fetching initial data */}
-                            {isInitialLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
-                                    <div className="flex flex-col items-center gap-3">
-                                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
-                                        <span className="text-slate-400 text-sm">Loading chart data...</span>
-                                    </div>
-                                </div>
+                            {/* T026: Conditional rendering based on data mode */}
+                            {dataMode === 'polling' ? (
+                                /* Polling mode: Use CandleDataProvider wrapper */
+                                <CandleDataProvider symbol={symbol} interval={chartInterval}>
+                                    {(candleState) => {
+                                        // T072: Store the refresh function for manual refresh button
+                                        candleRefreshRef.current = candleState.refresh
+
+                                        return (
+                                        <>
+                                            {/* T027: Loading indicator display */}
+                                            {candleState.isLoading && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                                                        <span className="text-slate-400 text-sm">Loading chart data...</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* T037: Visual refresh indicator during background updates */}
+                                            {candleState.isRefreshing && !candleState.isLoading && (
+                                                <div className="absolute top-2 right-2 z-10">
+                                                    <div className="flex items-center gap-2 bg-slate-800 px-2 py-1 rounded">
+                                                        <div className="animate-spin rounded-full h-3 w-3 border border-blue-400 border-t-transparent"></div>
+                                                        <span className="text-xs text-slate-400">Updating...</span>
+                                                        {/* T029: Last update timestamp display */}
+                                                        {candleState.lastUpdate && (
+                                                            <span className="text-xs text-slate-500">
+                                                                {candleState.lastUpdate.toLocaleTimeString()}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* T029: Last update timestamp display (when not refreshing) */}
+                                            {!candleState.isRefreshing && !candleState.isLoading && candleState.lastUpdate && (
+                                                <div className="absolute top-2 right-2 z-10">
+                                                    <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded">
+                                                        Updated: {candleState.lastUpdate.toLocaleTimeString()}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {/* T028: Error display */}
+                                            {candleState.error && !candleState.isLoading && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                                    <div className="flex flex-col items-center gap-3 text-center px-4">
+                                                        <div className="text-red-400 text-sm font-medium">{candleState.error}</div>
+                                                        <button
+                                                            onClick={candleState.refresh}
+                                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                                                        >
+                                                            Retry
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <ChartComponent
+                                                key={`${symbol}-${chartInterval}-polling`}
+                                                symbol={symbol}
+                                                candles={candleState.candles}
+                                                width={dimensions.width}
+                                                height={mainHeight}
+                                                onTimeScaleInit={setMainTimeScale}
+                                                onCrosshairMove={handleMainCrosshairMove}
+                                                overlays={overlays}
+                                                onVisibleTimeRangeChange={handleVisibleTimeRangeChange}
+                                                showVolume={true}
+                                                showLastPrice={true}
+                                            />
+                                        </>
+                                        )
+                                    }}
+                                </CandleDataProvider>
+                            ) : (
+                                /* WebSocket mode: Use existing behavior */
+                                <>
+                                    {/* T101: Loading state - spinner while fetching initial data */}
+                                    {isInitialLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                            <div className="flex flex-col items-center gap-3">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent"></div>
+                                                <span className="text-slate-400 text-sm">Loading chart data...</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* T102: Error state - show error message */}
+                                    {error && !isInitialLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
+                                            <div className="flex flex-col items-center gap-3 text-center px-4">
+                                                <div className="text-red-400 text-sm font-medium">{error}</div>
+                                                <button
+                                                    onClick={() => {
+                                                        setError(null)
+                                                        // Trigger refetch by changing symbol then changing back
+                                                        const currentSymbol = symbol
+                                                        setSymbol('')
+                                                        setTimeout(() => setSymbol(currentSymbol), 0)
+                                                    }}
+                                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
+                                                >
+                                                    Retry
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    <ChartComponent
+                                        key={`${symbol}-${chartInterval}`}
+                                        symbol={symbol}
+                                        candles={candles}
+                                        width={dimensions.width}
+                                        height={mainHeight}
+                                        onTimeScaleInit={setMainTimeScale}
+                                        onCrosshairMove={handleMainCrosshairMove}
+                                        overlays={overlays}
+                                        onVisibleTimeRangeChange={handleVisibleTimeRangeChange}
+                                        showVolume={true}
+                                        showLastPrice={true}
+                                    />
+                                </>
                             )}
-                            {/* T102: Error state - show error message */}
-                            {error && !isInitialLoading && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-slate-900 z-10">
-                                    <div className="flex flex-col items-center gap-3 text-center px-4">
-                                        <div className="text-red-400 text-sm font-medium">{error}</div>
-                                        <button
-                                            onClick={() => {
-                                                setError(null)
-                                                // Trigger refetch by changing symbol then changing back
-                                                const currentSymbol = symbol
-                                                setSymbol('')
-                                                setTimeout(() => setSymbol(currentSymbol), 0)
-                                            }}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
-                                        >
-                                            Retry
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                            <ChartComponent
-                                key={`${symbol}-${chartInterval}`}
-                                symbol={symbol}
-                                candles={candles}
-                                width={dimensions.width}
-                                height={mainHeight}
-                                onTimeScaleInit={setMainTimeScale}
-                                onCrosshairMove={handleMainCrosshairMove}
-                                overlays={overlays}
-                                onVisibleTimeRangeChange={handleVisibleTimeRangeChange}
-                                showVolume={true}
-                                showLastPrice={true}
-                            />
                         </div>
 
                         {/* Dynamically render indicator panes */}
                         {paneIndicators.length > 0 && (
                             <div className="flex flex-col gap-0 flex-1 min-h-0 w-full">
                                 {paneIndicators.map((ind, index) => {
-                                    const data = indicatorDataMap[ind.id]
+                                    const data = indicatorDataMap[ind.id] ?? undefined
                                     const isVisible = ind.displaySettings.visible && indicatorSettings[ind.id]?.visible !== false
                                     const isLast = index === paneIndicators.length - 1
 
@@ -719,9 +818,26 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                     return (
                                         <div
                                             key={ind.id}
-                                            className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800 w-full"
+                                            className="flex-1 bg-slate-900 p-1 border border-t-0 border-slate-800 w-full relative"
                                             style={{ borderRadius: isLast ? '0 0 0.5rem 0.5rem' : '0' }}
                                         >
+                                            {/* Remove button for the indicator pane */}
+                                            <button
+                                                onClick={() => removeIndicator(ind.id)}
+                                                className="absolute top-2 right-2 z-20 p-1 rounded bg-slate-800 hover:bg-red-900 text-slate-400 hover:text-white transition-colors"
+                                                title="Remove indicator"
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    className="h-3 w-3"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                >
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+
                                             <IndicatorPane
                                                 name={ind.name}
                                                 symbol={symbol}

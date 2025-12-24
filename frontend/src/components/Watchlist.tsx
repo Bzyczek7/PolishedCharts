@@ -43,9 +43,10 @@ import {
 
 interface WatchlistItemData {
   symbol: string
-  price: number
-  change: number
-  changePercent: number
+  price?: number
+  change?: number
+  changePercent?: number
+  error?: string
 }
 
 // Mock details lookup
@@ -66,6 +67,8 @@ interface WatchlistProps {
   onRemove: (symbols: string[]) => void
   onSelect: (symbol: string) => void
   onReorder: (items: WatchlistItemData[]) => void
+  isRefreshing?: boolean
+  lastUpdate?: Date | null
 }
 
 type SortField = 'symbol' | 'price' | 'changePercent'
@@ -108,16 +111,18 @@ const WatchlistItem = ({
   }
 
   useEffect(() => {
-    if (item.price > prevPriceRef.current) {
-      setFlash("up")
-      const timer = setTimeout(() => setFlash(null), 1000)
-      return () => clearTimeout(timer)
-    } else if (item.price < prevPriceRef.current) {
-      setFlash("down")
-      const timer = setTimeout(() => setFlash(null), 1000)
-      return () => clearTimeout(timer)
+    if (item.price !== undefined && item.price !== prevPriceRef.current) {
+      if (prevPriceRef.current !== undefined && item.price > prevPriceRef.current) {
+        setFlash("up")
+        const timer = setTimeout(() => setFlash(null), 1000)
+        return () => clearTimeout(timer)
+      } else if (prevPriceRef.current !== undefined && item.price < prevPriceRef.current) {
+        setFlash("down")
+        const timer = setTimeout(() => setFlash(null), 1000)
+        return () => clearTimeout(timer)
+      }
+      prevPriceRef.current = item.price
     }
-    prevPriceRef.current = item.price
   }, [item.price])
 
   return (
@@ -186,8 +191,8 @@ const WatchlistItem = ({
                                 </div>
                                 <div className="space-y-0.5">
                                     <p className="text-[10px] text-slate-500 uppercase font-semibold">Price Chg</p>
-                                    <p className={cn("text-xs font-medium", item.change >= 0 ? "text-emerald-500" : "text-rose-500")}>
-                                        {item.change >= 0 ? "+" : ""}{item.change.toFixed(2)}
+                                    <p className={cn("text-xs font-medium", (item.change ?? 0) >= 0 ? "text-emerald-500" : "text-rose-500")}>
+                                        {item.change !== undefined ? (item.change >= 0 ? "+" : "") + item.change.toFixed(2) : "--"}
                                     </p>
                                 </div>
                             </div>
@@ -195,19 +200,31 @@ const WatchlistItem = ({
                     </TooltipContent>
                 </Tooltip>
           </TableCell>
-          <TableCell 
+          <TableCell
             className={cn(
                 "text-right text-slate-300 transition-colors duration-300",
                 flash === "up" && "bg-emerald-500/20 text-emerald-400",
                 flash === "down" && "bg-rose-500/20 text-rose-400"
             )}
           >
-            {item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {item.error ? (
+              <span className="text-slate-600 text-xs">{item.error}</span>
+            ) : item.price !== undefined ? (
+              item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ) : (
+              <span className="text-slate-600 text-xs">--</span>
+            )}
           </TableCell>
           <TableCell className="text-right">
-            <span className={item.change >= 0 ? "text-emerald-500" : "text-rose-500"}>
-              {item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%
-            </span>
+            {item.error ? (
+              <span className="text-slate-600 text-xs">--</span>
+            ) : item.changePercent !== undefined ? (
+              <span className={(item.change ?? 0) >= 0 ? "text-emerald-500" : "text-rose-500"}>
+                {item.changePercent >= 0 ? "+" : ""}{item.changePercent.toFixed(2)}%
+              </span>
+            ) : (
+              <span className="text-slate-600 text-xs">--</span>
+            )}
           </TableCell>
         </TableRow>
       </ContextMenuTrigger>
@@ -229,7 +246,7 @@ const WatchlistItem = ({
   )
 }
 
-const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: WatchlistProps) => {
+const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder, isRefreshing, lastUpdate }: WatchlistProps) => {
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>([])
   const [selectionMode, setSelectionMode] = useState(false)
   const [sortField, setSortField] = useState<SortField | null>(null)
@@ -293,14 +310,14 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
         if (sortOrder === 'asc') newOrder = 'desc'
         else if (sortOrder === 'desc') newOrder = null
     }
-    
+
     setSortField(newOrder ? field : null)
     setSortOrder(newOrder)
 
     if (newOrder) {
         const sorted = [...items].sort((a, b) => {
-            const valA = a[field]
-            const valB = b[field]
+            const valA = a[field] ?? 0
+            const valB = b[field] ?? 0
             if (valA < valB) return newOrder === 'asc' ? -1 : 1
             if (valA > valB) return newOrder === 'asc' ? 1 : -1
             return 0
@@ -322,11 +339,18 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
         <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
             Watchlist
+            {/* T049: Visual refresh indicator during background updates */}
+            {isRefreshing && (
+                <span className="ml-2 flex items-center gap-1 text-xs text-slate-600">
+                    <div className="animate-spin rounded-full h-2 w-2 border border-slate-500 border-t-transparent"></div>
+                    Updating...
+                </span>
+            )}
             </h2>
             {items.length > 0 && (
-                <Button 
-                    variant="ghost" 
-                    size="sm" 
+                <Button
+                    variant="ghost"
+                    size="sm"
                     className={cn(
                         "h-6 px-2 text-[10px] uppercase font-bold",
                         selectionMode ? "text-blue-400 bg-blue-500/10" : "text-slate-600 hover:text-slate-400"
@@ -337,7 +361,14 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
                 </Button>
             )}
         </div>
-        
+
+        <div className="flex items-center gap-2">
+            {/* T050: Last update timestamp display */}
+            {lastUpdate && !isRefreshing && items.length > 0 && (
+                <span className="text-[10px] text-slate-600">
+                    {lastUpdate.toLocaleTimeString()}
+                </span>
+            )}
         {selectionMode ? (
             <Button 
                 variant="ghost" 
@@ -359,6 +390,7 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder }: Watchli
                 <Plus className="h-4 w-4" />
             </Button>
         )}
+        </div>
       </div>
 
       {items.length === 0 ? (

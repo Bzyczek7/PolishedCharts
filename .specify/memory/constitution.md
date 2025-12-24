@@ -2,15 +2,16 @@
 
 <!--
 Sync Impact Report:
-- Version change: (none) → 1.0.0 (initial ratification)
-- Modified principles: (initial creation)
-- Added sections: All 9 core principles, Performance Budgets, Development Standards, Governance
+- Version change: 1.0.0 → 1.1.0 (MINOR: material expansion - machine-verifiable parity evidence)
+- Modified principles: I. UX Parity with TradingView (Requirements), Development Standards (Review Process)
+- Added sections: None
 - Removed sections: None
 - Templates requiring updates:
-  ✅ .specify/templates/plan-template.md (Constitution Check section - updated below)
+  ✅ .specify/templates/plan-template.md (Constitution Check section - auto-sync)
   ✅ .specify/templates/spec-template.md (already aligned)
   ✅ .specify/templates/tasks-template.md (already aligned with TDD principles)
 - Follow-up TODOs: None
+- Rationale: Replace screenshot/clip requirements with machine-verifiable parity evidence (Feature 005 alignment)
 -->
 
 ## Core Principles
@@ -28,7 +29,18 @@ Chart interactions MUST feel "TradingView-native":
 **Rationale**: The primary value proposition is a local TradingView alternative. Any deviation from TradingView's interaction model creates friction for users familiar with that platform.
 
 **Requirements**:
-- UI changes require before/after screenshots or short clips and explicit acceptance criteria
+- UI changes require machine-verifiable parity evidence and explicit acceptance criteria.
+  Accepted proof artifacts (must be committed or attached to PR):
+
+  - A fixture ID (or deterministic dataset) + exact reproduction steps (symbol, interval, indicator params, visible-range rule).
+  - Automated test output: unit/integration tests that validate indicator values, pane placement, axis bounds, and regime thresholds.
+  - A generated "Parity Report" (Markdown or JSON) containing:
+    - indicator components present (e.g., bands/levels/zero-line),
+    - axis scaling bounds (e.g., cRSI locked 0–100),
+    - threshold indices for regime transitions (e.g., TDFI crosses ±0.05),
+    - crosshair sync assertion results (same timestamp across panes),
+    - color palette verification (hex codes used per regime).
+  - Optional: screenshots/videos may be attached for human review, but are not required and are not considered acceptance proof.
 - Zoom/pan animations must run at 60fps minimum
 - Candle rendering must match TradingView's visual style (wick, body, colors, spacing)
 - Grid lines, price labels, and time axis must align with TradingView conventions
@@ -226,7 +238,8 @@ If the constitution conflicts with a spec or plan, the constitution wins until e
 
 - All changes MUST pass CI checks
 - Changes affecting core principles require explicit review against constitution
-- UI changes require visual verification (screenshots or recordings)
+- UI changes require a completed parity checklist plus machine-readable evidence (tests + parity report).
+  Screenshots/recordings are optional and must not be the only acceptance proof.
 
 ---
 
@@ -259,4 +272,4 @@ The following defaults apply to all features unless revised via ADR:
 
 ---
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-23
+**Version**: 1.1.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-25

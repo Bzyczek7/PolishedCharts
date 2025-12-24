@@ -239,6 +239,17 @@ Developers want to add new indicators without modifying chart rendering logic. T
 - **Feature 001 - Initial Setup**: Provides the backend infrastructure, database models, and alert engine foundation
 - **Feature 002 - Supercharts Visuals**: Provides the chart rendering UI, indicator panes, and crosshair/zoom/pan synchronization
 
+### Parity Acceptance
+
+**Feature 005 - Indicator Parity**: Final acceptance of the flagship indicators (cRSI, TDFI, ADXVMA) requires passing the parity validation checks defined in `005-indicator-parity`. This includes:
+
+- Visual parity against TradingView Supercharts reference screenshots
+- Data value validation against frozen fixture data
+- Crosshair and zoom/pan synchronization across all panes
+- Color and regime rendering matching specified hex codes
+
+The 003 feature is considered complete when indicators are functionally implemented and rendering, but full acceptance requires the parity checks in 005 to pass for the agreed symbols and timeframes.
+
 ### Out of Scope for MVP
 
 - Real-time streaming indicator updates (evaluation per candle only)

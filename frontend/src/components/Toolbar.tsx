@@ -1,4 +1,4 @@
-import { Search, Settings, Maximize2, TrendingUp, BarChart3, Waves, LayoutGrid, Save } from "lucide-react"
+import { Search, Settings, Maximize2, TrendingUp, BarChart3, Waves, LayoutGrid, Save, Radio, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
+
+export type DataMode = 'websocket' | 'polling'
 
 export interface Layout {
   id: string
@@ -34,14 +36,18 @@ interface ToolbarProps {
   onToggleIndicatorVisibility: (indicator: string) => void
   onToggleSeriesVisibility: (indicator: string, series: string) => void
   onToggleLevelsVisibility: (indicator: string) => void
+  onRemoveIndicator: (indicatorId: string) => void
+  dataMode: DataMode
+  onDataModeToggle: () => void
+  onManualRefresh?: () => void
 }
 
-const Toolbar = ({ 
-  symbol, 
+const Toolbar = ({
+  symbol,
   interval,
   onIntervalSelect,
-  onSymbolClick, 
-  onIndicatorsClick, 
+  onSymbolClick,
+  onIndicatorsClick,
   onFullscreenToggle,
   activeLayout,
   savedLayouts,
@@ -50,7 +56,11 @@ const Toolbar = ({
   indicatorSettings,
   onToggleIndicatorVisibility,
   onToggleSeriesVisibility,
-  onToggleLevelsVisibility
+  onToggleLevelsVisibility,
+  onRemoveIndicator,
+  dataMode,
+  onDataModeToggle,
+  onManualRefresh
 }: ToolbarProps) => {
   const timeframes = ['1m', '5m', '15m', '30m', '1h', '4h', '1D', '1W']
   const [newLayoutName, setNewLayoutName] = useState('')
@@ -147,23 +157,42 @@ const Toolbar = ({
                         <div key={id} className="p-2 space-y-1 border-b border-slate-800 last:border-0">
                             <div className="flex items-center justify-between text-sm px-2 font-bold text-blue-400">
                                 <span className="capitalize">{id}</span>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="h-6 px-2 text-xs"
-                                    onClick={() => onToggleIndicatorVisibility(id)}
-                                >
-                                    {indicatorSettings[id]?.visible !== false ? "Hide All" : "Show All"}
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-2 text-xs"
+                                        onClick={() => onToggleIndicatorVisibility(id)}
+                                    >
+                                        {indicatorSettings[id]?.visible !== false ? "Hide All" : "Show All"}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 p-0 text-slate-500 hover:text-red-400"
+                                        onClick={() => onRemoveIndicator(id)}
+                                        title="Remove indicator"
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            className="h-3 w-3"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                        >
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </Button>
+                                </div>
                             </div>
-                            
+
                             <div className="ml-2 space-y-1">
                                 {/* Horizontal Thresholds Toggle */}
                                 <div className="flex items-center justify-between text-xs px-2 text-slate-400">
                                     <span>Threshold Levels</span>
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
                                         className="h-5 text-[10px] p-0"
                                         onClick={() => onToggleLevelsVisibility(id)}
                                     >
@@ -175,9 +204,9 @@ const Toolbar = ({
                                     <>
                                         <div className="flex items-center justify-between text-xs px-2 text-slate-400">
                                             <span>RSI Line</span>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 className="h-5 text-[10px] p-0"
                                                 onClick={() => onToggleSeriesVisibility(id, 'crsi')}
                                             >
@@ -186,9 +215,9 @@ const Toolbar = ({
                                         </div>
                                         <div className="flex items-center justify-between text-xs px-2 text-slate-400">
                                             <span>Bands</span>
-                                            <Button 
-                                                variant="ghost" 
-                                                size="sm" 
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
                                                 className="h-5 text-[10px] p-0"
                                                 onClick={() => {
                                                     onToggleSeriesVisibility(id, 'upper_band');
@@ -264,17 +293,40 @@ const Toolbar = ({
 
       {/* Utilities */}
       <div className="ml-auto flex gap-1">
-        <Button 
-            variant="ghost" 
-            size="icon" 
+        {/* Data Mode Toggle */}
+        <Button
+            variant="ghost"
+            size="sm"
+            onClick={onDataModeToggle}
+            className={`h-8 px-2 text-xs ${dataMode === 'polling' ? 'text-blue-400 bg-slate-800' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+            title={`Current: ${dataMode === 'websocket' ? 'WebSocket (real-time)' : 'Polling (periodic refresh)'}`}
+        >
+            <Radio className="h-3 w-3 mr-1" />
+            {dataMode === 'websocket' ? 'WS' : 'Poll'}
+        </Button>
+        {/* Manual Refresh Button - only show in polling mode */}
+        {dataMode === 'polling' && onManualRefresh && (
+            <Button
+                variant="ghost"
+                size="icon"
+                onClick={onManualRefresh}
+                className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
+                title="Refresh candle data"
+            >
+                <RefreshCw className="h-4 w-4" />
+            </Button>
+        )}
+        <Button
+            variant="ghost"
+            size="icon"
             onClick={onFullscreenToggle}
             className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
         >
             <Maximize2 className="h-4 w-4" />
         </Button>
-        <Button 
-            variant="ghost" 
-            size="icon" 
+        <Button
+            variant="ghost"
+            size="icon"
             className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800"
         >
             <Settings className="h-4 w-4" />

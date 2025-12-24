@@ -1,0 +1,233 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Candle API
+  description: API for fetching and managing candle (OHLCV) data with polling support
+  version: 1.0.0
+  contact:
+    name: TradingAlert Project
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+tags:
+  - name: candles
+    description: Candle data operations
+  - name: watchlist
+    description: Watchlist price operations
+
+paths:
+  /candles/{symbol}:
+    get:
+      tags: [candles]
+      summary: Get candle data for a symbol
+      description: |
+        Fetches historical candle data for the specified symbol and interval.
+        Supports time-range filtering and local-only (cache) queries.
+      operationId: getCandles
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stock ticker symbol (e.g., "AAPL")
+          example: AAPL
+        - name: interval
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 1d, 1wk]
+            default: 1d
+          description: Time interval for candles
+          example: 1h
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Start timestamp (UTC) for filtering
+          example: "2024-01-01T00:00:00Z"
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: End timestamp (UTC) for filtering
+          example: "2024-12-31T23:59:59Z"
+        - name: local_only
+          in: query
+          required: false
+          schema:
+            type: boolean
+            default: false
+          description: If true, returns only cached data from database (no external fetch)
+      responses:
+        '200':
+          description: Successful response with candle data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CandleResponse'
+        '404':
+          description: Symbol not found or no data available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+
+  /candles/latest_prices/{symbols}:
+    get:
+      tags: [watchlist]
+      summary: Get latest prices for multiple symbols
+      description: |
+        Fetches the latest price data for multiple symbols in a single batched request.
+        Used for watchlist polling. Symbols are comma-separated.
+      operationId: getLatestPrices
+      parameters:
+        - name: symbols
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Comma-separated list of stock ticker symbols
+          example: "AAPL,GOOGL,MSFT"
+        - name: interval
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 1d, 1wk]
+            default: 1d
+          description: Time interval for price data
+          example: 1d
+      responses:
+        '200':
+          description: Successful response with latest prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LatestPriceResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+
+components:
+  schemas:
+    CandleResponse:
+      type: object
+      required:
+        - ticker
+        - timestamp
+        - open
+        - high
+        - low
+        - close
+        - volume
+      properties:
+        ticker:
+          type: string
+          description: Stock ticker symbol
+          example: AAPL
+        timestamp:
+          type: string
+          format: date-time
+          description: Candle timestamp in UTC (ISO 8601)
+          example: "2024-12-24T14:30:00Z"
+        open:
+          type: number
+          format: float
+          description: Opening price
+          example: 195.25
+        high:
+          type: number
+          format: float
+          description: Highest price
+          example: 196.50
+        low:
+          type: number
+          format: float
+          description: Lowest price
+          example: 194.80
+        close:
+          type: number
+          format: float
+          description: Closing price
+          example: 196.15
+        volume:
+          type: integer
+          description: Trading volume
+          example: 45678900
+
+    LatestPriceResponse:
+      type: object
+      required:
+        - symbol
+        - price
+        - change
+        - changePercent
+        - timestamp
+      properties:
+        symbol:
+          type: string
+          description: Stock ticker symbol
+          example: AAPL
+        price:
+          type: number
+          format: float
+          description: Current/latest price
+          example: 196.15
+        change:
+          type: number
+          format: float
+          description: Price change amount (current - previous close)
+          example: 0.90
+        changePercent:
+          type: number
+          format: float
+          description: Price change percentage
+          example: 0.46
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the price data (UTC)
+          example: "2024-12-24T21:00:00Z"
+        error:
+          type: string
+          description: Error message if price could not be fetched (only present on error)
+          example: "Symbol not found"
+
+    ErrorDetail:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Symbol not found"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for authentication (if required)
+
+security: []

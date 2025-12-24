@@ -340,9 +340,9 @@ This document breaks down the implementation of the advanced indicators feature 
 ### Final Integration Tasks
 
 - [X] T115 Run full test suite and ensure all tests pass
-- [ ] T116 Manual testing of all user stories with before/after screenshots
-- [ ] T117 Performance verification: 60fps with 5 panes
-- [ ] T118 Create git commit with all changes
+- [X] T116 Manual testing of all user stories with before/after screenshots
+- [X] T117 Performance verification: 60fps with 5 panes
+- [X] T118 Create git commit with all changes
 
 ---
 
