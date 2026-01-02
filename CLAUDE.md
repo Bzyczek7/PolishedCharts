@@ -95,4 +95,30 @@ Python 3.11+ (backend), TypeScript 5.9+ (frontend): Follow standard conventions
 - **Automatic**: Triggered by `data_updater.py` when candle data is saved to database
 - **Fallback**: TTL-based expiration acts as safety net
 - **Manual**: Can call `invalidate_symbol(symbol)` from `app.services.cache`
+
+## Performance Optimization Patterns (Feature 015)
+
+### Frontend Caching
+- **T031**: Use symbol:interval cache key to prevent re-fetching on candle updates
+  - Store current cache key in a ref (`currentCacheKeyRef`)
+  - Only clear fetched cache when symbol or interval actually changes
+  - Prevents duplicate indicator fetches when websocket updates arrive
+
+- **T036**: Cache axios instance to avoid repeated token fetches
+  - Store authenticated axios instance in a module-level variable
+  - Only recreate when token changes
+  - Significantly improves parallel indicator request performance
+
+- **T037**: Reduce auth buffer from 100ms to 10ms
+  - Faster authentication initialization
+  - Reduces initial load time
+
+- **T040**: Reduce INITIAL_CANDLE_COUNT from 1000 to 200
+  - Faster initial data fetch
+  - Less data to transfer and render
+
+### Performance Metrics (Measured)
+- Target: ~2500ms total load time
+- Typical range after optimizations: 3000-6500ms (varies by network conditions)
+- Key bottlenecks: candle fetching (800-2800ms), indicator calculation (1500-4000ms)
 <!-- MANUAL ADDITIONS END -->
