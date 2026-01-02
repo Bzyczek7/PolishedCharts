@@ -256,6 +256,9 @@ export function useIndicatorData(
   // T030: Use composite key (id:params) to refetch when params change
   const fetchedRefs = useRef<Set<string>>(new Set());
 
+  // T031: Track current symbol:interval cache key to prevent re-fetching on candle updates
+  const currentCacheKeyRef = useRef<string>('');
+
   // Cache for fixture data to avoid loading multiple times
   const fixtureCacheRef = useRef<FixtureData | null>(null);
 
@@ -376,9 +379,32 @@ export function useIndicatorData(
       return;
     }
 
-    // Clear fetched cache when symbol or interval changes
-    // This ensures indicators are re-fetched for the new ticker
-    fetchedRefs.current.clear();
+    // T031: Only clear fetched cache when symbol or interval changes
+    // This prevents re-fetching when candles update (e.g., websocket updates)
+    const cacheKey = `${symbol}:${interval}`;
+    const isNewSymbol = currentCacheKeyRef.current !== cacheKey;
+    if (isNewSymbol) {
+      fetchedRefs.current.clear();
+      currentCacheKeyRef.current = cacheKey;
+    }
+
+    // Check if we need to fetch anything
+    // Only fetch if: new symbol, or indicators were added, or params changed
+    const indicatorsToFetch = indicators.filter(ind => {
+      const fetchKey = getIndicatorFetchKey(ind);
+      return !fetchedRefs.current.has(fetchKey);
+    });
+
+    // If no indicators need fetching and we have data, skip the fetchAll call
+    const hasExistingData = indicators.every(ind => {
+      const fetchKey = getIndicatorFetchKey(ind);
+      return fetchedRefs.current.has(fetchKey) && dataMapRef.current[ind.id] !== undefined;
+    });
+
+    if (hasExistingData && !isNewSymbol && indicatorsToFetch.length === 0) {
+      // Already have all indicator data, skip fetching
+      return;
+    }
 
     // Initialize data map with null values for new indicators to prevent race conditions
     const initialDataMap = { ...dataMapRef.current };
