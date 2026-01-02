@@ -308,13 +308,18 @@ def generate_indicator_cache_key(
     """
     Generate a cache key for indicator calculations.
 
+    NOTE: from_ts and to_ts are NOT included in the cache key because:
+    1. Indicator calculation is the expensive part (pandas-ta computation)
+    2. Date filtering happens AFTER calculation, so result is the same
+    3. Including timestamps prevents cache hits when reloading same symbol
+
     Args:
         symbol: Stock symbol
         interval: Time interval
         indicator_name: Name of the indicator
         params: Indicator parameters
-        from_ts: Start date (for zooming/scrolling)
-        to_ts: End date (for zooming/scrolling)
+        from_ts: Start date (for zooming/scrolling) - NOT used in key
+        to_ts: End date (for zooming/scrolling) - NOT used in key
 
     Returns:
         A cache key
@@ -322,14 +327,8 @@ def generate_indicator_cache_key(
     # Sort params for consistency
     sorted_params = sorted(params.items())
 
-    # Create param string
+    # Create param string - NO date range (see docstring)
     param_str = ",".join(f"{k}={v}" for k, v in sorted_params)
-
-    # Add date range to key (critical for zooming/scrolling)
-    if from_ts or to_ts:
-        from_str = from_ts.isoformat() if from_ts else "None"
-        to_str = to_ts.isoformat() if to_ts else "None"
-        param_str += f"|range={from_str},{to_str}"
 
     return generate_cache_key(symbol, interval, indicator_name, param_str)
 

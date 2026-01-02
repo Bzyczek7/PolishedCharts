@@ -38,15 +38,16 @@ const DEFAULT_CONFIG: IndicatorCacheConfig = {
 
 /**
  * Generate cache key from indicator parameters
- * Includes optional date range to prevent cache collisions when using date-filtered queries
+ * NOTE: Date range NOT included because indicator calculation is expensive,
+ * filtering happens after. Same symbol/indicator/params = same cache.
  */
 function generateIndicatorCacheKey(
   symbol: string,
   interval: string,
   indicatorName: string,
   params: Record<string, number | string>,
-  from?: string,  // Optional date range start
-  to?: string     // Optional date range end
+  _from?: string,  // Optional date range start - NOT used in key
+  _to?: string     // Optional date range end - NOT used in key
 ): string {
   // Sort params for consistency
   const sortedParams = Object.entries(params)
@@ -54,9 +55,8 @@ function generateIndicatorCacheKey(
     .map(([k, v]) => `${k}=${v}`)
     .join('&');
 
-  // Append date range to cache key if provided
-  const rangeKey = (from && to) ? `:${from}:${to}` : '';
-  return `${symbol.toLowerCase()}:${interval}:${indicatorName}:${sortedParams}${rangeKey}`;
+  // No date range in key (see function docstring)
+  return `${symbol.toLowerCase()}:${interval}:${indicatorName}:${sortedParams}`;
 }
 
 /**
