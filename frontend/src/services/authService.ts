@@ -44,7 +44,7 @@ async function waitForAuthReady(): Promise<void> {
 
   // Create a new wait promise
   authInitPromise = new Promise<void>((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
       unsubscribe();
       // T037: Reduced buffer from 100ms to 10ms for faster auth
       setTimeout(resolve, 10);

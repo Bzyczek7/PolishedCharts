@@ -48,7 +48,7 @@ function migrateIndicatorNameForFetch(name: string): string {
 function fixtureToIndicatorOutput(
   fixture: FixtureData,
   indicatorName: string,
-  params: Record<string, number | string>
+  _params: Record<string, number | string>
 ): IndicatorOutput {
   const indicatorData = fixture.indicators;
 
