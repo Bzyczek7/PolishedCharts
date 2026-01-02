@@ -620,8 +620,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     const fetchData = async () => {
         try {
             const to = new Date().toISOString()
-            // T040: Reduced from 1000 to 100 candles for faster initial load (target 2000ms)
-            const INITIAL_CANDLE_COUNT = 100
+            // T040: Reduced from 1000 to 200 candles for faster initial load
+            const INITIAL_CANDLE_COUNT = 200
             const intervalMs = getIntervalMilliseconds(chartInterval)
             const fromDate = new Date(new Date(to).getTime() - (INITIAL_CANDLE_COUNT * intervalMs))
             const from = fromDate.toISOString()
