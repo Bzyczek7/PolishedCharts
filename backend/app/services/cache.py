@@ -398,6 +398,9 @@ def generate_candle_cache_key(
     """
     Generate a cache key for candle data.
 
+    NOTE: Uses rounded timestamps to enable cache hits for same day requests.
+    Candles for same symbol+interval+date are typically the same.
+
     Args:
         symbol: Stock symbol
         interval: Time interval
@@ -407,11 +410,13 @@ def generate_candle_cache_key(
     Returns:
         A cache key
     """
-    from ..core.performance_config import get_cache_ttl_for_interval
+    # Round to nearest minute for better cache hits
+    # This allows cache hits even when milliseconds differ
+    start_rounded = start.replace(second=0, microsecond=0)
+    end_rounded = end.replace(second=0, microsecond=0)
 
-    # Normalize dates to strings for consistency
-    start_str = start.isoformat() if start.tzinfo else start.isoformat() + "Z"
-    end_str = end.isoformat() if end.tzinfo else end.isoformat() + "Z"
+    start_str = start_rounded.isoformat() if start_rounded.tzinfo else start_rounded.isoformat() + "Z"
+    end_str = end_rounded.isoformat() if end_rounded.tzinfo else end_rounded.isoformat() + "Z"
 
     return generate_cache_key(symbol, interval, start_str, end_str)
 
