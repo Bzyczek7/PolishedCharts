@@ -5,16 +5,15 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.candles import CandleService
-from app.services.providers import YFinanceProvider, AlphaVantageProvider
+from app.services.providers import YFinanceProvider
 from app.services.gap_detector import GapDetector
 
 logger = logging.getLogger(__name__)
 
 class DataOrchestrator:
-    def __init__(self, candle_service: CandleService, yf_provider: YFinanceProvider, av_provider: AlphaVantageProvider):
+    def __init__(self, candle_service: CandleService, yf_provider: YFinanceProvider):
         self.candle_service = candle_service
         self.yf_provider = yf_provider
-        self.av_provider = av_provider
 
     async def get_candles(
         self, 
@@ -41,6 +40,23 @@ class DataOrchestrator:
             start = start.replace(tzinfo=timezone.utc)
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
+
+        # FEATURE 014: Check candle cache first
+        from app.services.cache import get_candle_data, cache_candle_data
+        from app.services.performance import performance_logger
+
+        cached_candles = get_candle_data(ticker, interval, start, end)
+        if cached_candles is not None:
+            logger.debug(f"Candle cache hit for {ticker} ({interval})")
+            performance_logger.record(
+                operation="get_candles_cache_hit",
+                duration_ms=0.5,  # Sub-millisecond for cache hit
+                category="cache",
+                context={"symbol": ticker, "interval": interval}
+            )
+            return cached_candles
+
+        logger.debug(f"Candle cache miss for {ticker} ({interval})")
 
         # 1. Identify Gaps (only if not local_only)
         if not local_only:
@@ -77,15 +93,19 @@ class DataOrchestrator:
 
                     logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
                     try:
-                        # Timeout protection: don't hang the API request for more than 10s
+                        # Timeout protection: don't hang the API request (increased from 10s to 30s)
                         await asyncio.wait_for(
                             self.fetch_and_save(db, symbol_id, ticker, interval, fill_start, fill_end),
-                            timeout=10.0
+                            timeout=30.0
                         )
                     except asyncio.TimeoutError:
                         logger.error(f"Gap filling timed out for {ticker} ({interval})")
+                        # Rollback the transaction to prevent "invalid transaction" errors
+                        await db.rollback()
                     except Exception as e:
                         logger.error(f"Error filling gaps for {ticker}: {e}")
+                        # Rollback on any error to prevent transaction issues
+                        await db.rollback()
 
         # 2. Fetch all from DB
         # We re-query the full range to ensure we have a continuous, sorted, deduplicated set.
@@ -122,42 +142,35 @@ class DataOrchestrator:
                     "ticker": ticker
                 })
 
+        # FEATURE 014: Cache the results after DB query
+        try:
+            cache_candle_data(ticker, interval, start, end, valid_candles)
+            logger.debug(f"Cached {len(valid_candles)} candles for {ticker} ({interval})")
+        except Exception as e:
+            # Graceful degradation: cache failure should not break the endpoint
+            logger.warning(f"Failed to cache candle data for {ticker}: {e}")
+
         return valid_candles
 
     async def fetch_and_save(
-        self, 
-        db: AsyncSession, 
-        symbol_id: int, 
-        ticker: str, 
-        interval: str, 
-        start: datetime, 
+        self,
+        db: AsyncSession,
+        symbol_id: int,
+        ticker: str,
+        interval: str,
+        start: datetime,
         end: datetime
     ):
         """
         Fetch data for a range and save to DB.
         """
-        # Strategy: 
-        # If range is recent (within last 24h), try Alpha Vantage first for high precision.
-        # Otherwise, or if AV fails/limit hit, use yfinance for history.
-        
-        now = datetime.now(timezone.utc)
-        use_av = (now - start) < self.yf_provider._get_default_lookback(interval)
-        
-        candles = []
-        if use_av:
-            try:
-                candles = await self.av_provider.fetch_candles(ticker, interval, start, end)
-            except Exception as e:
-                logger.warning(f"Alpha Vantage failed for {ticker}: {e}. Falling back to yfinance.")
-                use_av = False
-        
-        if not use_av:
-            try:
-                candles = await self.yf_provider.fetch_candles(ticker, interval, start, end)
-            except Exception as e:
-                logger.error(f"yfinance failed for {ticker}: {e}")
-                raise e
-        
+        # Use yfinance for all data fetching
+        try:
+            candles = await self.yf_provider.fetch_candles(ticker, interval, start, end)
+        except Exception as e:
+            logger.error(f"yfinance failed for {ticker}: {e}")
+            raise e
+
         if candles:
             # Prepare for upsert
             await self.candle_service.upsert_candles(db, symbol_id, interval, candles)

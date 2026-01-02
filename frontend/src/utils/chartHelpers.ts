@@ -11,6 +11,7 @@
 export interface DataPoint {
   time: number;
   value: number;
+  color?: string;
 }
 
 /**
@@ -19,6 +20,39 @@ export interface DataPoint {
 export interface Thresholds {
   high: number;
   low: number;
+}
+
+/**
+ * Convert timestamp to Unix seconds (lightweight-charts format).
+ * Handles milliseconds, seconds, ISO strings, and date objects.
+ *
+ * @param ts - Timestamp (number, string, or Date)
+ * @returns Unix seconds
+ */
+export function toUnixSeconds(ts: string | number | Date): number {
+  // Handle Date objects
+  if (ts instanceof Date) {
+    return Math.floor(ts.getTime() / 1000);
+  }
+
+  // Handle strings - could be ISO string OR numeric string
+  if (typeof ts === 'string') {
+    const n = Number(ts);
+    // If the string converts to a valid number, use it
+    if (!isNaN(n)) {
+      // It's a numeric string - could be seconds or milliseconds
+      return n > 1e12 ? Math.floor(n / 1000) : n;
+    }
+    // It's an ISO string - parse it
+    return Math.floor(new Date(ts).getTime() / 1000);
+  }
+
+  // Handle numbers
+  const n = Number(ts);
+  if (isNaN(n)) return 0; // Invalid timestamp
+  // If it's larger than 1e12, it's milliseconds - convert to seconds
+  // Otherwise assume it's already seconds
+  return n > 1e12 ? Math.floor(n / 1000) : n;
 }
 
 /**
@@ -46,12 +80,8 @@ export function formatDataForChart(
     const ts = timestamps[i];
     if (!ts) return null;
 
-    // Handle both string timestamps and Unix timestamps
-    const time = typeof ts === 'string'
-      ? Math.floor(new Date(ts).getTime() / 1000)
-      : typeof ts === 'number'
-        ? ts
-        : Math.floor(new Date(ts as any).getTime() / 1000);
+    // Use robust timestamp converter
+    const time = toUnixSeconds(ts);
 
     if (isNaN(time)) return null;
 
@@ -211,3 +241,161 @@ export function splitSeriesByTrend(
  */
 export * from '../lib/chartUtils';
 export * from '../lib/indicatorTransform';
+
+// ============================================================================
+// Feature 008: Overlay Indicator Rendering & Configuration UI
+// Formatting helpers for overlay indicator data
+// ============================================================================
+
+import type { IndicatorOutput } from '../components/types/indicators';
+import type { Time } from 'lightweight-charts';
+
+/**
+ * Formatted data point for Lightweight Charts
+ * Feature 008 - T012: formatIndicatorData helper function
+ */
+export interface ChartDataPoint {
+  time: Time;
+  value: number;
+}
+
+/**
+ * Format indicator output data for Lightweight Charts overlay rendering
+ * Feature 008 - T012 [P] [US1]: Create formatIndicatorData helper function
+ *
+ * Converts IndicatorOutput to ChartDataPoint[] format for line series.
+ * Handles null values, timestamp conversion, and trend-based per-point coloring.
+ *
+ * @param data - IndicatorOutput from API or fixture
+ * @param fieldName - Optional specific field name (e.g., 'sma', 'ema'). If not provided, auto-detects.
+ * @param seriesColors - Optional per-series color overrides from instance.style.seriesColors
+ *                      For trend indicators, supports 'bullish', 'neutral', 'bearish' keys
+ * @returns Array of formatted data points for Lightweight Charts
+ *
+ * @example
+ * ```ts
+ * const indicatorData: IndicatorOutput = { ... };
+ * const chartData = formatIndicatorData(indicatorData, 'sma');
+ * // chartData = [{ time: 1704067200, value: 150.25 }, ...]
+ *
+ * // With user-configured trend colors
+ * const chartData = formatIndicatorData(indicatorData, 'adxvma', {
+ *   bullish: '#00FF00',
+ *   neutral: '#FFFF00',
+ *   bearish: '#ef5350',
+ * });
+ * ```
+ */
+export function formatIndicatorData(
+  data: IndicatorOutput | null,
+  fieldName?: string,
+  seriesColors?: Record<string, string>
+): DataPoint[] {
+  if (!data || !data.timestamps || !data.data) {
+    return [];
+  }
+
+  // Determine which field to use for overlay indicators
+  // For overlays, look for common field names or use the first numeric field
+  let valueField = fieldName;
+  if (!valueField) {
+    const possibleFields = ['sma', 'ema', 'adxvma', 'value', 'close'];
+    valueField = possibleFields.find(field => data.data[field]);
+
+    // If no common field found, use the first available field
+    if (!valueField && Object.keys(data.data).length > 0) {
+      valueField = Object.keys(data.data)[0];
+    }
+  }
+
+  if (!valueField || !data.data[valueField]) {
+    console.warn(`[formatIndicatorData] No valid data field found (tried: ${fieldName || 'auto-detect'})`);
+    return [];
+  }
+
+  const values = data.data[valueField];
+  if (!values || !Array.isArray(values)) {
+    return [];
+  }
+
+  // Check for signal field for trend-based coloring (e.g., ADXVMA_Signal)
+  const signalSeries = data.metadata?.series_metadata?.find(s => s.role === 'signal');
+  const signalField = signalSeries?.field;
+  const signalData = signalField ? data.data[signalField] : null;
+
+  // Get trend colors with priority: seriesColors > metadata.color_schemes > defaults
+  const colorSchemes = data.metadata?.color_schemes || {};
+  const bullishColor = seriesColors?.bullish || colorSchemes.bullish || '#00FF00';  // Lime
+  const neutralColor = seriesColors?.neutral || colorSchemes.neutral || '#FFFF00';  // Yellow
+  const bearishColor = seriesColors?.bearish || colorSchemes.bearish || '#ef5350';  // Red
+
+  // Use DataPoint (with optional color) instead of ChartDataPoint
+  const result: DataPoint[] = [];
+
+  for (let i = 0; i < data.timestamps.length; i++) {
+    const timestamp = data.timestamps[i];
+    const value = values[i];
+
+    // Skip null/undefined values
+    if (value === null || value === undefined) {
+      continue;
+    }
+
+    // Validate timestamp
+    if (typeof timestamp !== 'number' || isNaN(timestamp)) {
+      continue;
+    }
+
+    // Validate value
+    if (typeof value !== 'number' || isNaN(value)) {
+      continue;
+    }
+
+    // Determine color based on signal if available
+    let color: string | undefined;
+    if (signalData && signalData[i] !== null && signalData[i] !== undefined) {
+      const signal = signalData[i];
+      if (signal === 1) color = bullishColor;
+      else if (signal === 0) color = neutralColor;
+      else if (signal === -1) color = bearishColor;
+    }
+
+    result.push({
+      time: timestamp as number,
+      value: value,
+      color,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Auto-detect the primary value field for an overlay indicator
+ * Feature 008 - Helper for formatIndicatorData
+ *
+ * @param data - IndicatorOutput from API or fixture
+ * @returns Field name (e.g., 'sma', 'ema') or undefined if not found
+ */
+export function detectOverlayField(data: IndicatorOutput | null): string | undefined {
+  if (!data || !data.data) {
+    return undefined;
+  }
+
+  // Priority order for common overlay indicator field names
+  const overlayFields = ['sma', 'ema', 'adxvma', 'value', 'close'];
+
+  for (const field of overlayFields) {
+    if (data.data[field] && Array.isArray(data.data[field])) {
+      return field;
+    }
+  }
+
+  // Fallback to first available field
+  const firstField = Object.keys(data.data)[0];
+  if (firstField && Array.isArray(data.data[firstField])) {
+    return firstField;
+  }
+
+  return undefined;
+}

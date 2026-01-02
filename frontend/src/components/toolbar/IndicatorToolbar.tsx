@@ -1,6 +1,7 @@
 /**
  * IndicatorToolbar - Toolbar controls for indicator visibility and settings
  * Feature: 003-advanced-indicators
+ * Feature 010: pandas-ta-indicators (Phase 2 UI fixes)
  * Phase 4: User Story 2 - Per-Symbol Indicator Toggles and Persistence
  * Tasks: T044a, T045
  */
@@ -9,6 +10,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useIndicatorContext } from '../../contexts/IndicatorContext';
 import type { IndicatorPane } from '../types/indicators';
+import { getIndicatorPaneDisplayName } from '@/utils/indicatorDisplay';
 
 export interface IndicatorToolbarProps {
   onOpenSettings?: (indicatorId: string) => void;
@@ -76,8 +78,10 @@ export function IndicatorToolbar({ onOpenSettings, onOpenDialog }: IndicatorTool
               key={indicator.id}
               className="flex items-center gap-1 px-2 py-1 rounded bg-[#2a2e39] border border-[#363b45]"
             >
-              {/* Indicator Name */}
-              <span className="text-xs text-slate-300">{indicator.name}</span>
+              {/* Indicator Name - Feature 010: Use shared formatter */}
+              <span className="text-sm font-medium text-slate-200">
+                {getIndicatorPaneDisplayName(indicator)}
+              </span>
 
               {/* Visibility Toggle */}
               <button

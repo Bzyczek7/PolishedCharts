@@ -30,14 +30,6 @@ calculate_tdfi = indicators_module.calculate_tdfi
 calculate_crsi = indicators_module.calculate_crsi
 calculate_adxvma = indicators_module.calculate_adxvma
 
-# Register built-in indicators
-_registry = get_registry()
-_registry.register(SMAIndicator())
-_registry.register(EMAIndicator())
-_registry.register(TDFIIndicator())
-_registry.register(cRSIIndicator())
-_registry.register(ADXVMAIndicator())
-
 __all__ = [
     'Indicator',
     'IndicatorRegistry',

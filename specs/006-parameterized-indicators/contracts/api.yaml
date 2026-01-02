@@ -1,0 +1,260 @@
+openapi: 3.0.0
+info:
+  title: TradingAlert API - Parameterized Indicators
+  version: 1.0.0
+  description: API contracts for parameterized indicator instances feature
+
+paths:
+  /indicators/supported:
+    get:
+      operationId: listSupportedIndicators
+      summary: List all supported indicators
+      description: |
+        Returns a list of all registered indicator instances with their metadata.
+        This includes both default instances (e.g., "sma") and parameterized variants
+        (e.g., "sma_50", "sma_200").
+      tags:
+        - Indicators
+      responses:
+        '200':
+          description: List of indicators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IndicatorInfo'
+              examples:
+                default_variants:
+                  summary: Default and variant indicators
+                  value:
+                    - name: sma
+                      description: Simple Moving Average (period=20)
+                      display_type: overlay
+                      category: overlay
+                      parameters:
+                        period:
+                          type: integer
+                          default: 20
+                          min: 2
+                          max: 200
+                          description: SMA period for calculation
+                      metadata: {}
+                    - name: sma_5
+                      description: Simple Moving Average (period=5)
+                      display_type: overlay
+                      category: overlay
+                      parameters:
+                        period:
+                          type: integer
+                          default: 5
+                          min: 2
+                          max: 200
+                          description: SMA period for calculation
+                      metadata: {}
+                    - name: sma_50
+                      description: Simple Moving Average (period=50)
+                      display_type: overlay
+                      category: overlay
+                      parameters:
+                        period:
+                          type: integer
+                          default: 50
+                          min: 2
+                          max: 200
+                          description: SMA period for calculation
+                      metadata: {}
+                    - name: sma_200
+                      description: Simple Moving Average (period=200)
+                      display_type: overlay
+                      category: overlay
+                      parameters:
+                        period:
+                          type: integer
+                          default: 200
+                          min: 2
+                          max: 200
+                          description: SMA period for calculation
+                      metadata: {}
+
+  /indicators/{symbol}/{indicator}:
+    get:
+      operationId: calculateIndicator
+      summary: Calculate indicator for symbol
+      description: |
+        Calculate the specified indicator instance for a given symbol.
+        The indicator name can be a default instance (e.g., "sma") or a parameterized
+        variant (e.g., "sma_50").
+      tags:
+        - Indicators
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stock symbol (e.g., AAPL, IBM)
+          example: AAPL
+        - name: indicator
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Indicator instance name (e.g., sma, sma_50, ema_9)
+          example: sma_50
+        - name: interval
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 1d, 1w]
+            default: 1d
+          description: Time interval for candles
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+          description: Maximum number of candles to return
+      responses:
+        '200':
+          description: Indicator calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorOutput'
+        '404':
+          description: Indicator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    IndicatorInfo:
+      type: object
+      required:
+        - name
+        - description
+        - display_type
+        - category
+        - parameters
+        - metadata
+      properties:
+        name:
+          type: string
+          description: Unique indicator instance name
+          example: sma_50
+        description:
+          type: string
+          description: Human-readable description including parameters
+          example: Simple Moving Average (period=50)
+        display_type:
+          type: string
+          enum: [overlay, pane]
+          description: Whether indicator draws on price chart or separate pane
+        category:
+          type: string
+          enum: [overlay, oscillator, momentum, trend, volatility]
+          description: Indicator category
+        parameters:
+          type: object
+          description: Parameter definitions with types and defaults
+          additionalProperties:
+            $ref: '#/components/schemas/ParameterDefinition'
+        metadata:
+          type: object
+          description: Full rendering metadata for frontend
+        alert_templates:
+          type: array
+          description: Available alert condition templates
+          items:
+            $ref: '#/components/schemas/AlertTemplate'
+
+    ParameterDefinition:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [integer, float, string, boolean]
+          description: Parameter data type
+        default:
+          description: Default value for this parameter
+        min:
+          description: Minimum value (for numeric types)
+        max:
+          description: Maximum value (for numeric types)
+        description:
+          type: string
+          description: Parameter description
+
+    AlertTemplate:
+      type: object
+      properties:
+        condition_type:
+          type: string
+          description: Type of alert condition
+        label:
+          type: string
+          description: Human-readable label
+        description:
+          type: string
+          description: Condition description
+        applicable_fields:
+          type: array
+          items:
+            type: string
+          description: Indicator fields this applies to
+        requires_threshold:
+          type: boolean
+          description: Whether a threshold value is required
+
+    IndicatorOutput:
+      type: object
+      required:
+        - symbol
+        - indicator
+        - timestamps
+        - data
+        - metadata
+      properties:
+        symbol:
+          type: string
+          description: Stock symbol
+        indicator:
+          type: string
+          description: Indicator instance name
+        timestamps:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Unix timestamps in seconds
+        data:
+          type: object
+          description: Map of field name to values array
+          additionalProperties:
+            type: array
+            items:
+              oneOf:
+                - type: number
+                - type: null
+        metadata:
+          type: object
+          description: Indicator metadata for rendering
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        detail:
+          type: string
+
+tags:
+  - name: Indicators
+    description: Technical indicator operations

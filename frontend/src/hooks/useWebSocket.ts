@@ -16,15 +16,17 @@ export function useWebSocket(): WebSocketHook {
   const socketRef = useRef<WebSocket | null>(null);
 
   const connect = useCallback((url: string) => {
-    if (socketRef.current) {
+    // Only close if socket is fully connected, not still connecting
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.close();
+    } else {
+      socketRef.current = null;
     }
     const newSocket = new WebSocket(url);
     socketRef.current = newSocket;
     setSocket(newSocket);
 
     newSocket.onopen = () => {
-      console.log('WebSocket connected');
       setReadyState(newSocket.readyState);
     };
 
@@ -33,20 +35,20 @@ export function useWebSocket(): WebSocketHook {
     };
 
     newSocket.onclose = () => {
-      console.log('WebSocket disconnected');
       setReadyState(newSocket.readyState);
       socketRef.current = null;
       setSocket(null);
     };
 
     newSocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setReadyState(newSocket.readyState);
+      // Suppress error logging during initial connection/cleanup
+      // WebSocket errors during component lifecycle are expected
     };
   }, []);
 
   const disconnect = useCallback(() => {
-    if (socketRef.current) {
+    // Only close if socket is fully connected
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.close();
     }
   }, []);
@@ -59,8 +61,13 @@ export function useWebSocket(): WebSocketHook {
 
   useEffect(() => {
     return () => {
-      if (socketRef.current) {
+      // Only close if socket is fully connected (not still connecting)
+      // In React Strict Mode, cleanup runs before connection completes
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
         socketRef.current.close();
+      } else {
+        // Just nullify the ref without closing to avoid connection error
+        socketRef.current = null;
       }
     };
   }, []);

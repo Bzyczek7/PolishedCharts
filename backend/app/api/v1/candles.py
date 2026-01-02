@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+import logging
+import time
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from typing import List, Optional, Union, Dict, Any
 from datetime import datetime, timezone, timedelta
 import asyncio
+
+logger = logging.getLogger(__name__)
 
 from app.db.session import get_db, AsyncSessionLocal
 from app.models.symbol import Symbol
@@ -16,10 +20,22 @@ from app.services.backfill import BackfillService
 from app.services.backfill_worker import BackfillWorker
 from app.services.incremental_worker import IncrementalUpdateWorker
 from app.services.alert_engine import AlertEngine
-from app.services.providers import YFinanceProvider, AlphaVantageProvider
+from app.services.providers import YFinanceProvider
+from app.services.market_schedule import MarketSchedule
 from app.core.config import settings
+from app.api.decorators import public_endpoint
+# T020a: Performance logging
+from app.services.performance import performance_logger
 
 router = APIRouter()
+
+# --- Constants ---
+MAX_RANGE_DAYS = {
+    "1m": 7, "2m": 30, "5m": 30, "15m": 30,    # Intraday capped
+    "30m": 60, "1h": 60, "4h": 120,
+    "1d": 365 * 5,  # 5 years - matches backend CHUNK_POLICIES in providers.py
+    "1wk": 365 * 10  # 10 years - matches backend CHUNK_POLICIES
+}
 
 # --- Helper Functions ---
 def interval_to_timedelta(interval: str) -> timedelta:
@@ -35,14 +51,30 @@ def interval_to_timedelta(interval: str) -> timedelta:
         return timedelta(weeks=int(interval[:-2]))
     return timedelta(days=1) # Default fallback
 
+def validate_interval_range(interval: str, from_ts: Optional[datetime], to_ts: Optional[datetime]):
+    """Validate that the requested date range is within allowed limits for the interval."""
+    if not from_ts or not to_ts:
+        return  # Skip validation if range not specified
+
+    max_days = MAX_RANGE_DAYS.get(interval, 365)
+    days = (to_ts - from_ts).total_seconds() / 86400  # Use total_seconds for accuracy
+
+    # Allow 1 day tolerance for time component (e.g., requesting "120 days" at 11:42 AM vs 12:42 PM)
+    if days > max_days + 1:  # 1 day tolerance for time-of-day differences
+        raise HTTPException(
+            status_code=400,
+            detail=f"Range too large for {interval}: max {max_days} days, got {days:.1f} days"
+        )
+
 # --- Dependency Providers ---
 
-def get_orchestrator() -> DataOrchestrator:
-    """Dependency to get a DataOrchestrator instance."""
-    candle_service = CandleService()
-    yf_provider = YFinanceProvider()
-    av_provider = AlphaVantageProvider(api_key=settings.ALPHA_VANTAGE_API_KEY)
-    return DataOrchestrator(candle_service, yf_provider, av_provider)
+def get_orchestrator(request: Request) -> DataOrchestrator:
+    """Dependency to get the singleton DataOrchestrator from app state (HTTP routes)."""
+    return request.app.state.orchestrator
+
+def get_orchestrator_ws(websocket: WebSocket) -> DataOrchestrator:
+    """Dependency to get the singleton DataOrchestrator from app state (WebSocket routes)."""
+    return websocket.app.state.orchestrator
 
 def get_backfill_worker(orchestrator: DataOrchestrator = Depends(get_orchestrator)) -> BackfillWorker:
     """Dependency to get a BackfillWorker instance."""
@@ -65,13 +97,14 @@ async def _get_price_for_symbol(symbol_str: str, interval: str, orchestrator: Da
     """
     from sqlalchemy import desc
     from app.db.session import AsyncSessionLocal
+    from app.services.watchlist import get_or_create_symbol
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Symbol).where(Symbol.ticker == symbol_str))
-        symbol_obj = result.scalars().first()
+        # Get or create symbol - ensures all requested symbols get a Symbol table entry
+        symbol_obj = await get_or_create_symbol(db, symbol_str)
 
         if not symbol_obj:
-            return {"symbol": symbol_str, "error": "Symbol not found"}
+            return {"symbol": symbol_str, "error": "Invalid ticker symbol"}
 
         try:
             latest_candle_q = await db.execute(
@@ -118,6 +151,7 @@ async def _get_price_for_symbol(symbol_str: str, interval: str, orchestrator: Da
 # --- API Endpoints ---
 
 @router.get("/{symbol}", response_model=List[CandleResponse])
+@public_endpoint
 async def get_candles(
     symbol: str,
     interval: str = Query("1d", description="Timeframe (e.g. 1m, 5m, 1h, 1d)"),
@@ -127,16 +161,52 @@ async def get_candles(
     db: AsyncSession = Depends(get_db),
     orchestrator: DataOrchestrator = Depends(get_orchestrator)
 ):
-    interval = interval.lower().replace("w", "wk")
-    result = await db.execute(select(Symbol).filter(Symbol.ticker == symbol.upper()))
-    symbol_obj = result.scalars().first()
+    # Only normalize trailing "w" to "wk" (fixes "1wk" → "1wkk" bug)
+    interval = interval.lower()
+    if interval.endswith("w") and not interval.endswith("wk"):
+        interval = interval[:-1] + "wk"
+
+    # DEBUG: Log first 5 candle timestamps to check for non-midnight times on 1d
+    if interval == '1d':
+        result = await db.execute(select(Symbol).filter(Symbol.ticker == symbol.upper()))
+        symbol_obj = result.scalars().first()
+        if symbol_obj:
+            check_result = await db.execute(
+                select(Candle)
+                .where(Candle.symbol_id == symbol_obj.id)
+                .where(Candle.interval == '1d')
+                .order_by(Candle.timestamp.desc())
+                .limit(10)
+            )
+            sample_candles = check_result.scalars().all()
+            print(f"\n========== DEBUG {symbol} 1d timestamps ==========")
+            for c in sample_candles:
+                ts_str = c.timestamp.isoformat() if hasattr(c.timestamp, 'isoformat') else str(c.timestamp)
+                print(f"  {ts_str}")
+            print(f"==============================\n")
+
+    # Validate range before orchestrator call (prevents 500 errors for large intraday requests)
+    validate_interval_range(interval, from_ts, to_ts)
+
+    # Auto-create symbol if it doesn't exist (helps new users get started with default symbols like SPY)
+    from app.services.watchlist import get_or_create_symbol
+    symbol_obj = await get_or_create_symbol(db, symbol.upper())
     if not symbol_obj:
-        raise HTTPException(status_code=404, detail="Symbol not found")
+        raise HTTPException(status_code=404, detail="Invalid ticker symbol")
 
     try:
+        # T020a: Instrument only the expensive operation with performance logging
+        start_time = time.time()
         candles_data = await orchestrator.get_candles(
             db=db, symbol_id=symbol_obj.id, ticker=symbol_obj.ticker,
             interval=interval, start=from_ts, end=to_ts, local_only=local_only
+        )
+        duration_ms = (time.time() - start_time) * 1000
+        performance_logger.record(
+            operation="fetch_candles",
+            duration_ms=duration_ms,
+            category="data_fetch",
+            context={"symbol": symbol, "interval": interval}
         )
         if not candles_data:
             raise HTTPException(status_code=404, detail="No data available")
@@ -145,6 +215,7 @@ async def get_candles(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/backfill", response_model=BackfillResponse)
+@public_endpoint
 async def trigger_backfill(
     request: BackfillRequest,
     db: AsyncSession = Depends(get_db),
@@ -162,6 +233,7 @@ async def trigger_backfill(
     }
 
 @router.post("/update-latest", response_model=dict)
+@public_endpoint
 async def update_latest(
     symbol: str = Query(..., description="Ticker symbol"),
     interval: str = Query("1h", description="Timeframe"),
@@ -172,6 +244,7 @@ async def update_latest(
     return {"status": "success", "message": f"Incremental update for {symbol} ({interval}) triggered"}
 
 @router.get("/latest_prices/{symbols:path}", response_model=List[Dict[str, Any]])
+@public_endpoint
 async def get_latest_prices(
     symbols: str,
     interval: str = Query("1d", description="Timeframe for latest data (default: 1d)"),
@@ -197,8 +270,13 @@ async def websocket_endpoint(
     symbol: str,
     interval: str = Query("1d", description="Timeframe (e.g. 1m, 5m, 1h, 1d)"),
     db: AsyncSession = Depends(get_db),
-    orchestrator: DataOrchestrator = Depends(get_orchestrator)
+    orchestrator: DataOrchestrator = Depends(get_orchestrator_ws)
 ):
+    # Only normalize trailing "w" to "wk" (fixes "1wk" → "1wkk" bug)
+    interval = interval.lower()
+    if interval.endswith("w") and not interval.endswith("wk"):
+        interval = interval[:-1] + "wk"
+
     await websocket.accept()
     result = await db.execute(select(Symbol).filter(Symbol.ticker == symbol.upper()))
     symbol_obj = result.scalars().first()
@@ -206,10 +284,20 @@ async def websocket_endpoint(
         await websocket.close(code=4000, reason="Symbol not found")
         return
 
-    last_candle_timestamp = None
+    # Track the last sent candle to avoid sending duplicates
+    last_sent_candle_key = None
+    market_schedule = MarketSchedule()
 
     try:
         while True:
+            # Skip polling when market is closed (weekends, holidays, after hours)
+            # Only applies to US equity symbols with intraday intervals
+            is_intraday = interval in ('1m', '2m', '5m', '15m', '30m', '1h', '4h')
+            if is_intraday and not market_schedule.is_market_open():
+                # Sleep longer when market is closed (check every minute instead of 5 seconds)
+                await asyncio.sleep(60)
+                continue
+
             lookback_delta = interval_to_timedelta(interval) * 2
             start_date = datetime.now(timezone.utc) - lookback_delta
             end_date = datetime.now(timezone.utc)
@@ -226,7 +314,10 @@ async def websocket_endpoint(
 
             if latest_candles:
                 latest_candle = latest_candles[-1]
-                if last_candle_timestamp is None or latest_candle['timestamp'] > last_candle_timestamp:
+                # Create a unique key based on timestamp and close price to identify unique candles
+                current_candle_key = (latest_candle['timestamp'], latest_candle['close'])
+
+                if last_sent_candle_key != current_candle_key:
                     await websocket.send_json({
                         "timestamp": latest_candle['timestamp'].isoformat(),
                         "open": latest_candle['open'],
@@ -235,11 +326,12 @@ async def websocket_endpoint(
                         "close": latest_candle['close'],
                         "volume": latest_candle['volume'],
                     })
-                    last_candle_timestamp = latest_candle['timestamp']
+                    last_sent_candle_key = current_candle_key
+                    logger.info(f"WebSocket sent update for {symbol} ({interval}): {latest_candle['timestamp']} - Close: {latest_candle['close']}")
 
             await asyncio.sleep(5)
     except WebSocketDisconnect:
-        print(f"Client disconnected from WebSocket for {symbol}")
+        logger.info(f"Client disconnected from WebSocket for {symbol}")
     except Exception as e:
-        print(f"Error in WebSocket for {symbol}: {e}")
+        logger.error(f"Error in WebSocket for {symbol}: {e}")
         await websocket.close(code=1011, reason="Internal Server Error")

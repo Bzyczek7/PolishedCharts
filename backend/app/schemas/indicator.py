@@ -4,7 +4,7 @@ This module defines the Pydantic schemas for indicator metadata, output,
 and related data structures following the metadata-driven indicator contract.
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from enum import Enum
@@ -43,6 +43,7 @@ class ColorMode(str, Enum):
     SINGLE = "single"
     THRESHOLD = "threshold"
     GRADIENT = "gradient"
+    TREND = "trend"  # Feature 005: Color based on trend direction (up/down/neutral)
 
 
 class ThresholdsConfig(BaseModel):
@@ -226,3 +227,49 @@ class ADXVMAOutput(BaseModel):
     timestamps: List[int]
     adxvma: List[Optional[float]]
     metadata: IndicatorMetadata
+
+
+
+# Feature 014: Batch API request/response models
+
+class IndicatorRequest(BaseModel):
+    """Single indicator request within a batch."""
+
+    symbol: str = Field(..., description="Stock symbol (e.g., SPY)")
+    indicator_name: str = Field(..., description="Indicator name (e.g., crsi, sma)")
+    interval: str = Field(default="1d", description="Timeframe")
+    params: Optional[Dict[str, Any]] = Field(default=None, description="Indicator parameters")
+    from_ts: Optional[datetime] = Field(default=None, alias="from", description="Start timestamp")
+    to_ts: Optional[datetime] = Field(default=None, alias="to", description="End timestamp")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class BatchIndicatorRequest(BaseModel):
+    """Batch indicator calculation request."""
+
+    requests: List[IndicatorRequest] = Field(
+        ...,
+        min_length=1,
+        max_length=10,  # FR-010: Maximum 10 indicators per batch
+        description="List of indicator requests (max 10)"
+    )
+
+
+class ErrorDetail(BaseModel):
+    """Error details for partial batch failures."""
+
+    index: int = Field(..., description="Request index that failed")
+    symbol: str = Field(..., description="Symbol from the request")
+    indicator_name: str = Field(..., description="Indicator name from the request")
+    error: str = Field(..., description="Error message")
+
+
+class BatchIndicatorResponse(BaseModel):
+    """Batch indicator calculation response."""
+
+    results: List[IndicatorOutput] = Field(default=[], description="Successful results")
+    errors: List[ErrorDetail] = Field(default=[], description="Failed requests")
+    total_duration_ms: float = Field(..., description="Total processing time in milliseconds")
+    cache_hits: int = Field(..., description="Number of cache hits")
+    cache_misses: int = Field(..., description="Number of cache misses")

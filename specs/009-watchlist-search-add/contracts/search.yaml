@@ -1,0 +1,120 @@
+openapi: 3.0.0
+info:
+  title: Symbol Search API
+  description: API for searching ticker symbols in the ticker_universe table
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+paths:
+  /symbols/search:
+    get:
+      summary: Search for ticker symbols
+      description: |
+        Searches the ticker_universe table for matching ticker symbols and display names.
+
+        **Validation Rules**:
+        - Query must be 1-5 characters (per AC-005)
+        - Returns partial matches on ticker symbol (e.g., "GOO" matches "GOOGL", "GOOG")
+        - Results limited to US equities for MVP
+        - Maximum 10 results returned
+
+        **Frontend Debouncing**: Client should debounce input at 300ms (per AC-001)
+      operationId: searchSymbols
+      tags:
+        - symbols
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 5
+          description: Search query (partial ticker symbol or company name)
+          example: "AAP"
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SymbolSearchResult'
+          examples:
+            partial_match:
+              summary: Partial ticker match
+              value:
+                - symbol: "AAPL"
+                  display_name: "Apple Inc."
+                - symbol: "ABBV"
+                  display_name: "AbbVie Inc."
+            single_result:
+              summary: Exact match
+              value:
+                - symbol: "AAPL"
+                  display_name: "Apple Inc."
+            no_results:
+              summary: No matches found
+              value: []
+        '400':
+          description: Invalid query length
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          examples:
+            empty_query:
+              summary: Empty query
+              value:
+                detail: "Query must be between 1 and 5 characters"
+            too_long:
+              summary: Query too long
+              value:
+                detail: "Query must be between 1 and 5 characters"
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  schemas:
+    SymbolSearchResult:
+      type: object
+      required:
+        - symbol
+        - display_name
+      properties:
+        symbol:
+          type: string
+          description: Ticker symbol (uppercase)
+          example: "AAPL"
+        display_name:
+          type: string
+          description: Company name or description
+          example: "Apple Inc."
+
+    Error:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Query must be between 1 and 5 characters"
+
+  responses:
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Internal server error"
+
+tags:
+  - name: symbols
+    description: Symbol search operations

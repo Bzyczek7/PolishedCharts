@@ -11,7 +11,6 @@
 
 ## Phase 2: Orchestration & UI Wiring [checkpoint: 074c3b7]
 - [x] Task: Implement `YFinanceProvider` with per-interval chunking and explicit handling for interval-specific lookback limits. ca92b98
-- [x] Task: Implement `AlphaVantageProvider` with configurable rate limits and "Rate Exceeded" detection. 027ceef
 - [x] Task: Write failing tests for the Missing Middle stitching logic, verifying the orchestrator fills holes without redundant re-fetches (Red Phase). adf9c36
 - [x] Task: Add Provider Truth integration tests to validate that intraday limits are enforced per-interval (e.g., 1m lookback < 1h lookback) (Red Phase). 64c0346
 - [x] Task: Implement the `DataOrchestrator` to coordinate multi-segment fetching and deduplicated merging. adf9c36

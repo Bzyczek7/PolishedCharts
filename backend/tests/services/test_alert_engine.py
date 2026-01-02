@@ -168,10 +168,10 @@ async def test_alert_crosses_exact_price():
     assert triggered[0].id == 1
 
 
-# T040 [US2] Test rapid oscillations
+# T040 [US2] Test price oscillations with direction changes
 @pytest.mark.asyncio
-async def test_alert_rapid_oscillations():
-    """Test: alerts handle rapid price oscillations correctly"""
+async def test_alert_oscillations():
+    """Test: alerts handle price oscillations with direction changes correctly"""
     mock_session = AsyncMock()
 
     mock_factory = MagicMock()
@@ -184,7 +184,8 @@ async def test_alert_rapid_oscillations():
         symbol_id=1,
         condition=AlertCondition.CROSSES_UP.value,
         threshold=150.0,
-        is_active=True
+        is_active=True,
+        cooldown=1  # 1 minute cooldown - minimum
     )
 
     mock_result = MagicMock()
@@ -193,18 +194,53 @@ async def test_alert_rapid_oscillations():
 
     engine = AlertEngine(mock_factory)
 
-    # Price oscillates around threshold: 148 -> 152 -> 148 -> 152
+    # Price oscillates around threshold: 148 -> 152 -> 148
     # First crossing: 148 -> 152 (should trigger)
     triggered1 = await engine.evaluate_symbol_alerts(1, 152.0, previous_price=148.0)
     assert len(triggered1) == 1
 
-    # Second crossing: 152 -> 148 (should NOT trigger - wrong direction)
+    # Reverse crossing: 152 -> 148 (should NOT trigger - crosses_down)
     triggered2 = await engine.evaluate_symbol_alerts(1, 148.0, previous_price=152.0)
     assert len(triggered2) == 0
 
-    # Third crossing: 148 -> 152 (should trigger again)
+    # Back to up crossing: 148 -> 152 (should NOT trigger - cooldown blocks this)
     triggered3 = await engine.evaluate_symbol_alerts(1, 152.0, previous_price=148.0)
-    assert len(triggered3) == 1
+    assert len(triggered3) == 0  # Cooldown blocks (minimum 1 minute)
+
+
+# TXXX Test minimum cooldown enforcement (cooldown now in minutes)
+@pytest.mark.asyncio
+async def test_alert_minimum_cooldown():
+    """Test: alerts enforce minimum 1-minute cooldown"""
+    mock_session = AsyncMock()
+
+    mock_factory = MagicMock()
+    mock_factory.return_value.__aenter__.return_value = mock_session
+    mock_factory.return_value.__aexit__.return_value = AsyncMock()
+
+    # Alert with no explicit cooldown (should default to 1 minute minimum)
+    alert = Alert(
+        id=1,
+        symbol_id=1,
+        condition=AlertCondition.CROSSES_UP.value,
+        threshold=150.0,
+        is_active=True
+        # No cooldown set - will use minimum 1 minute (60 seconds)
+    )
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [alert]
+    mock_session.execute.return_value = mock_result
+
+    engine = AlertEngine(mock_factory)
+
+    # First crossing: should trigger
+    triggered1 = await engine.evaluate_symbol_alerts(1, 152.0, previous_price=148.0)
+    assert len(triggered1) == 1
+
+    # Immediate second crossing: should NOT trigger due to minimum 1-minute cooldown
+    triggered2 = await engine.evaluate_symbol_alerts(1, 152.0, previous_price=148.0)
+    assert len(triggered2) == 0  # Cooldown blocks this
 
 
 # Original tests - keep for backward compatibility

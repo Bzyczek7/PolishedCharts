@@ -1,0 +1,78 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import './App.css'
+import Layout from './components/Layout'
+import Toolbar, { type DataMode } from './components/Toolbar'
+import Watchlist from './components/Watchlist'
+import AlertsView from './components/AlertsView'
+import ChartComponent from './components/ChartComponent'
+import { OHLCDisplayWithTime } from './components/chart/OHLCDisplay'
+import type { Alert } from './components/AlertsList'
+import type { Layout as LayoutType } from './components/Toolbar'
+import IndicatorPane from './components/IndicatorPane'
+import { loadLayouts, saveLayouts, loadAlerts, saveAlerts } from './services/layoutService'
+import { getCandles } from './api/candles'
+import type { Candle } from './api/candles'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { Toaster, toast } from 'sonner'
+import { formatDataForChart, formatIndicatorData } from './utils/chartHelpers'
+import { IndicatorProvider, useIndicatorContext } from './contexts/IndicatorContext'
+import { IndicatorDialog } from './components/indicators/IndicatorDialog'
+import { ErrorBoundary } from './components/ErrorBoundary' // T049: Error boundary for indicator rendering
+import { useIndicatorData } from './hooks/useIndicatorData'
+import type { IndicatorOutput } from './components/types/indicators'
+import type { Time, IRange } from 'lightweight-charts'
+import { useWebSocket } from './hooks/useWebSocket'
+import { CandleDataProvider } from './components/CandleDataProvider'
+import { WatchlistDataProvider } from './components/WatchlistDataProvider'
+import type { WatchlistItem } from './api/watchlist'
+// Feature 009: Import watchlist API and search components
+import { WatchlistSearch } from './components/WatchlistSearch'
+import { useWatchlist } from './hooks/useWatchlist'
+import { getWatchlist, addToWatchlist, removeFromWatchlist } from './api/watchlist'
+// Feature 008: Overlay indicator instance management with styling
+import { useIndicatorInstances } from './hooks/useIndicatorInstances'
+import type { IndicatorInstance } from './components/types/indicators'
+import { IndicatorSettingsDialog } from './components/IndicatorSettingsDialog'
+import { OverlayIndicatorLegend } from './components/OverlayIndicatorLegend'
+import { SourceCodeModal } from './components/SourceCodeModal'
+// Phase 6: Oscillator settings dialog
+import { OscillatorSettingsDialog } from './components/OscillatorSettingsDialog'
+
+// Feature 008: Load manual test module (available in browser console for testing)
+if (import.meta.env.DEV) {
+  import('./tests/manual/feature008-manual-test')
+}
+
+interface AppContentProps {
+  symbol: string
+  setSymbol: (symbol: string) => void
+}
+
+function AppContent({ symbol, setSymbol }: AppContentProps) {
+  const [chartInterval, setChartInterval] = useState('1d')
+  const [dataMode, setDataMode] = useState<DataMode>('websocket') // T026: Data mode toggle state
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isIndicatorsOpen, setIsIndicatorsOpen] = useState(false)
+  const mainViewportRef = useRef<HTMLDivElement>(null)
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [mainTimeScale, setMainTimeScale] = useState<any>(null)
+  const indicatorTimeScalesRef = useRef<Map<string, any>>(new Map())
+  const { connect, disconnect, lastMessage } = useWebSocket();
+
+  // Feature 009: Use API-based watchlist hook instead of localStorage
+  const {
+    entries: apiWatchlistEntries,
+    symbols: watchlistSymbols,
+    isLoading: watchlistLoading,
+    error: watchlistError,
+    refetch: refetchWatchlist,
+    addSymbol: addSymbolToWatchlist,
+    removeSymbol: removeSymbolFromWatchlist,
+    clearError: clearWatchlistError,
+  } = useWatchlist()
+
+  // Local state for visual ordering (drag-and-drop reordering)
+  // The API doesn't support persistent ordering, so we keep it local only
+  const [orderedSymbols, setOrderedSymbols] = useState<string[]>([])
+
+  // Update ordered symbols when API watchlist changes

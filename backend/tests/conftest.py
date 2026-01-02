@@ -50,6 +50,10 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await session.execute(text("TRUNCATE TABLE alert CASCADE"))
         await session.execute(text("TRUNCATE TABLE candle CASCADE"))
         await session.execute(text("TRUNCATE TABLE symbol CASCADE"))
+        # Also truncate Firebase auth tables
+        await session.execute(text("TRUNCATE TABLE layouts CASCADE"))
+        await session.execute(text("TRUNCATE TABLE user_watchlists CASCADE"))
+        await session.execute(text("TRUNCATE TABLE users CASCADE"))
         await session.commit()
 
         # Begin a transaction that will be rolled back

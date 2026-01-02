@@ -1,0 +1,631 @@
+openapi: 3.0.3
+info:
+  title: Indicator Batch API
+  description: |
+    Batch endpoint for calculating multiple indicators in a single request.
+
+    **Performance Optimization**: This endpoint reduces the N-roundtrip problem where
+    loading N indicators requires N separate HTTP requests. With batching, all indicators
+    are calculated in a single request while sharing database queries and cache lookups.
+
+    **Partial Failure Support**: If individual indicator calculations fail, other indicators
+    in the batch still return successfully. Error details are included in the response.
+
+    **Caching**: Results are cached using the same cache layer as the single-indicator endpoint.
+    Cache hit/miss information is included in the response for monitoring.
+
+  version: 1.0.0
+  contact:
+    name: TradingAlert API
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://api.tradingalert.example.com/api/v1
+    description: Production server
+
+tags:
+  - name: indicators
+    description: Technical indicator calculations
+
+paths:
+  /indicators/batch:
+    post:
+      tags:
+        - indicators
+      summary: Calculate multiple indicators in a single request
+      description: |
+        Batch indicator calculation endpoint that processes multiple indicator requests
+        in a single API call. This provides significant performance benefits by:
+
+        1. **Single candle query**: Fetches candles once for all indicators for the same symbol/interval
+        2. **Parallel calculation**: Calculates indicators concurrently using asyncio
+        3. **Cache optimization**: Checks cache before any database work
+        4. **Deduplication**: Identical indicator requests are calculated once
+
+        **Performance Targets**:
+        - 3 indicators: <200ms total (vs 3 × 300ms = 900ms serial)
+        - 10 indicators: <500ms total (max batch size)
+
+        **Cache Behavior**:
+        - Cache hits return immediately without database query
+        - Cache misses trigger database fetch and calculation
+        - Results are automatically cached for future requests
+
+      operationId: batchIndicators
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchIndicatorRequest'
+            examples:
+              three_indicators_same_symbol:
+                summary: Three indicators for SPY daily
+                description: Common use case: multiple indicators for same symbol
+                value:
+                  requests:
+                    - symbol: "SPY"
+                      indicator_name: "crsi"
+                      interval: "1d"
+                      params:
+                        domcycle: 10
+                        vibration: 3
+                        leveling: 3.0
+                        cyclic_memory: 30
+                    - symbol: "SPY"
+                      indicator_name: "rsi"
+                      interval: "1d"
+                      params:
+                        period: 14
+                    - symbol: "SPY"
+                      indicator_name: "ema"
+                      interval: "1d"
+                      params:
+                        period: 20
+
+              different_symbols:
+                summary: Indicators for different symbols
+                description: Batch requests can span multiple symbols
+                value:
+                  requests:
+                    - symbol: "SPY"
+                      indicator_name: "sma"
+                      interval: "1d"
+                      params:
+                        period: 50
+                    - symbol: "QQQ"
+                      indicator_name: "sma"
+                      interval: "1d"
+                      params:
+                        period: 50
+
+              with_date_range:
+                summary: Indicators with custom date range
+                description: Filter indicators to specific time periods
+                value:
+                  requests:
+                    - symbol: "AAPL"
+                      indicator_name: "macd"
+                      interval: "1d"
+                      params:
+                        fast: 12
+                        slow: 26
+                        signal: 9
+                      from: "2023-01-01T00:00:00Z"
+                      to: "2024-01-01T00:00:00Z"
+
+      responses:
+        '200':
+          description: Successful batch calculation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchIndicatorResponse'
+              examples:
+                full_success:
+                  summary: All indicators calculated successfully
+                  value:
+                    results:
+                      - symbol: "SPY"
+                        interval: "1d"
+                        indicator_name: "crsi"
+                        timestamps: [946684800, 946771200]
+                        data:
+                          crsi: [50.0, 52.3]
+                          upper_band: [70.0, 70.5]
+                          lower_band: [30.0, 29.5]
+                        metadata:
+                          name: "crsi"
+                          display_name: "cRSI"
+                          display_type: "oscillator"
+                          category: "momentum"
+                          series_metadata:
+                            - field: "crsi"
+                              display_name: "cRSI"
+                              type: "line"
+                              style: "solid"
+                              color: "#2962FF"
+                            - field: "upper_band"
+                              display_name: "Upper Band"
+                              type: "line"
+                              style: "dashed"
+                              color: "#4CAF50"
+                            - field: "lower_band"
+                              display_name: "Lower Band"
+                              type: "line"
+                              style: "dashed"
+                              color: "#F44336"
+                        calculated_at: "2026-01-02T10:30:00Z"
+                        data_points: 10000
+                      - symbol: "SPY"
+                        interval: "1d"
+                        indicator_name: "rsi"
+                        timestamps: [946684800, 946771200]
+                        data:
+                          rsi: [45.2, 48.1]
+                        metadata:
+                          name: "rsi"
+                          display_name: "RSI"
+                          display_type: "oscillator"
+                          category: "momentum"
+                          series_metadata:
+                            - field: "rsi"
+                              display_name: "RSI"
+                              type: "line"
+                              style: "solid"
+                              color: "#9C27B0"
+                        calculated_at: "2026-01-02T10:30:00Z"
+                        data_points: 10000
+                    errors: []
+                    total_duration_ms: 145.3
+                    cache_hits: 0
+                    cache_misses: 2
+
+                partial_failure:
+                  summary: Some indicators failed
+                  description: Individual failures don't fail the entire batch
+                  value:
+                    results:
+                      - symbol: "SPY"
+                        interval: "1d"
+                        indicator_name: "sma"
+                        timestamps: [946684800, 946771200]
+                        data:
+                          sma: [450.2, 451.5]
+                        metadata:
+                          name: "sma"
+                          display_name: "SMA"
+                          display_type: "overlay"
+                          category: "trend"
+                          series_metadata:
+                            - field: "sma"
+                              display_name: "SMA"
+                              type: "line"
+                              style: "solid"
+                              color: "#FF9800"
+                        calculated_at: "2026-01-02T10:30:00Z"
+                        data_points: 10000
+                    errors:
+                      - index: 1
+                        symbol: "INVALID"
+                        indicator_name: "rsi"
+                        error: "Invalid ticker symbol: INVALID"
+                    total_duration_ms: 312.7
+                    cache_hits: 1
+                    cache_misses: 1
+
+                all_cached:
+                  summary: All results from cache
+                  description: Fastest path when all indicators are cached
+                  value:
+                    results:
+                      - symbol: "SPY"
+                        interval: "1d"
+                        indicator_name: "crsi"
+                        timestamps: [946684800, 946771200]
+                        data:
+                          crsi: [50.0, 52.3]
+                        metadata:
+                          name: "crsi"
+                          display_name: "cRSI"
+                        calculated_at: "2026-01-02T10:28:00Z"
+                        data_points: 10000
+                    errors: []
+                    total_duration_ms: 28.5
+                    cache_hits: 1
+                    cache_misses: 0
+
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_batch_size:
+                  summary: Batch size exceeds maximum
+                  value:
+                    detail: "Batch size exceeds maximum of 10 requests"
+
+                invalid_interval:
+                  summary: Invalid interval parameter
+                  value:
+                    detail: "Invalid interval. Must be one of: 1m, 5m, 15m, 1h, 4h, 1d, 1wk"
+
+                empty_requests:
+                  summary: Empty request array
+                  value:
+                    detail: "Request array must contain at least 1 indicator request"
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                database_error:
+                  summary: Database connection failed
+                  value:
+                    detail: "Database query failed: connection timeout"
+
+                cache_error:
+                  summary: Cache layer failure
+                  value:
+                    detail: "Cache service unavailable, falling back to database"
+
+components:
+  schemas:
+    BatchIndicatorRequest:
+      type: object
+      required:
+        - requests
+      properties:
+        requests:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/IndicatorRequest'
+      description: |
+        Array of indicator requests to process in batch.
+
+        **Maximum batch size**: 10 indicators per request (FR-010)
+
+        **Processing timeout**: 5 seconds maximum (FR-014)
+
+    IndicatorRequest:
+      type: object
+      required:
+        - symbol
+        - indicator_name
+      properties:
+        symbol:
+          type: string
+          minLength: 1
+          maxLength: 10
+          pattern: "^[A-Z]{1,5}$"
+          description: |
+            Stock ticker symbol (e.g., SPY, AAPL, QQQ).
+
+            Will be converted to uppercase.
+          example: "SPY"
+
+        indicator_name:
+          type: string
+          minLength: 1
+          description: |
+            Name of the indicator to calculate.
+
+            Common indicators: crsi, rsi, sma, ema, macd, bbands, tdfi
+
+            Must be registered in the indicator registry.
+          example: "crsi"
+
+        interval:
+          type: string
+          default: "1d"
+          enum: ["1m", "5m", "15m", "1h", "4h", "1d", "1wk"]
+          description: |
+            Timeframe for the candle data.
+
+            - 1m, 5m, 15m: Intraday intervals
+            - 1h, 4h: Hourly intervals
+            - 1d, 1wk: Daily and weekly intervals
+          example: "1d"
+
+        params:
+          type: object
+          additionalProperties: true
+          description: |
+            Indicator-specific parameters.
+
+            Parameters vary by indicator. Common parameters include:
+            - period: Lookback period (SMA, EMA, RSI)
+            - fast/slow/signal: MACD periods
+            - domcycle/vibration/leveling/cyclic_memory: cRSI parameters
+
+            All parameters are validated against the indicator's parameter definitions.
+          example:
+            period: 14
+
+        from:
+          type: string
+          format: date-time
+          description: |
+            Start timestamp for indicator calculation (ISO 8601 format).
+
+            If provided, a warm-up period is automatically included to ensure
+            accurate indicator values at the start of the requested range.
+          example: "2023-01-01T00:00:00Z"
+
+        to:
+          type: string
+          format: date-time
+          description: |
+            End timestamp for indicator calculation (ISO 8601 format).
+
+            Defaults to current time if not provided.
+          example: "2024-01-01T00:00:00Z"
+
+    BatchIndicatorResponse:
+      type: object
+      required:
+        - results
+        - errors
+        - total_duration_ms
+        - cache_hits
+        - cache_misses
+      properties:
+        results:
+          type: array
+          description: |
+            Successfully calculated indicators.
+
+            Array order corresponds to the order of requests in the request body.
+
+            If a request failed, its position in this array is None (use errors array for details).
+          items:
+            $ref: '#/components/schemas/IndicatorOutput'
+
+        errors:
+          type: array
+          description: |
+            Errors for failed indicator calculations.
+
+            Each error includes the request index, symbol, indicator name, and error message.
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+
+        total_duration_ms:
+          type: number
+          format: float
+          description: |
+            Total processing time in milliseconds.
+
+            Includes database queries, calculations, and caching overhead.
+
+            **Target**: <200ms for 3 indicators (SC-003)
+          example: 145.3
+
+        cache_hits:
+          type: integer
+          description: |
+            Number of requests served from cache.
+
+            Cached results are returned in <50ms.
+          example: 2
+
+        cache_misses:
+          type: integer
+          description: |
+            Number of requests that required calculation.
+
+            Cache misses trigger database query and indicator calculation.
+          example: 1
+
+    IndicatorOutput:
+      type: object
+      required:
+        - symbol
+        - interval
+        - indicator_name
+        - timestamps
+        - data
+        - metadata
+        - calculated_at
+        - data_points
+      properties:
+        symbol:
+          type: string
+          description: Stock symbol (uppercase)
+          example: "SPY"
+
+        interval:
+          type: string
+          description: Timeframe
+          example: "1d"
+
+        indicator_name:
+          type: string
+          description: Indicator name
+          example: "crsi"
+
+        timestamps:
+          type: array
+          items:
+            type: integer
+          description: |
+            Unix timestamps in seconds (UTC).
+
+            Corresponds to the time axis for all data series.
+          example: [946684800, 946771200]
+
+        data:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: number
+              nullable: true
+          description: |
+            Indicator data series.
+
+            Each key is a field name (e.g., "rsi", "upper_band").
+            Each value is an array of data points aligned with timestamps.
+
+            Null values indicate NaN/Inf in the calculation (typically during warm-up period).
+          example:
+            crsi: [50.0, 52.3, 51.8, null]
+            upper_band: [70.0, 70.5, 70.2, 69.8]
+
+        metadata:
+          $ref: '#/components/schemas/IndicatorMetadata'
+
+        calculated_at:
+          type: string
+          format: date-time
+          description: When the indicator was calculated (ISO 8601)
+          example: "2026-01-02T10:30:00Z"
+
+        data_points:
+          type: integer
+          description: Number of data points returned
+          example: 10000
+
+    IndicatorMetadata:
+      type: object
+      required:
+        - name
+        - display_name
+        - display_type
+        - category
+        - series_metadata
+      properties:
+        name:
+          type: string
+          description: Internal indicator name
+          example: "crsi"
+
+        display_name:
+          type: string
+          description: Human-readable indicator name
+          example: "cRSI"
+
+        display_type:
+          type: string
+          enum: ["oscillator", "overlay"]
+          description: |
+            How the indicator should be displayed on the chart.
+
+            - oscillator: Separate pane with own y-axis (e.g., RSI, MACD)
+            - overlay: Overlay on price chart (e.g., SMA, EMA, Bollinger Bands)
+          example: "oscillator"
+
+        category:
+          type: string
+          enum: ["trend", "momentum", "volatility", "volume"]
+          description: Indicator category for grouping
+          example: "momentum"
+
+        series_metadata:
+          type: array
+          description: |
+            Metadata for each data series in the indicator.
+
+            Defines display properties for rendering.
+          items:
+            $ref: '#/components/schemas/SeriesMetadata'
+
+    SeriesMetadata:
+      type: object
+      required:
+        - field
+        - display_name
+        - type
+      properties:
+        field:
+          type: string
+          description: Field name in the data object
+          example: "crsi"
+
+        display_name:
+          type: string
+          description: Human-readable name for legend/tooltip
+          example: "cRSI"
+
+        type:
+          type: string
+          enum: ["line", "histogram", "area"]
+          description: Visual type for rendering
+          example: "line"
+
+        style:
+          type: string
+          enum: ["solid", "dashed", "dotted"]
+          description: Line style (for line type)
+          example: "solid"
+
+        color:
+          type: string
+          pattern: "^#[0-9A-Fa-f]{6}$"
+          description: Hex color code for rendering
+          example: "#2962FF"
+
+    ErrorDetail:
+      type: object
+      required:
+        - index
+        - symbol
+        - indicator_name
+        - error
+      properties:
+        index:
+          type: integer
+          minimum: 0
+          description: |
+            Index in the requests array that failed.
+
+            Use to map errors to original requests.
+          example: 1
+
+        symbol:
+          type: string
+          description: Symbol from the failed request
+          example: "INVALID"
+
+        indicator_name:
+          type: string
+          description: Indicator name from the failed request
+          example: "rsi"
+
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Invalid ticker symbol: INVALID"
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Error message
+          example: "Invalid interval. Must be one of: 1m, 5m, 15m, 1h, 4h, 1d, 1wk"
+
+  parameters: {}
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API key for authentication (if required).
+
+        For public endpoints, no authentication is needed.
+
+security: []

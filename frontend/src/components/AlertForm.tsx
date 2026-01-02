@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react'
 import {
   createAlert,
   type AlertCondition,
+  type AlertTriggerMode,
   getIndicatorConditions,
   type IndicatorCondition,
   type AlertCreate
 } from '../api/alerts'
-import { listIndicators, type IndicatorInfo } from '../api/indicators'
+import { listIndicatorsWithMetadata, type IndicatorInfo } from '../api/indicators'
+import { getIndicatorTitle } from '@/utils/indicatorDisplay'
 
 interface AlertFormProps {
   symbol: string
@@ -26,7 +28,8 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
   const [alertType, setAlertType] = useState<'price' | 'indicator'>('price')
   const [condition, setCondition] = useState<AlertCondition>('above')
   const [threshold, setThreshold] = useState('')
-  const [cooldown, setCooldown] = useState('')
+  const [cooldown, setCooldown] = useState('1')  // Default: 1 minute
+  const [triggerMode, setTriggerMode] = useState<AlertTriggerMode>('once_per_bar_close')  // Default
 
   // Indicator alert state
   const [indicators, setIndicators] = useState<IndicatorInfo[]>([])
@@ -41,12 +44,13 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
   const [isLoadingIndicators, setIsLoadingIndicators] = useState(false)
   const [isLoadingConditions, setIsLoadingConditions] = useState(false)
 
-  // Load available indicators on mount
+  // Load available indicators on mount (with metadata for display names)
   useEffect(() => {
     const loadIndicators = async () => {
       setIsLoadingIndicators(true)
       try {
-        const data = await listIndicators()
+        // Use listIndicatorsWithMetadata to get series_metadata for clean display names
+        const data = await listIndicatorsWithMetadata()
         setIndicators(data)
       } catch (error) {
         console.error('Error loading indicators:', error)
@@ -124,13 +128,14 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
           condition,
           threshold: thresholdVal,
           cooldown: cooldownVal,
+          trigger_mode: triggerMode,
           is_active: true
         }
 
         const result = await createAlert(alertData)
         setMessage('Alert created successfully!')
         setThreshold('')
-        setCooldown('')
+        setCooldown('1')
         if (onAlertCreated) onAlertCreated(result)
       } catch (error) {
         console.error('Error creating alert:', error)
@@ -162,6 +167,7 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
           condition,
           threshold: requiresThreshold ? parseFloat(threshold) : undefined,
           cooldown: cooldownVal,
+          trigger_mode: triggerMode,
           is_active: true,
           indicator_name: selectedIndicator,
           indicator_field: selectedField,
@@ -171,7 +177,7 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
         const result = await createAlert(alertData)
         setMessage('Alert created successfully!')
         setThreshold('')
-        setCooldown('')
+        setCooldown('1')
         setIndicatorParams({})
         if (onAlertCreated) onAlertCreated(result)
       } catch (error) {
@@ -249,7 +255,7 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
                 <option value="">Select an indicator...</option>
                 {indicators.map((ind) => (
                   <option key={ind.name} value={ind.name}>
-                    {ind.name.toUpperCase()} - {ind.description}
+                    {getIndicatorTitle(ind)} - {ind.description}
                   </option>
                 ))}
               </select>
@@ -331,19 +337,42 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
         {/* Cooldown */}
         <div>
           <label htmlFor="cooldown" className="block text-sm font-medium text-slate-400 mb-1">
-            Cooldown (optional, seconds)
+            Cooldown (optional, minutes)
           </label>
           <input
             id="cooldown"
             type="number"
-            min="0"
+            min="1"
+            max="1440"
             step="1"
             value={cooldown}
             onChange={(e) => setCooldown(e.target.value)}
             className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g. 300 (5 minutes)"
+            placeholder="e.g. 5 (5 minutes)"
           />
-          <p className="text-xs text-slate-500 mt-1">Minimum time between alert triggers</p>
+          <p className="text-xs text-slate-500 mt-1">Minimum 1 minute between alert triggers</p>
+        </div>
+
+        {/* Trigger Mode */}
+        <div>
+          <label htmlFor="triggerMode" className="block text-sm font-medium text-slate-400 mb-1">
+            Trigger Mode
+          </label>
+          <select
+            id="triggerMode"
+            value={triggerMode}
+            onChange={(e) => setTriggerMode(e.target.value as AlertTriggerMode)}
+            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="once">Once (fire once and disable)</option>
+            <option value="once_per_bar">Once per bar update</option>
+            <option value="once_per_bar_close">Once per bar close</option>
+          </select>
+          <p className="text-xs text-slate-500 mt-1">
+            {triggerMode === 'once' && 'Alert will fire once and then be automatically disabled'}
+            {triggerMode === 'once_per_bar' && 'Alert will fire at most once per bar update'}
+            {triggerMode === 'once_per_bar_close' && 'Alert will fire at most once per bar close (respects bar timestamps)'}
+          </p>
         </div>
 
         {/* Submit Button */}

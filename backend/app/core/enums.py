@@ -3,6 +3,19 @@
 from enum import Enum
 
 
+class AlertTriggerMode(str, Enum):
+    """Alert trigger mode types.
+
+    - once: Alert fires once and is automatically disabled
+    - once_per_bar: Alert fires at most once per bar update
+    - once_per_bar_close: Alert fires at most once per bar close (respects bar timestamps)
+    """
+
+    ONCE = "once"
+    ONCE_PER_BAR = "once_per_bar"
+    ONCE_PER_BAR_CLOSE = "once_per_bar_close"
+
+
 class AlertCondition(str, Enum):
     """Alert condition types with clarified semantics.
 
@@ -12,7 +25,9 @@ class AlertCondition(str, Enum):
     - crosses_up: Triggers when previous < threshold AND current >= threshold
     - crosses_down: Triggers when previous > threshold AND current <= threshold
 
-    Indicator Conditions (new):
+    Indicator Conditions:
+    - indicator_above_upper: Triggers when cRSI is above upper band (sell signal)
+    - indicator_below_lower: Triggers when cRSI is below lower band (buy signal)
     - indicator_crosses_upper: Triggers when indicator crosses above threshold
     - indicator_crosses_lower: Triggers when indicator crosses below threshold
     - indicator_turns_positive: Triggers when indicator enters bullish zone (negative -> positive)
@@ -29,6 +44,8 @@ class AlertCondition(str, Enum):
     CROSSES_DOWN = "crosses_down"
 
     # Indicator conditions
+    INDICATOR_ABOVE_UPPER = "indicator_above_upper"
+    INDICATOR_BELOW_LOWER = "indicator_below_lower"
     INDICATOR_CROSSES_UPPER = "indicator_crosses_upper"
     INDICATOR_CROSSES_LOWER = "indicator_crosses_lower"
     INDICATOR_TURNS_POSITIVE = "indicator_turns_positive"
@@ -51,6 +68,8 @@ class AlertCondition(str, Enum):
     def indicator_conditions(cls) -> set:
         """Return set of indicator-based alert conditions."""
         return {
+            cls.INDICATOR_ABOVE_UPPER,
+            cls.INDICATOR_BELOW_LOWER,
             cls.INDICATOR_CROSSES_UPPER,
             cls.INDICATOR_CROSSES_LOWER,
             cls.INDICATOR_TURNS_POSITIVE,

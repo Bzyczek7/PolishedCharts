@@ -7,7 +7,7 @@ from app.models.symbol import Symbol
 from app.models.candle import Candle
 from app.db.session import get_db
 from app.main import app
-from app.services.providers import YFinanceProvider, AlphaVantageProvider
+from app.services.providers import YFinanceProvider
 
 @pytest.mark.asyncio
 async def test_transparent_gap_filling_integration(async_client: AsyncClient, db_session):
@@ -41,17 +41,16 @@ async def test_transparent_gap_filling_integration(async_client: AsyncClient, db
         yield db_session
     app.dependency_overrides[get_db] = override_get_db
 
-    # Mock BOTH providers because orchestrator might choose either
+    # Mock YFinanceProvider since orchestrator now only uses YFinance
     with patch.object(YFinanceProvider, 'fetch_candles', AsyncMock(return_value=mock_candles)) as mock_yf:
-        with patch.object(AlphaVantageProvider, 'fetch_candles', AsyncMock(return_value=mock_candles)) as mock_av:
-            response = await async_client.get(f"/api/v1/candles/{ticker}?interval=1d&from=2025-01-01T00:00:00Z&to=2025-01-03T00:00:00Z")
-            
-            assert response.status_code == 200
-            data = response.json()
-            assert len(data) == 3
-            assert mock_yf.called or mock_av.called
-            
-            result = await db_session.execute(select(Candle).where(Candle.symbol_id == symbol.id, Candle.timestamp == ts2))
-            assert result.scalars().first() is not None
+        response = await async_client.get(f"/api/v1/candles/{ticker}?interval=1d&from=2025-01-01T00:00:00Z&to=2025-01-03T00:00:00Z")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 3
+        assert mock_yf.called
+
+        result = await db_session.execute(select(Candle).where(Candle.symbol_id == symbol.id, Candle.timestamp == ts2))
+        assert result.scalars().first() is not None
 
     app.dependency_overrides = {}

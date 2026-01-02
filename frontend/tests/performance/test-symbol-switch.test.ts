@@ -87,12 +87,12 @@ describe('Symbol Switch Restore Performance', () => {
         visible: false
       });
       result.current.addIndicator('SPY', {
-        id: 'ema_20',
+        id: 'ema',
         params: { period: 20 },
         visible: true
       });
       result.current.addIndicator('SPY', {
-        id: 'sma_50',
+        id: 'sma',
         params: { period: 50 },
         visible: true
       });

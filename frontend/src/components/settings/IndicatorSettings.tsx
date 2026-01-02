@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -78,6 +79,9 @@ export function IndicatorSettings({
           <DialogTitle className="text-lg font-semibold text-white">
             {currentIndicator.name} Settings
           </DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Edit indicator parameters and visibility
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">

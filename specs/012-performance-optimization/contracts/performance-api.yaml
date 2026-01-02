@@ -1,0 +1,314 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Performance Monitoring API
+  description: API endpoints for performance monitoring and reporting
+  version: 1.0.0
+
+paths:
+  /api/v1/performance/logs:
+    get:
+      summary: Get performance logs
+      description: Retrieve collected performance logs with optional filtering
+      tags:
+        - Performance
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [data_fetch, calculation, rendering, ui_interaction]
+          description: Filter by operation category
+        - name: operation
+          in: query
+          schema:
+            type: string
+          description: Filter by operation name
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range (ISO 8601)
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of time range (ISO 8601)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 1000
+            maximum: 10000
+          description: Maximum number of logs to return
+      responses:
+        '200':
+          description: List of performance logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PerformanceLog'
+                  total:
+                    type: integer
+                    description: Total count of logs matching filters
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+
+    delete:
+      summary: Clear performance logs
+      description: Delete all stored performance logs
+      tags:
+        - Performance
+      responses:
+        '204':
+          description: Logs cleared successfully
+        '401':
+          description: Unauthorized
+
+  /api/v1/performance/report:
+    post:
+      summary: Generate performance report
+      description: Analyze performance logs and generate bottleneck report
+      tags:
+        - Performance
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                start:
+                  type: string
+                  format: date-time
+                  description: Start of time range for report (default: 24 hours ago)
+                end:
+                  type: string
+                  format: date-time
+                  description: End of time range for report (default: now)
+                thresholds:
+                  $ref: '#/components/schemas/ThresholdConfig'
+      responses:
+        '200':
+          description: Performance report generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerformanceReport'
+        '400':
+          description: Invalid request parameters
+        '401':
+          description: Unauthorized
+        '404':
+          description: No logs found for the specified time range
+
+  /api/v1/performance/export:
+    get:
+      summary: Export performance data
+      description: Export performance logs as JSON file
+      tags:
+        - Performance
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+          description: Export format
+        - name: start
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Start of time range
+        - name: end
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: End of time range
+      responses:
+        '200':
+          description: Performance data export
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PerformanceLog'
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Unauthorized
+
+components:
+  schemas:
+    PerformanceLog:
+      type: object
+      required:
+        - id
+        - timestamp
+        - category
+        - operation
+        - duration_ms
+        - context
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this log entry
+        timestamp:
+          type: string
+          format: date-time
+          description: When the operation started
+        category:
+          type: string
+          enum: [data_fetch, calculation, rendering, ui_interaction]
+          description: Category of operation
+        operation:
+          type: string
+          description: Specific operation name (e.g., fetch_candles, calculate_rsi)
+        duration_ms:
+          type: number
+          format: float
+          minimum: 0
+          description: Duration in milliseconds
+        context:
+          type: object
+          additionalProperties: true
+          description: Additional context (symbol, interval, data_size, etc.)
+
+    PerformanceReport:
+      type: object
+      required:
+        - generated_at
+        - start_time
+        - end_time
+        - total_operations
+        - by_category
+        - bottlenecks
+        - rankings
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        total_operations:
+          type: integer
+        by_category:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CategoryStats'
+        bottlenecks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bottleneck'
+        rankings:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperationRanking'
+
+    CategoryStats:
+      type: object
+      properties:
+        total_duration_ms:
+          type: number
+        operation_count:
+          type: integer
+        average_duration_ms:
+          type: number
+        p50_duration_ms:
+          type: number
+        p95_duration_ms:
+          type: number
+        p99_duration_ms:
+          type: number
+
+    Bottleneck:
+      type: object
+      required:
+        - operation
+        - category
+        - reason
+        - total_duration_ms
+        - percent_of_total
+        - impact
+      properties:
+        operation:
+          type: string
+        category:
+          type: string
+        reason:
+          type: string
+          enum: [threshold_exceeded, high_contribution, outlier]
+        total_duration_ms:
+          type: number
+        percent_of_total:
+          type: number
+        impact:
+          type: string
+          enum: [critical, high, medium]
+
+    OperationRanking:
+      type: object
+      required:
+        - operation
+        - category
+        - total_duration_ms
+        - count
+        - average_duration_ms
+        - percent_of_total_load_time
+      properties:
+        operation:
+          type: string
+        category:
+          type: string
+        total_duration_ms:
+          type: number
+        count:
+          type: integer
+        average_duration_ms:
+          type: number
+        percent_of_total_load_time:
+          type: number
+
+    ThresholdConfig:
+      type: object
+      properties:
+        operation_thresholds:
+          type: object
+          additionalProperties:
+            type: number
+          description: Maximum acceptable duration per operation type (ms)
+        max_operation_contribution_percent:
+          type: number
+          default: 20
+          description: Max % of total load time any single operation should contribute
+        min_sample_count:
+          type: integer
+          default: 3
+          description: Minimum count for bottleneck analysis
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+security:
+  - bearerAuth: []

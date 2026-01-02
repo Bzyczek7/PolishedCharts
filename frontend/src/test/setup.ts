@@ -38,34 +38,53 @@ if (!(window as any).PointerEvent) {
 }
 
 // Mock lightweight-charts
-vi.mock('lightweight-charts', () => ({
-  createChart: vi.fn().mockReturnValue({
-    addSeries: vi.fn().mockReturnValue({
-      setData: vi.fn(),
-      createPriceLine: vi.fn(),
-      applyOptions: vi.fn(),
-    }),
+vi.mock('lightweight-charts', () => {
+  const mockSeries = {
+    setData: vi.fn(),
+    createPriceLine: vi.fn(),
     applyOptions: vi.fn(),
-    remove: vi.fn(),
-    timeScale: vi.fn().mockReturnValue({
-      fitContent: vi.fn(),
-    }),
     priceScale: vi.fn().mockReturnValue({
       applyOptions: vi.fn(),
     }),
-  }),
-  ColorType: { Solid: 'solid' },
-  LineSeries: 'LineSeries',
-  CandlestickSeries: 'CandlestickSeries',
-  HistogramSeries: 'HistogramSeries',
-  LineStyle: {
-    Solid: 0,
-    Dashed: 1,
-    Dotted: 2,
-    LargeDashed: 3,
-    SparseDotted: 4,
-  },
-}));
+  };
+
+  // Create mock constructors for Series types
+  const LineSeries = vi.fn().mockReturnValue(mockSeries);
+  const CandlestickSeries = vi.fn().mockReturnValue(mockSeries);
+  const HistogramSeries = vi.fn().mockReturnValue(mockSeries);
+
+  return {
+    createChart: vi.fn().mockReturnValue({
+      addSeries: vi.fn().mockReturnValue(mockSeries),
+      applyOptions: vi.fn(),
+      remove: vi.fn(),
+      timeScale: vi.fn().mockReturnValue({
+        fitContent: vi.fn(),
+        getVisibleRange: vi.fn(),
+        setVisibleRange: vi.fn(),
+        scrollToPosition: vi.fn(),
+      }),
+      priceScale: vi.fn().mockReturnValue({
+        applyOptions: vi.fn(),
+      }),
+    }),
+    ColorType: { Solid: 'solid' },
+    LineSeries,
+    CandlestickSeries,
+    HistogramSeries,
+    LineStyle: {
+      Solid: 0,
+      Dashed: 1,
+      Dotted: 2,
+      LargeDashed: 3,
+      SparseDotted: 4,
+    },
+    CrosshairMode: {
+      Normal: 0,
+      Magnet: 1,
+    },
+  };
+});
 
 // Mock Radix UI Tooltip
 vi.mock('@radix-ui/react-tooltip', async () => {

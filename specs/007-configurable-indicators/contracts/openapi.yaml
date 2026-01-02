@@ -1,0 +1,419 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Indicators API
+  description: API for technical indicators with configurable parameters
+  version: 1.1.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: indicators
+    description: Technical indicator endpoints
+
+paths:
+  /api/v1/indicators/supported:
+    get:
+      tags:
+        - indicators
+      summary: List supported indicators
+      description: Returns all available indicators with their parameter definitions
+      operationId: listSupportedIndicators
+      responses:
+        '200':
+          description: List of supported indicators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IndicatorInfo'
+
+  /api/v1/indicators/{symbol}/{indicator_name}:
+    get:
+      tags:
+        - indicators
+      summary: Get indicator data
+      description: Calculate and return indicator values with custom parameters
+      operationId: getIndicatorData
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stock ticker symbol (e.g., AAPL)
+          example: AAPL
+
+        - name: indicator_name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Base indicator name (sma, ema, tdfi, crsi, adxvma)
+          example: sma
+
+        - name: interval
+          in: query
+          description: Timeframe for candles
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h, 4h, 1d, 1wk]
+            default: 1d
+
+        - name: limit
+          in: query
+          description: Maximum number of data points to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+
+        # SMA/EMA parameters
+        - name: period
+          in: query
+          description: Indicator period (for SMA, EMA)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+
+        # TDFI parameters
+        - name: lookback
+          in: query
+          description: Lookback period (for TDFI)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+
+        - name: filter_high
+          in: query
+          description: Upper threshold (for TDFI)
+          schema:
+            type: number
+            format: float
+            minimum: -1.0
+            maximum: 1.0
+
+        - name: filter_low
+          in: query
+          description: Lower threshold (for TDFI)
+          schema:
+            type: number
+            format: float
+            minimum: -1.0
+            maximum: 1.0
+
+        # cRSI parameters
+        - name: dom_cycle
+          in: query
+          description: Dominant cycle period (for cRSI)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+
+        - name: vibration
+          in: query
+          description: Vibration period (for cRSI)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+
+        - name: leveling
+          in: query
+          description: Leveling factor (for cRSI)
+          schema:
+            type: number
+            format: float
+            minimum: 1.0
+            maximum: 50.0
+
+        - name: cyclic_memory
+          in: query
+          description: Cyclic memory period (for cRSI)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+
+        # ADXVMA parameters
+        - name: adxvma_period
+          in: query
+          description: ADXVMA period
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+
+        # Legacy JSON params (backward compatibility)
+        - name: params
+          in: query
+          description: JSON string of parameters (legacy, for backward compatibility)
+          schema:
+            type: string
+          style: form
+          explode: false
+
+      responses:
+        '200':
+          description: Indicator data calculated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorOutput'
+              examples:
+                smaResponse:
+                  value:
+                    symbol: AAPL
+                    interval: 1d
+                    timestamps: [1735075200, 1735161600]
+                    data:
+                      sma: [178.45, 178.52]
+                    parameters:
+                      period: 50
+                    metadata:
+                      display_type: overlay
+                      color_mode: single
+                      color_schemes:
+                        bullish: '#2962ff'
+                        bearish: '#2962ff'
+                        neutral: '#2962ff'
+                      series_metadata:
+                        - field: sma
+                          role: main
+                          label: SMA
+                          line_color: '#2962ff'
+                          line_style: solid
+                          line_width: 2
+                          display_type: line
+                    calculated_at: '2025-12-25T10:00:00Z'
+                    data_points: 2
+
+        '400':
+          description: Invalid parameter value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidParameter:
+                  value:
+                    detail: "Parameter 'period' must be <= 500, got 1000"
+                    error: Invalid parameter value
+                    parameter: period
+                    provided: '1000'
+                    valid_range: 1-500
+
+                unknownParameter:
+                  value:
+                    detail: "Invalid parameter 'invalid_param' for indicator 'sma'. Valid parameters: ['period']"
+                    error: Invalid parameter value
+                    parameter: invalid_param
+
+        '404':
+          description: Indicator or symbol not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                indicatorNotFound:
+                  value:
+                    detail: "Indicator 'unknown' not found. Available: ['sma', 'ema', 'tdfi', 'crsi', 'adxvma']"
+                    error: Indicator not found
+                    available_indicators: ['sma', 'ema', 'tdfi', 'crsi', 'adxvma']
+
+                symbolNotFound:
+                  value:
+                    detail: Symbol 'UNKNOWN' not found
+                    error: Symbol not found
+
+  /api/v1/indicators/:
+    get:
+      tags:
+        - indicators
+      summary: List indicators (basic)
+      description: Returns basic list of available indicators
+      operationId: listIndicators
+      responses:
+        '200':
+          description: List of indicators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BasicIndicatorInfo'
+
+components:
+  schemas:
+    ParameterDefinition:
+      type: object
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          enum: [integer, float, boolean, string]
+        default:
+          type: number
+        min:
+          type: number
+          nullable: true
+        max:
+          type: number
+          nullable: true
+        description:
+          type: string
+      required:
+        - name
+        - type
+        - default
+
+    IndicatorInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: sma
+        description:
+          type: string
+          example: Simple Moving Average (period=20)
+        display_type:
+          type: string
+          enum: [overlay, pane]
+          example: overlay
+        category:
+          type: string
+          example: overlay
+        parameters:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ParameterDefinition'
+        metadata:
+          type: object
+          description: Full rendering metadata
+        alert_templates:
+          type: array
+          items:
+            type: object
+            properties:
+              condition_type:
+                type: string
+              label:
+                type: string
+              description:
+                type: string
+              applicable_fields:
+                type: array
+                items:
+                  type: string
+              requires_threshold:
+                type: boolean
+
+    BasicIndicatorInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: sma
+        description:
+          type: string
+          example: Simple Moving Average (period=20)
+        parameters:
+          type: object
+          additionalProperties:
+            type: object
+
+    IndicatorOutput:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: AAPL
+        interval:
+          type: string
+          example: 1d
+        timestamps:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Unix timestamps in seconds
+        data:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: number
+              nullable: true
+          description: Map of field names to value arrays
+        parameters:
+          type: object
+          description: Parameters used for calculation
+          example:
+            period: 50
+        metadata:
+          type: object
+          description: Indicator rendering metadata
+        calculated_at:
+          type: string
+          format: date-time
+        data_points:
+          type: integer
+          description: Number of data points returned
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Error message
+        error:
+          type: string
+          description: Error type (for extended error responses)
+        parameter:
+          type: string
+          description: Parameter name that caused the error
+        provided:
+          type: string
+          description: The value that was provided
+        valid_range:
+          type: string
+          description: The valid range for the parameter
+        available_indicators:
+          type: array
+          items:
+            type: string
+          description: List of available indicator names
+
+  examples:
+    SMARequest:
+      value:
+        symbol: AAPL
+        indicator_name: sma
+        interval: 1d
+        period: 50
+        limit: 100
+
+    EMARequest:
+      value:
+        symbol: AAPL
+        indicator_name: ema
+        interval: 1d
+        period: 9
+        limit: 100
+
+    cRSIRequest:
+      value:
+        symbol: AAPL
+        indicator_name: crsi
+        interval: 1d
+        dom_cycle: 20
+        vibration: 14
+        limit: 100

@@ -124,18 +124,18 @@ class DataUpdater:
         """Save fetched candles to the database"""
         async with self.SessionLocal() as session:
             # Get the symbol from database
-            symbol_result = await session.execute(sql_select(Symbol).filter(Symbol.ticker == symbol))
+            symbol_result = await session.execute(select(Symbol).where(Symbol.ticker == symbol))
             symbol_obj = symbol_result.scalars().first()
-            
+
             if not symbol_obj:
                 logger.error(f"Symbol {symbol} not found in database")
                 return
-            
+
             # Process and save each candle
             for candle_data in candles:
                 # Check if candle already exists in database
                 existing_result = await session.execute(
-                    sql_select(Candle).filter(
+                    select(Candle).where(
                         Candle.symbol_id == symbol_obj.id,
                         Candle.interval == interval,
                         Candle.timestamp == candle_data["timestamp"]
@@ -165,6 +165,12 @@ class DataUpdater:
                     session.add(new_candle)
             
             await session.commit()
+
+            # Invalidate cache for this symbol to force recalculation of indicators
+            from app.services.cache import invalidate_symbol
+            invalidate_symbol(symbol)
+            logger.debug(f"Invalidated cache for {symbol} after candle update")
+
             logger.debug(f"Saved {len(candles)} candles to database for {symbol} ({interval})")
     
     async def stop_updates(self):

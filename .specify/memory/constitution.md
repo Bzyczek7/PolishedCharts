@@ -2,8 +2,8 @@
 
 <!--
 Sync Impact Report:
-- Version change: 1.0.0 → 1.1.0 (MINOR: material expansion - machine-verifiable parity evidence)
-- Modified principles: I. UX Parity with TradingView (Requirements), Development Standards (Review Process)
+- Version change: 1.1.0 → 1.2.0 (MINOR: material expansion - visual verification requirement)
+- Modified principles: Development Standards (Review Process)
 - Added sections: None
 - Removed sections: None
 - Templates requiring updates:
@@ -11,7 +11,8 @@ Sync Impact Report:
   ✅ .specify/templates/spec-template.md (already aligned)
   ✅ .specify/templates/tasks-template.md (already aligned with TDD principles)
 - Follow-up TODOs: None
-- Rationale: Replace screenshot/clip requirements with machine-verifiable parity evidence (Feature 005 alignment)
+- Rationale: Add explicit visual verification requirement with clear validation instructions to prevent
+  iteration cycles on UI/visual changes (landing page, styling, marketing copy, etc.)
 -->
 
 ## Core Principles
@@ -241,6 +242,20 @@ If the constitution conflicts with a spec or plan, the constitution wins until e
 - UI changes require a completed parity checklist plus machine-readable evidence (tests + parity report).
   Screenshots/recordings are optional and must not be the only acceptance proof.
 
+**Visual Addition Verification** (NON-NEGOTIABLE):
+- Any visual, UI, or styling addition (new components, layout changes, color schemes, animations,
+  landing page sections, marketing copy placement, etc.) MUST be verified by the project maintainer
+  before merging.
+- Verification request MUST include:
+  1. **Exact reproduction steps**: URL/path to view, login state if applicable, browser/device info
+  2. **Visual artifacts**: Screenshots and/or screen recording showing the implementation
+  3. **Context**: What user story or requirement this addresses (with spec/plan link)
+  4. **Acceptance criteria**: Specific checklist of what to validate (layout, spacing, colors, typography,
+     responsive behavior, accessibility, copy/wording, etc.)
+- Rationale: History of iterations on visual changes (landing page, Hussar placement, donation cards,
+  data delay notices) demonstrates that visual validation cannot be assumed. Explicit verification with
+  clear instructions prevents wasted cycles and aligns implementation with vision.
+
 ---
 
 ## Governance
@@ -272,4 +287,4 @@ The following defaults apply to all features unless revised via ADR:
 
 ---
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-25
+**Version**: 1.2.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-30

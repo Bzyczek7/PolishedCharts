@@ -1,0 +1,213 @@
+openapi: 3.0.0
+info:
+  title: Watchlist API
+  description: API for managing the global shared watchlist with transactional historical data backfill
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+paths:
+  /watchlist:
+    get:
+      summary: List all watchlist entries
+      description: Returns all symbols in the global shared watchlist with their add timestamps
+      operationId: listWatchlist
+      tags:
+        - watchlist
+      responses:
+        '200':
+          description: List of watchlist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchlistEntry'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+    post:
+      summary: Add symbol to watchlist
+      description: |
+        Adds a ticker to the watchlist with automatic historical data backfill.
+
+        **Transaction Flow**:
+        1. Validate ticker exists in ticker_universe
+        2. Get or create symbol entry
+        3. Backfill full historical daily data (60s timeout)
+        4. Create watchlist entry
+
+        **Returns**:
+        - 201 with status "added" on success
+        - 200 with status "already_present" if ticker already in watchlist
+        - 400 with error message if validation or backfill fails
+
+        **Note**: No partial entries - either full success or complete rollback.
+      operationId: addToWatchlist
+      tags:
+        - watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - symbol
+              properties:
+                symbol:
+                  type: string
+                  description: Stock ticker symbol (e.g., "AAPL")
+                  pattern: '^[A-Z]{1,5}$'
+                  example: "AAPL"
+      responses:
+        '201':
+          description: Symbol added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistAddResponse'
+          example:
+            status: "added"
+            symbol: "AAPL"
+            candles_backfilled: 1253
+        '200':
+          description: Symbol already in watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistAddResponse'
+          example:
+            status: "already_present"
+            symbol: "AAPL"
+        '400':
+          description: Invalid request or backfill failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          examples:
+            invalid_ticker:
+              value:
+                detail: "Invalid ticker: INVALID not found in ticker universe"
+            no_data:
+              value:
+                detail: "No historical data available for INVALID from Yahoo Finance"
+            timeout:
+              value:
+                detail: "Backfill for AAPL exceeded 60 second timeout"
+            rate_limited:
+              value:
+                detail: "Yahoo Finance rate limit exceeded. Please try again later."
+        '408':
+          $ref: '#/components/responses/TimeoutError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /watchlist/{symbol}:
+    delete:
+      summary: Remove symbol from watchlist
+      description: Removes a ticker from the global shared watchlist. Historical candle data is preserved.
+      operationId: removeFromWatchlist
+      tags:
+        - watchlist
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stock ticker symbol (e.g., "AAPL")
+          example: "AAPL"
+      responses:
+        '204':
+          description: Symbol removed successfully
+        '404':
+          description: Symbol not in watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          example:
+            detail: "AAPL not found in watchlist"
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  schemas:
+    WatchlistEntry:
+      type: object
+      required:
+        - id
+        - symbol
+        - added_at
+      properties:
+        id:
+          type: integer
+          description: Watchlist entry ID
+          example: 1
+        symbol:
+          type: string
+          description: Stock ticker symbol
+          example: "AAPL"
+        added_at:
+          type: string
+          format: date-time
+          description: When the symbol was added to the watchlist
+          example: "2025-12-27T10:30:00Z"
+
+    WatchlistAddResponse:
+      type: object
+      required:
+        - status
+        - symbol
+      properties:
+        status:
+          type: string
+          enum: ["added", "already_present"]
+          description: |
+            - "added": Symbol was added to watchlist with full historical data
+            - "already_present": Symbol was already in watchlist
+        symbol:
+          type: string
+          description: The ticker symbol
+          example: "AAPL"
+        candles_backfilled:
+          type: integer
+          description: Number of historical candles backfilled (only present when status="added")
+          example: 1253
+
+    Error:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Invalid ticker: INVALID not found in ticker universe"
+
+  responses:
+    TimeoutError:
+      description: Request timeout
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Backfill for AAPL exceeded 60 second timeout"
+
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Internal server error"
+
+tags:
+  - name: watchlist
+    description: Watchlist management operations

@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: Notification API
+  description: API for managing notification preferences, Telegram configuration, and delivery history
+  version: 1.0.0
+  contact:
+    name: TradingAlert
+
+paths:
+  /api/v1/notifications/settings:
+    get:
+      summary: Get notification settings
+      description: Retrieve user's notification preferences (NotificationPreference entity)
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Notification settings retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreference'
+        '401':
+          description: Unauthorized (guest users - Telegram not available)
+        '500':
+          description: Server error
+
+    patch:
+      summary: Update notification settings
+      description: Update notification preferences (toast, sound, Telegram)
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferenceUpdate'
+      responses:
+        '200':
+          description: Settings updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreference'
+        '400':
+          description: Invalid request (e.g., invalid Telegram credentials)
+        '401':
+          description: Unauthorized (guest users)
+        '500':
+          description: Server error
+
+  /api/v1/notifications/telegram/validate:
+    post:
+      summary: Validate Telegram credentials
+      description: Validate bot token and chat ID without sending a message. Credentials are encrypted before storage.
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - chat_id
+              properties:
+                token:
+                  type: string
+                  description: Telegram bot token (will be encrypted)
+                chat_id:
+                  type: string
+                  description: Telegram chat ID (will be encrypted)
+      responses:
+        '200':
+          description: Credentials valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  bot_name:
+                    type: string
+        '400':
+          description: Invalid credentials
+        '401':
+          description: Unauthorized (guest users)
+        '500':
+          description: Server error
+
+  /api/v1/notifications/telegram/test:
+    post:
+      summary: Test Telegram configuration
+      description: Send a test message to verify Telegram credentials are working
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Test message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message_id:
+                    type: string
+        '400':
+          description: Invalid credentials
+        '401':
+          description: Unauthorized (guest users)
+        '500':
+          description: Server error or Telegram unavailable
+
+  /api/v1/notifications/history:
+    get:
+      summary: Get notification history
+      description: Retrieve recent notification deliveries (last 50)
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Notification history retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationDelivery'
+                  total:
+                    type: integer
+        '401':
+          description: Unauthorized (guest users)
+        '500':
+          description: Server error
+
+components:
+  schemas:
+    NotificationPreference:
+      description: Global user notification preferences (1:1 with User)
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Preference identifier
+        user_id:
+          type: string
+          format: uuid
+          description: Foreign key to User
+        toast_enabled:
+          type: boolean
+          description: Show toast notifications
+        sound_enabled:
+          type: boolean
+          description: Play sound notifications
+        sound_type:
+          type: string
+          enum:
+            - bell
+            - alert
+            - chime
+          description: Sound to play (required if sound_enabled)
+        telegram_enabled:
+          type: boolean
+          description: Send Telegram messages
+        telegram_token_encrypted:
+          type: string
+          nullable: true
+          description: Encrypted Telegram bot token (never exposed via API)
+        telegram_chat_id_encrypted:
+          type: string
+          nullable: true
+          description: Encrypted Telegram chat ID (never exposed via API)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - user_id
+        - toast_enabled
+        - sound_enabled
+        - telegram_enabled
+
+    NotificationPreferenceUpdate:
+      description: Request to update notification preferences
+      type: object
+      properties:
+        toast_enabled:
+          type: boolean
+        sound_enabled:
+          type: boolean
+        sound_type:
+          type: string
+          enum:
+            - bell
+            - alert
+            - chime
+        telegram_enabled:
+          type: boolean
+        telegram_token:
+          type: string
+          description: Telegram bot token (plaintext, will be encrypted)
+        telegram_chat_id:
+          type: string
+          description: Telegram chat ID (plaintext, will be encrypted)
+
+    NotificationDelivery:
+      description: Record of a notification that was sent (FK to AlertTrigger)
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Delivery identifier
+        alert_trigger_id:
+          type: string
+          format: uuid
+          description: Foreign key to AlertTrigger (1:N relationship)
+        alert_id:
+          type: string
+          format: uuid
+          description: Foreign key to Alert (denormalized for query efficiency)
+        alert_name:
+          type: string
+          description: Name of the alert that triggered
+        symbol:
+          type: string
+          description: Symbol that triggered the alert
+        notification_type:
+          type: string
+          enum:
+            - toast
+            - sound
+            - telegram
+          description: Type of notification sent
+        status:
+          type: string
+          enum:
+            - sent
+            - failed
+            - pending
+          description: Delivery status
+        triggered_at:
+          type: string
+          format: date-time
+          description: When the alert triggered
+        message:
+          type: string
+          description: Content sent (for display in history)
+        error_message:
+          type: string
+          nullable: true
+          description: Error details if status is failed
+      required:
+        - id
+        - alert_trigger_id
+        - alert_id
+        - notification_type
+        - status
+        - triggered_at
+
+    AlertNotificationSettings:
+      description: Per-alert notification overrides (1:0 or 1 with Alert)
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Settings identifier
+        alert_id:
+          type: string
+          format: uuid
+          description: Foreign key to Alert
+        toast_enabled:
+          type: boolean
+          nullable: true
+          description: Override global toast setting (null = use global)
+        sound_enabled:
+          type: boolean
+          nullable: true
+          description: Override global sound setting (null = use global)
+        sound_type:
+          type: string
+          enum:
+            - bell
+            - alert
+            - chime
+          nullable: true
+          description: Alert-specific sound (null = use global)
+        telegram_enabled:
+          type: boolean
+          nullable: true
+          description: Override global Telegram setting (null = use global)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

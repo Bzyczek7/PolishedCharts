@@ -1,0 +1,426 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://tradingalert.example.com/schemas/indicator-metadata.json",
+  "title": "Indicator Metadata Schema",
+  "description": "JSON Schema for validating TradingAlert indicator metadata",
+  "type": "object",
+  "definitions": {
+    "IndicatorMetadata": {
+      "type": "object",
+      "required": ["display_type", "color_mode", "color_schemes", "series_metadata"],
+      "properties": {
+        "display_type": {
+          "type": "string",
+          "enum": ["overlay", "pane"],
+          "description": "Whether indicator draws on price chart (overlay) or creates separate pane (pane)"
+        },
+        "color_mode": {
+          "type": "string",
+          "enum": ["single", "threshold", "gradient", "trend"],
+          "description": "How colors are applied to indicator values"
+        },
+        "color_schemes": {
+          "type": "object",
+          "description": "State to hex color mapping (e.g., bullish, bearish, neutral)",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^#[0-9A-Fa-f]{6}$",
+            "description": "Hex color code"
+          },
+          "minProperties": 1
+        },
+        "thresholds": {
+          "$ref": "#/definitions/ThresholdsConfig",
+          "description": "Threshold values for threshold-based coloring (required if color_mode='threshold')"
+        },
+        "scale_ranges": {
+          "$ref": "#/definitions/ScaleRangesConfig",
+          "description": "Y-axis scale configuration for pane indicators (required if display_type='pane')"
+        },
+        "series_metadata": {
+          "type": "array",
+          "description": "Metadata for each visual series (main line, bands, signals, histograms)",
+          "items": {
+            "$ref": "#/definitions/SeriesMetadata"
+          },
+          "minItems": 1
+        },
+        "reference_levels": {
+          "type": "array",
+          "description": "Horizontal reference lines with labels",
+          "items": {
+            "$ref": "#/definitions/ReferenceLevel"
+          },
+          "default": []
+        }
+      },
+      "if": {
+        "properties": {
+          "color_mode": { "const": "threshold" }
+        },
+        "required": ["color_mode"]
+      },
+      "then": {
+        "required": ["thresholds"]
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "display_type": { "const": "pane" }
+          },
+          "required": ["display_type"]
+        },
+        "then": {
+          "required": ["scale_ranges"]
+        }
+      }
+    },
+    "ThresholdsConfig": {
+      "type": "object",
+      "required": ["high", "low"],
+      "properties": {
+        "high": {
+          "type": "number",
+          "description": "Upper threshold value"
+        },
+        "low": {
+          "type": "number",
+          "description": "Lower threshold value"
+        }
+      },
+      "allOf": [
+        {
+          "description": "high must be greater than low",
+          "not": {
+            "required": ["high", "low"],
+            "then": {
+              "properties": {
+                "high": { "maximum": { "$data": "1/low" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ScaleRangesConfig": {
+      "type": "object",
+      "required": ["min", "max", "auto"],
+      "properties": {
+        "min": {
+          "type": "number",
+          "description": "Minimum Y-axis value"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum Y-axis value"
+        },
+        "auto": {
+          "type": "boolean",
+          "description": "If True, auto-scale instead of using min/max",
+          "default": false
+        }
+      },
+      "allOf": [
+        {
+          "description": "min must be less than max",
+          "not": {
+            "required": ["min", "max"],
+            "then": {
+              "properties": {
+                "min": { "minimum": { "$data": "1/max" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "SeriesMetadata": {
+      "type": "object",
+      "required": ["field", "role", "label", "line_color", "line_style", "line_width", "display_type"],
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Data field name in indicator output (CRITICAL for frontend binding)",
+          "minLength": 1,
+          "pattern": "^[a-z_][a-z0-9_]*$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["main", "signal", "band", "histogram"],
+          "description": "Role of this series within the indicator"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable name for legend/UI",
+          "minLength": 1
+        },
+        "line_color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Hex color code"
+        },
+        "line_style": {
+          "type": "string",
+          "enum": ["solid", "dashed", "dotted"],
+          "description": "Line style"
+        },
+        "line_width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Line width in pixels"
+        },
+        "display_type": {
+          "type": "string",
+          "enum": ["line", "histogram", "area"],
+          "description": "How to display this series"
+        }
+      }
+    },
+    "ReferenceLevel": {
+      "type": "object",
+      "required": ["value", "line_color", "line_label", "line_style"],
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "Y-axis value for the reference line"
+        },
+        "line_color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Hex color code"
+        },
+        "line_label": {
+          "type": "string",
+          "description": "Text label shown next to the line"
+        },
+        "line_style": {
+          "type": "string",
+          "enum": ["solid", "dashed", "dotted"],
+          "description": "Line style"
+        }
+      }
+    },
+    "ParameterDefinition": {
+      "type": "object",
+      "required": ["type", "default", "description"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["integer", "float", "string", "boolean"],
+          "description": "Parameter type"
+        },
+        "default": {
+          "description": "Default value (type varies by parameter type)"
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value (for numeric types)"
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value (for numeric types)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable parameter description"
+        }
+      },
+      "if": {
+        "properties": {
+          "type": { "const": "integer" }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "default": { "type": "integer" },
+          "min": { "type": "integer" },
+          "max": { "type": "integer" }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "type": { "const": "float" }
+          },
+          "required": ["type"]
+        },
+        "then": {
+          "properties": {
+            "default": { "type": "number" },
+            "min": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "else": {
+          "if": {
+            "properties": {
+              "type": { "const": "boolean" }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "properties": {
+              "default": { "type": "boolean" }
+            }
+          },
+          "else": {
+            "if": {
+              "properties": {
+                "type": { "const": "string" }
+              },
+              "required": ["type"]
+            },
+            "then": {
+              "properties": {
+                "default": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "IndicatorInfo": {
+      "type": "object",
+      "required": ["name", "description", "display_type", "category", "metadata"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique indicator identifier (e.g., 'rsi', 'macd')",
+          "pattern": "^[a-z_][a-z0-9_]*$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable indicator description"
+        },
+        "display_type": {
+          "type": "string",
+          "enum": ["overlay", "pane"],
+          "description": "Whether indicator draws on price chart or separate pane"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["overlay", "oscillator", "momentum", "trend", "volatility"],
+          "description": "Indicator category for grouping"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ParameterDefinition"
+          },
+          "description": "Configurable parameters for this indicator",
+          "default": {}
+        },
+        "metadata": {
+          "$ref": "#/definitions/IndicatorMetadata",
+          "description": "Full metadata for generic frontend rendering"
+        },
+        "alert_templates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AlertTemplate"
+          },
+          "description": "Available alert conditions",
+          "default": []
+        }
+      }
+    },
+    "AlertTemplate": {
+      "type": "object",
+      "required": ["condition_type", "label", "description", "applicable_fields", "requires_threshold"],
+      "properties": {
+        "condition_type": {
+          "type": "string",
+          "description": "Type of alert condition"
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable condition label"
+        },
+        "description": {
+          "type": "string",
+          "description": "Condition description"
+        },
+        "applicable_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Fields this condition applies to",
+          "minItems": 1
+        },
+        "requires_threshold": {
+          "type": "boolean",
+          "description": "Whether condition requires threshold value"
+        }
+      }
+    },
+    "IndicatorOutput": {
+      "type": "object",
+      "required": ["symbol", "interval", "timestamps", "data", "metadata", "calculated_at", "data_points"],
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "description": "Stock ticker symbol",
+          "pattern": "^[A-Z]{1,5}$",
+          "example": "AAPL"
+        },
+        "interval": {
+          "type": "string",
+          "description": "Candle interval",
+          "enum": ["1m", "5m", "15m", "1h", "4h", "1d", "1wk"],
+          "example": "1d"
+        },
+        "timestamps": {
+          "type": "array",
+          "description": "Unix timestamps in seconds (numeric, not strings)",
+          "items": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "data": {
+          "type": "object",
+          "description": "Field name -> array of values. Use null for insufficient data. Field names must match metadata.series_metadata[].field values.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "nullable": true
+            },
+            "minItems": 1
+          },
+          "minProperties": 1
+        },
+        "metadata": {
+          "$ref": "#/definitions/IndicatorMetadata"
+        },
+        "calculated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When calculation was performed (ISO 8601)"
+        },
+        "data_points": {
+          "type": "integer",
+          "description": "Number of data points returned",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "description": "All data arrays must have the same length as timestamps array",
+          "if": {
+            "required": ["timestamps", "data"]
+          },
+          "then": {
+            "expression": "this.timestamps.length === this.data[*].length",
+            "errorMessage": "All data arrays must have the same length as timestamps array"
+          }
+        }
+      ]
+    }
+  }
+}

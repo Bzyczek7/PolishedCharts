@@ -325,7 +325,7 @@ TradingAlert/
 │   │   │   └── candle.py        # Candle database model
 │   │   └── services/
 │   │       ├── indicators/      # Indicator registry
-│   │       └── providers.py     # YFinance/AlphaVantage
+│   │       └── providers.py     # YFinance provider
 │   └── tests/
 ├── frontend/
 │   ├── src/

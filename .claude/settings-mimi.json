@@ -1,0 +1,39 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.minimax.io/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "sk-cp-UShLovCGmHrPYnRYwJSVuEFRthj91W9nCCnOBkxxMuT6jQ9_9LmR_zpa0NhCEo5xccTOMy8ZsGaLTuzSanBnbZeMW5SpplYWQytKNjG9tfSpjMu6TzeOtKk",
+    "API_TIMEOUT_MS": "3000000",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": 1,
+    "ANTHROPIC_MODEL": "MiniMax-M2.1",
+    "ANTHROPIC_SMALL_FAST_MODEL": "MiniMax-M2.1",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "MiniMax-M2.1",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "MiniMax-M2.1",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "MiniMax-M2.1"
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "claude-code",
+        "--project",
+        "/home/marek/DQN/TradingAlert"
+      ]
+    },
+    "MiniMax": {
+      "command": "uvx",
+      "args": [
+        "minimax-coding-plan-mcp",
+        "-y"
+      ],
+      "env": {
+        "MINIMAX_API_KEY": "sk-cp-UShLovCGmHrPYnRYwJSVuEFRthj91W9nCCnOBkxxMuT6jQ9_9LmR_zpa0NhCEo5xccTOMy8ZsGaLTuzSanBnbZeMW5SpplYWQytKNjG9tfSpjMu6TzeOtKk",
+        "MINIMAX_API_HOST": "https://api.minimax.io"
+      }
+    }
+  }
+}

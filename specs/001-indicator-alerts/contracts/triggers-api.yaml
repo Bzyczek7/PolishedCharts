@@ -1,0 +1,146 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Triggers API
+  description: API for retrieving alert trigger history
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+tags:
+  - name: triggers
+    description: Trigger history operations
+
+paths:
+  /alerts/triggers/recent:
+    get:
+      tags: [triggers]
+      summary: Get recent trigger events
+      description: |
+        Retrieve a list of recent trigger events across all alerts, for the global Log view.
+
+        **Ordering**: Results are ordered by `triggered_at` descending (newest first).
+
+        **Symbol filtering**: Use the `symbol` parameter to filter by stock symbol (e.g., "AAPL").
+        The `symbol_id` parameter is deprecated but still supported for backward compatibility.
+      operationId: getRecentTriggers
+      parameters:
+        - name: symbol
+          in: query
+          description: Filter by stock symbol (e.g., "AAPL")
+          schema:
+            type: string
+          example: "AAPL"
+        - name: symbol_id
+          in: query
+          description: Filter by symbol ID (deprecated; use symbol parameter instead)
+          schema:
+            type: integer
+          deprecated: true
+        - name: limit
+          in: query
+          description: Maximum number of triggers to return
+          schema:
+            type: integer
+            default: 500
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          description: Number of triggers to skip (for pagination)
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of trigger events (ordered by triggered_at descending, newest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TriggerResponse'
+              example:
+                - id: 789
+                  alert_id: 123
+                  alert_label: "cRSI(20) band cross"
+                  trigger_type: "upper"
+                  symbol: "AAPL"
+                  triggered_at: "2025-12-26T14:25:00Z"
+                  observed_price: 185.50
+                  indicator_value: 75.5
+                  trigger_message: "It's time to sell!"
+                  delivery_status: "sent"
+                - id: 788
+                  alert_id: 123
+                  alert_label: "cRSI(20) band cross"
+                  trigger_type: "lower"
+                  symbol: "AAPL"
+                  triggered_at: "2025-12-26T10:15:00Z"
+                  observed_price: 182.30
+                  indicator_value: 28.5
+                  trigger_message: "It's time to buy!"
+                  delivery_status: "sent"
+                - id: 787
+                  alert_id: 456
+                  alert_label: "cRSI(14) upper only"
+                  trigger_type: "upper"
+                  symbol: "TSLA"
+                  triggered_at: "2025-12-26T09:30:00Z"
+                  observed_price: 245.80
+                  indicator_value: 72.0
+                  trigger_message: "TSLA overbought!"
+                  delivery_status: "sent"
+
+components:
+  schemas:
+    TriggerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Trigger ID
+          example: 789
+        alert_id:
+          type: integer
+          description: Associated alert ID
+          example: 123
+        alert_label:
+          type: string
+          description: Computed label of the alert that generated this trigger (e.g., "cRSI(20) band cross", "cRSI(14) upper only")
+          example: "cRSI(20) band cross"
+        trigger_type:
+          type: string
+          enum: [upper, lower]
+          description: Which condition triggered this event (upper band cross or lower band cross)
+          example: "upper"
+        symbol:
+          type: string
+          description: Stock symbol
+          example: "AAPL"
+        triggered_at:
+          type: string
+          format: date-time
+          description: When the trigger occurred (UTC)
+          example: "2025-12-26T14:25:00Z"
+        observed_price:
+          type: number
+          nullable: true
+          description: Price at trigger time
+          example: 185.50
+        indicator_value:
+          type: number
+          nullable: true
+          description: Indicator value at trigger time
+          example: 75.5
+        trigger_message:
+          type: string
+          description: The direction-specific message used for this trigger
+          example: "It's time to sell!"
+        delivery_status:
+          type: string
+          enum: [pending, sent, failed]
+          description: Notification delivery status
+          example: "sent"

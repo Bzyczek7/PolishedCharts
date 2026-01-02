@@ -70,32 +70,48 @@ export function useWatchlistData(symbols: string[]) {
     try {
       const prices = await getLatestPrices(symbols);
 
-      // Separate successful entries from errors
-      const successfulEntries: WatchlistItem[] = [];
+      // Create a map of symbol -> price data for easy lookup
+      const priceMap = new Map<string, WatchlistItem>();
       const errorMap = new Map<string, string>();
 
       for (const item of prices) {
         if (item.error) {
           errorMap.set(item.symbol, item.error);
-        } else if (item.price !== undefined && item.price !== null) {
-          successfulEntries.push(item);
         }
+        // Store all items with prices (even if price is null/undefined)
+        priceMap.set(item.symbol, item);
       }
+
+      // Create entries for ALL symbols, even those without price data
+      // This ensures the watchlist always shows all symbols, making them all interactive
+      const allEntries: WatchlistItem[] = symbols.map(symbol => {
+        const priceData = priceMap.get(symbol);
+        return priceData || { symbol, price: undefined, changePercent: undefined };
+      });
 
       setState(prev => ({
         ...prev,
-        entries: successfulEntries,
+        entries: allEntries,
         isLoading: false,
         isRefreshing: false,
         errors: errorMap,
         lastUpdate: new Date(),
       }));
     } catch (err) {
+      // On error, still return all symbols without price data
+      const allEntries: WatchlistItem[] = symbols.map(symbol => ({
+        symbol,
+        price: undefined,
+        changePercent: undefined,
+      }));
+
       setState(prev => ({
         ...prev,
+        entries: allEntries,
         isLoading: false,
         isRefreshing: false,
         errors: new Map(symbols.map(s => [s, err instanceof Error ? err.message : 'Failed to fetch prices'])),
+        lastUpdate: new Date(),
       }));
     }
   }, [symbols]);

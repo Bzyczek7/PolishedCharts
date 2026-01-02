@@ -273,10 +273,10 @@ const Watchlist = ({ items, onAddClick, onRemove, onSelect, onReorder, isRefresh
     const { active, over } = event
 
     if (over && active.id !== over.id) {
-      const oldIndex = items.findIndex((i) => i.symbol === active.id)
-      const newIndex = items.findIndex((i) => i.symbol === over.id)
       if (onReorder) {
-        onReorder(arrayMove(items, oldIndex, newIndex))
+        // Pass the symbols being moved, not the items array
+        // This allows the parent to apply the move to the full symbol list
+        onReorder([{ symbol: active.id as string }, { symbol: over.id as string }])
       }
       setSortField(null)
       setSortOrder(null)

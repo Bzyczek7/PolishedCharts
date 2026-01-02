@@ -6,10 +6,18 @@
  *
  * Provides polling-based candle data refresh for the main chart.
  * Automatically fetches data on mount and refreshes at interval-appropriate frequencies.
+ *
+ * Feature 005: Supports fixture mode for parity validation without live API calls
+ * Feature 012: Performance monitoring instrumentation and caching
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getCandles, type Candle } from '../api/candles';
 import { createPollTimer, clearPollTimer, getAdjustedPollIntervalMs, type PollTimer } from '../lib/pollingScheduler';
+import { isFixtureMode, loadFixture, getFixtureId, type FixtureData } from '../lib/fixtureLoader';
+import { measurePerformance } from '../lib/performance';
+import { getCachedCandles, setCachedCandles } from '../lib/candleCache';
+import { getCandlesWithCache, mergeAndPersistCandles } from '../lib/candleCacheUnified';
+import { invalidateIndicatorCache } from '../lib/indicatorCache';
 
 /**
  * Validates a stock symbol format.
@@ -20,6 +28,23 @@ function isValidSymbol(symbol: string): boolean {
   // Allow 1-20 characters, alphanumeric, dots, hyphens, equals, caret (for indices)
   const symbolRegex = /^[A-Za-z0-9=.^_-]{1,20}$/;
   return symbolRegex.test(symbol);
+}
+
+/**
+ * Convert fixture candle data to Candle format
+ * Feature 005: Keep ISO timestamps for consistency with rest of app
+ * Conversion to Unix seconds happens at chart boundary via chartHelpers.formatDataForChart
+ */
+function fixtureToCandles(fixture: FixtureData): Candle[] {
+  return fixture.candles.map((c: { time: string; open: number; high: number; low: number; close: number; volume: number }) => ({
+    ticker: fixture.symbol,
+    timestamp: c.time,
+    open: c.open,
+    high: c.high,
+    low: c.low,
+    close: c.close,
+    volume: c.volume
+  }));
 }
 
 /**
@@ -46,13 +71,23 @@ export function useCandleData(symbol: string, interval: string = '1d') {
     hasMore: true,
   });
 
+  // Data version counter - increments when candles are updated (especially backfill)
+  // Used to trigger indicator recalculation when candle data changes
+  const [dataVersion, setDataVersion] = useState(0);
+
   // Refs to track current symbol/interval and avoid stale closures
   const pollTimerRef = useRef<PollTimer | null>(null);
   const currentSymbolRef = useRef(symbol);
   const currentIntervalRef = useRef(interval);
 
+  // T042: Debounce for rapid symbol/interval changes
+  // Prevents excessive API calls when user rapidly switches symbols
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSymbolRef = useRef<string | null>(null);
+  const pendingIntervalRef = useRef<string | null>(null);
+
   /**
-   * Fetch candles from API
+   * Fetch candles from API or load from fixture (Feature 005)
    *
    * @param isRefresh - True if this is a background refresh (shows isRefreshing state)
    */
@@ -62,6 +97,53 @@ export function useCandleData(symbol: string, interval: string = '1d') {
       return;
     }
 
+    // Feature 005: Check if fixture mode is enabled
+    if (isFixtureMode()) {
+      const fixtureId = getFixtureId();
+      if (!fixtureId) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          isRefreshing: false,
+          error: 'Fixture mode enabled but VITE_FIXTURE_MODE not set to a valid fixture ID',
+        }));
+        return;
+      }
+
+      setState(prev => ({
+        ...prev,
+        isLoading: !isRefresh,
+        isRefreshing: isRefresh,
+        error: null,
+      }));
+
+      try {
+        const fixture = await loadFixture(fixtureId);
+        const candles = fixtureToCandles(fixture);
+
+        setState(prev => ({
+          ...prev,
+          candles,
+          isLoading: false,
+          isRefreshing: false,
+          error: null,
+          lastUpdate: new Date(),
+          isStale: false,
+        }));
+      } catch (err) {
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          isRefreshing: false,
+          error: err instanceof Error ? err.message : 'Failed to load fixture data',
+        }));
+      }
+
+      // Don't set up polling in fixture mode
+      return;
+    }
+
+    // Normal API mode
     // T074: Symbol validation before data fetch
     if (!isValidSymbol(symbol)) {
       setState(prev => ({
@@ -80,8 +162,22 @@ export function useCandleData(symbol: string, interval: string = '1d') {
       error: null,
     }));
 
+    // Performance: Mark candle fetch start
+    console.log(`%c[T2 START] Fetching candles for ${symbol} ${interval}`, 'color: #FF9800; font-weight: bold');
+
     try {
-      const candles = await getCandles(symbol, interval);
+      // Use unified caching layer (memory + IndexedDB + API)
+      const candles = await measurePerformance(
+        'fetch_candles',
+        'data_fetch',
+        () => getCandlesWithCache(symbol, interval, async () => {
+          return await getCandles(symbol, interval);
+        }),
+        { symbol, interval, is_refresh: isRefresh }
+      );
+
+      // Performance: Mark candle fetch complete
+      console.log(`%c[T2 DONE] Fetched ${candles.length} candles for ${symbol} ${interval}`, 'color: #FF9800; font-weight: bold');
 
       setState(prev => ({
         ...prev,
@@ -116,6 +212,12 @@ export function useCandleData(symbol: string, interval: string = '1d') {
    * @param toDate - ISO string of end date for backfill
    */
   const fetchCandlesWithRange = useCallback(async (fromDate: string, toDate: string) => {
+    // Feature 005: No backfill in fixture mode
+    if (isFixtureMode()) {
+      console.warn('[Fixture Mode] Backfill not supported in fixture mode');
+      return;
+    }
+
     // Cancel if symbol or interval changed (avoid race conditions)
     if (symbol !== currentSymbolRef.current || interval !== currentIntervalRef.current) {
       return;
@@ -128,29 +230,30 @@ export function useCandleData(symbol: string, interval: string = '1d') {
     }));
 
     try {
-      const newCandles = await getCandles(symbol, interval, fromDate, toDate);
+      // T010: Instrument backfill with performance logging
+      const newCandles = await measurePerformance(
+        'fetch_candles_backfill',
+        'data_fetch',
+        () => getCandles(symbol, interval, fromDate, toDate),
+        { symbol, interval, from: fromDate, to: toDate }
+      );
 
-      // Merge new candles with existing candles, avoiding duplicates
-      setState(prev => {
-        const existingTimestamps = new Set(prev.candles.map(c => c.timestamp));
-        const uniqueNewCandles = newCandles.filter(c => !existingTimestamps.has(c.timestamp));
+      // Merge with existing and persist to both caches
+      const merged = await mergeAndPersistCandles(symbol, interval, state.candles, newCandles);
 
-        // Merge and sort by timestamp
-        const mergedCandles = [...prev.candles, ...uniqueNewCandles].sort((a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
+      // Invalidate indicator cache so indicators recalculate with the new historical data
+      invalidateIndicatorCache(symbol);
 
-        // Update hasMore based on whether we got new data
-        const hasMore = uniqueNewCandles.length > 0;
+      // Increment data version to trigger indicator refetch
+      setDataVersion(v => v + 1);
 
-        return {
-          ...prev,
-          candles: mergedCandles,
-          isRefreshing: false,
-          lastUpdate: new Date(),
-          hasMore,
-        };
-      });
+      setState(prev => ({
+        ...prev,
+        candles: merged,
+        isRefreshing: false,
+        lastUpdate: new Date(),
+        hasMore: newCandles.length > 0,
+      }));
     } catch (err) {
       setState(prev => ({
         ...prev,
@@ -158,34 +261,76 @@ export function useCandleData(symbol: string, interval: string = '1d') {
         error: err instanceof Error ? err.message : 'Failed to fetch backfill data',
       }));
     }
-  }, [symbol, interval]);
+  }, [symbol, interval, state.candles]);
 
   /**
    * Setup polling on mount and when symbol/interval changes
    * T073: Uses adjusted poll interval based on market schedule
+   * T042: Debounces rapid symbol/interval changes (300ms delay)
+   * Feature 005: No polling in fixture mode
    */
   useEffect(() => {
-    // Update refs
-    currentSymbolRef.current = symbol;
-    currentIntervalRef.current = interval;
-
-    // Cancel existing timer if any
-    if (pollTimerRef.current) {
-      clearPollTimer(pollTimerRef.current);
-      pollTimerRef.current = null;
+    // Cancel existing debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
     }
 
-    // Initial fetch
-    fetchCandles();
+    // Store pending values
+    pendingSymbolRef.current = symbol;
+    pendingIntervalRef.current = interval;
 
-    // Setup polling timer with market-aware interval (T073)
-    const pollInterval = getAdjustedPollIntervalMs(interval);
-    pollTimerRef.current = createPollTimer(() => {
-      fetchCandles(true); // Background refresh
-    }, pollInterval);
+    // Feature 005: No debounce in fixture mode - fetch immediately
+    if (isFixtureMode()) {
+      // Update refs
+      currentSymbolRef.current = symbol;
+      currentIntervalRef.current = interval;
 
-    // Cleanup on unmount
+      // Cancel existing poll timer
+      if (pollTimerRef.current) {
+        clearPollTimer(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+
+      // Immediate fetch
+      fetchCandles();
+      return;
+    }
+
+    // T042: Debounce rapid symbol/interval changes
+    // Wait 300ms after the last change before actually fetching
+    // This prevents excessive API calls when user types rapidly or clicks multiple symbols
+    debounceTimerRef.current = setTimeout(() => {
+      const pendingSymbol = pendingSymbolRef.current;
+      const pendingInterval = pendingIntervalRef.current;
+
+      // Only proceed if values haven't changed again
+      if (pendingSymbol === symbol && pendingInterval === interval) {
+        // Update refs
+        currentSymbolRef.current = pendingSymbol!;
+        currentIntervalRef.current = pendingInterval!;
+
+        // Cancel existing poll timer
+        if (pollTimerRef.current) {
+          clearPollTimer(pollTimerRef.current);
+          pollTimerRef.current = null;
+        }
+
+        // Fetch candles
+        fetchCandles();
+
+        // Setup polling timer with market-aware interval (T073)
+        const pollInterval = getAdjustedPollIntervalMs(pendingInterval!);
+        pollTimerRef.current = createPollTimer(() => {
+          fetchCandles(true); // Background refresh
+        }, pollInterval);
+      }
+    }, 300); // 300ms debounce delay
+
+    // Cleanup on unmount or symbol/interval change
     return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
       if (pollTimerRef.current) {
         clearPollTimer(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -197,5 +342,6 @@ export function useCandleData(symbol: string, interval: string = '1d') {
     ...state,
     refresh,
     fetchCandlesWithRange, // T059: Backfill data fetching method
+    dataVersion, // Version counter for tracking data updates (used to trigger indicator refetch)
   };
 }

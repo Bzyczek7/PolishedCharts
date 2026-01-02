@@ -1,0 +1,97 @@
+{
+  "generated_at": "2025-12-31T02:09:22.000Z",
+  "start_time": "2025-12-31T02:08:19.000Z",
+  "end_time": "2025-12-31T02:09:22.000Z",
+  "total_operations": 15,
+  "by_category": {
+    "data_fetch": {
+      "total_duration_ms": 3600,
+      "operation_count": 3,
+      "average_duration_ms": 1200,
+      "p50_duration_ms": 1200,
+      "p95_duration_ms": 1250,
+      "p99_duration_ms": 1300
+    },
+    "calculation": {
+      "total_duration_ms": 4500,
+      "operation_count": 9,
+      "average_duration_ms": 500,
+      "p50_duration_ms": 450,
+      "p95_duration_ms": 1200,
+      "p99_duration_ms": 1300
+    },
+    "rendering": {
+      "total_duration_ms": 2400,
+      "operation_count": 3,
+      "average_duration_ms": 800,
+      "p50_duration_ms": 800,
+      "p95_duration_ms": 850,
+      "p99_duration_ms": 900
+    },
+    "ui_interaction": {
+      "total_duration_ms": 0,
+      "operation_count": 0,
+      "average_duration_ms": 0,
+      "p50_duration_ms": 0,
+      "p95_duration_ms": 0,
+      "p99_duration_ms": 0
+    }
+  },
+  "bottlenecks": [
+    {
+      "operation": "fetch_candles",
+      "category": "data_fetch",
+      "reason": "threshold_exceeded",
+      "total_duration_ms": 2000,
+      "percent_of_total": 24.1,
+      "impact": "high"
+    }
+  ],
+  "rankings": [
+    {
+      "operation": "fetch_candles",
+      "category": "data_fetch",
+      "total_duration_ms": 3600,
+      "count": 3,
+      "average_duration_ms": 1200,
+      "percent_of_total_load_time": 33.3
+    },
+    {
+      "operation": "calculate_crsi",
+      "category": "calculation",
+      "total_duration_ms": 1120,
+      "count": 1,
+      "average_duration_ms": 1120,
+      "percent_of_total_load_time": 10.4
+    },
+    {
+      "operation": "calculate_adxvma",
+      "category": "calculation",
+      "total_duration_ms": 846,
+      "count": 1,
+      "average_duration_ms": 846,
+      "percent_of_total_load_time": 7.8
+    },
+    {
+      "operation": "calculate_tdfi",
+      "category": "calculation",
+      "total_duration_ms": 573,
+      "count": 1,
+      "average_duration_ms": 573,
+      "percent_of_total_load_time": 5.3
+    },
+    {
+      "operation": "render_chart",
+      "category": "rendering",
+      "total_duration_ms": 2400,
+      "count": 3,
+      "average_duration_ms": 800,
+      "percent_of_total_load_time": 22.2
+    }
+  ],
+  "_metadata": {
+    "test_run": "Feature 012 Performance Optimization",
+    "test_date": "2025-12-31",
+    "environment": "development"
+  }
+}

@@ -21,6 +21,23 @@ def calculate_sma(df: pd.DataFrame, period: int = 20, price_col: str = 'close') 
     return df
 
 
+def calculate_ema(df: pd.DataFrame, period: int = 20, price_col: str = 'close') -> pd.DataFrame:
+    """
+    Calculate Exponential Moving Average (EMA).
+
+    Args:
+        df: DataFrame with price data
+        period: Number of periods for the moving average (default: 20)
+        price_col: Column name to use for price (default: 'close')
+
+    Returns:
+        DataFrame with EMA column added
+    """
+    df = df.copy()
+    df['ema'] = df[price_col].ewm(span=period, adjust=False).mean()
+    return df
+
+
 def calculate_tdfi(
     df: pd.DataFrame, 
     lookback: int = 13,
@@ -63,57 +80,53 @@ def rma(series, length):
     return series.ewm(alpha=alpha, adjust=False).mean()
 
 def calculate_crsi(
-    df: pd.DataFrame, 
-    domcycle: int = 20, 
-    vibration: int = 14, 
-    leveling: float = 11.0, 
+    df: pd.DataFrame,
+    domcycle: int = 20,
+    vibration: int = 14,
+    leveling: float = 11.0,
     cyclicmemory: int = 40
 ) -> pd.DataFrame:
+    """
+    Vectorized implementation of cRSI (Cyclic RSI) for performance.
+
+    Previous implementation used O(n^2) loops with .iloc[i] access.
+    This vectorized version uses pandas rolling/expanding operations.
+    """
     df = df.copy()
     src = df['close']
-    cyclelen = domcycle / 2
+    cyclelen = domcycle // 2
 
     up = rma(src.diff().clip(lower=0), cyclelen)
     down = rma(-src.diff().clip(upper=0), cyclelen)
-    
+
     rsi = pd.Series(np.where(down == 0, 100, np.where(up == 0, 0, 100 - (100 / (1 + up / down)))), index=df.index)
 
     torque = 2.0 / (vibration + 1)
     phasingLag = (vibration - 1) // 2
-    
-    # Initialize crsi series
-    crsi = pd.Series(index=df.index, dtype=float)
-    rsi_shifted = rsi.shift(phasingLag)
-    
-    # Iterative calculation for cRSI (emulating Pine Script's recursive nature)
-    rsi_shifted = rsi.shift(phasingLag).ffill() # Use ffill to handle initial NaNs
-    for i in range(len(df)):
-        if i == 0:
-            crsi.iloc[i] = rsi.iloc[i] if pd.notna(rsi.iloc[i]) else 50.0 # Start at 50 if RSI is NaN
-        else:
-            prev_crsi = crsi.iloc[i-1]
-            if pd.notna(rsi.iloc[i]) and pd.notna(rsi_shifted.iloc[i]):
-                crsi.iloc[i] = torque * (2 * rsi.iloc[i] - rsi_shifted.iloc[i]) + (1 - torque) * prev_crsi
-            else:
-                crsi.iloc[i] = prev_crsi
+
+    # Vectorized cRSI calculation using cumulative operations
+    # Formula: crsi[i] = torque * (2*rsi[i] - rsi_shifted[i]) + (1-torque) * crsi[i-1]
+    # This is an exponential moving average formula, can be computed using ewm
+    rsi_shifted = rsi.shift(phasingLag).ffill()
+
+    # Calculate the signal component: 2*rsi - rsi_shifted
+    signal = 2 * rsi - rsi_shifted
+
+    # Use ewm for the recursive formula: crsi = torque * signal + (1-torque) * crsi_prev
+    # This is equivalent to EMA with alpha = torque
+    crsi = signal.ewm(alpha=torque, adjust=False).mean()
+
+    # Fill initial NaN with rsi values or 50
+    crsi = crsi.fillna(rsi).fillna(50.0)
 
     df['cRSI'] = crsi
 
-    # Dynamic bands calculation using percentiles
-    upper_band = pd.Series(index=df.index, dtype=float)
-    lower_band = pd.Series(index=df.index, dtype=float)
-    
+    # Vectorized dynamic bands using rolling quantile
     aperc = leveling / 100.0
-    
-    for i in range(len(df)):
-        if i < cyclicmemory:
-            upper_band.iloc[i] = np.nan
-            lower_band.iloc[i] = np.nan
-        else:
-            window = crsi.iloc[i-cyclicmemory+1:i+1]
-            # Standard cRSI leveling uses percentiles
-            upper_band.iloc[i] = window.quantile(1 - aperc)
-            lower_band.iloc[i] = window.quantile(aperc)
+
+    # Use rolling window with min_periods to handle initial values
+    upper_band = crsi.rolling(window=cyclicmemory, min_periods=cyclicmemory).quantile(1 - aperc)
+    lower_band = crsi.rolling(window=cyclicmemory, min_periods=cyclicmemory).quantile(aperc)
 
     df['cRSI_UpperBand'] = upper_band
     df['cRSI_LowerBand'] = lower_band
@@ -121,77 +134,98 @@ def calculate_crsi(
     return df
 
 def calculate_adxvma(df: pd.DataFrame, adxvma_period: int = 15) -> pd.DataFrame:
+    """
+    Vectorized implementation of ADXVMA (Average Directional Index Volatility Moving Average).
+
+    Previous implementation used O(n) loop with .iloc[i] access.
+    This vectorized version uses pandas ewm and rolling operations.
+    """
     df = df.copy()
     k = 1.0 / adxvma_period
-    
-    # Initialize series
-    adxvma = pd.Series(0.0, index=df.index)
-    up = pd.Series(0.0, index=df.index)
-    down = pd.Series(0.0, index=df.index)
-    ups = pd.Series(0.0, index=df.index)
-    downs = pd.Series(0.0, index=df.index)
-    index_vals = pd.Series(0.0, index=df.index)
-    trend = pd.Series(0, index=df.index)
-    
     close = df['close']
-    
-    for i in range(1, len(df)):
-        # up/down components
-        currentUp = max(close.iloc[i] - close.iloc[i-1], 0)
-        currentDown = max(close.iloc[i-1] - close.iloc[i], 0)
-        
-        up.iloc[i] = (1-k) * up.iloc[i-1] + k * currentUp
-        down.iloc[i] = (1-k) * down.iloc[i-1] + k * currentDown
-        
-        sum_val = up.iloc[i] + down.iloc[i]
-        fractionUp = 0.0
-        fractionDown = 0.0
-        if sum_val > 0.0:
-            fractionUp = up.iloc[i] / sum_val
-            fractionDown = down.iloc[i] / sum_val
-            
-        ups.iloc[i] = (1-k) * ups.iloc[i-1] + k * fractionUp
-        downs.iloc[i] = (1-k) * downs.iloc[i-1] + k * fractionDown
-        
-        normDiff = abs(ups.iloc[i] - downs.iloc[i])
-        normSum = ups.iloc[i] + downs.iloc[i]
-        
-        normFraction = 0.0
-        if normSum > 0.0:
-            normFraction = normDiff / normSum
-            
-        index_vals.iloc[i] = (1-k) * index_vals.iloc[i-1] + k * normFraction
-        
-        # Calculate vIndex using rolling window of index_vals
-        if i >= adxvma_period:
-            # highest(index, adxvma_period)[1] -> max of previous period
-            window = index_vals.iloc[max(0, i-adxvma_period):i]
-            hhp = window.max()
-            llp = window.min()
-            
-            hhv = max(index_vals.iloc[i], hhp)
-            llv = min(index_vals.iloc[i], llp)
-            
-            vIndex = 0.0
-            if (hhv - llv) > 0.0:
-                vIndex = (index_vals.iloc[i] - llv) / (hhv - llv)
-            
-            adxvma.iloc[i] = (1 - k * vIndex) * adxvma.iloc[i-1] + k * vIndex * close.iloc[i]
-        else:
-            # Seed value
-            adxvma.iloc[i] = close.iloc[i]
 
-        # Trend logic from Pine Script
-        prev_trend = trend.iloc[i-1]
-        curr_val = adxvma.iloc[i]
-        prev_val = adxvma.iloc[i-1]
-        
-        if prev_trend > -1 and curr_val > prev_val:
-            trend.iloc[i] = 1
-        elif prev_trend < 1 and curr_val < prev_val:
-            trend.iloc[i] = -1
-        else:
-            trend.iloc[i] = 0
+    # Vectorized up/down components using shift
+    close_diff = close.diff()
+    current_up = close_diff.clip(lower=0)
+    current_down = -close_diff.clip(upper=0)
+
+    # Exponential moving averages using ewm (vectorized)
+    # Formula: value[i] = (1-k) * value[i-1] + k * input
+    up = current_up.ewm(alpha=k, adjust=False).mean().fillna(0)
+    down = current_down.ewm(alpha=k, adjust=False).mean().fillna(0)
+
+    # Calculate fractions
+    sum_val = up + down
+    fraction_up = np.where(sum_val > 0.0, up / sum_val, 0.0)
+    fraction_down = np.where(sum_val > 0.0, down / sum_val, 0.0)
+
+    # Second level EMA
+    ups = pd.Series(fraction_up, index=df.index).ewm(alpha=k, adjust=False).mean().fillna(0)
+    downs = pd.Series(fraction_down, index=df.index).ewm(alpha=k, adjust=False).mean().fillna(0)
+
+    # Normalize
+    norm_diff = np.abs(ups - downs)
+    norm_sum = ups + downs
+    norm_fraction = np.where(norm_sum > 0.0, norm_diff / norm_sum, 0.0)
+
+    # Index values EMA
+    index_vals = pd.Series(norm_fraction, index=df.index).ewm(alpha=k, adjust=False).mean().fillna(0)
+
+    # Vectorized rolling max/min for vIndex calculation
+    # Use rolling window to get previous period max/min
+    rolling_max = index_vals.rolling(window=adxvma_period, min_periods=1).max().shift(1)
+    rolling_min = index_vals.rolling(window=adxvma_period, min_periods=1).min().shift(1)
+
+    # First row has no previous values
+    rolling_max.iloc[0] = index_vals.iloc[0]
+    rolling_min.iloc[0] = index_vals.iloc[0]
+
+    hhv = np.maximum(index_vals, rolling_max)
+    llv = np.minimum(index_vals, rolling_min)
+
+    # Calculate vIndex
+    vIndex = np.where((hhv - llv) > 0.0, (index_vals - llv) / (hhv - llv), 0.0)
+
+    # Calculate ADXVMA using vectorized operations
+    # For first period, use close; for rest, use EMA formula
+    adxvma = pd.Series(index=df.index, dtype=float)
+    adxvma.iloc[0] = close.iloc[0]
+
+    # Vectorized EMA for adxvma: adxvma[i] = (1 - k * vIndex) * adxvma[i-1] + k * vIndex * close[i]
+    # This is a variable-coefficient EMA, need to compute iteratively but can optimize
+    # Using numpy for the iterative part is still much faster than .iloc loops
+    adxvma_vals = np.zeros(len(df))
+    adxvma_vals[0] = close.iloc[0]
+
+    for i in range(1, len(df)):
+        vi = vIndex[i]
+        adxvma_vals[i] = (1 - k * vi) * adxvma_vals[i-1] + k * vi * close.iloc[i]
+
+    adxvma = pd.Series(adxvma_vals, index=df.index)
+
+    # Vectorized trend calculation
+    # trend[i] = 1 if prev_trend > -1 and curr_val > prev_val
+    # trend[i] = -1 if prev_trend < 1 and curr_val < prev_val
+    # trend[i] = 0 otherwise
+    adxvma_diff = adxvma.diff()
+
+    trend = pd.Series(0, index=df.index, dtype=int)
+    # First trend point
+    trend.iloc[0] = 0
+
+    # Vectorized trend computation using shift
+    prev_trend = trend.shift(1).fillna(0)
+    curr_above_prev = adxvma_diff > 0
+    curr_below_prev = adxvma_diff < 0
+
+    trend = np.where(
+        (prev_trend > -1) & curr_above_prev, 1,
+        np.where(
+            (prev_trend < 1) & curr_below_prev, -1,
+            0
+        )
+    )
+    trend = pd.Series(trend, index=df.index)
 
     df['ADXVMA'] = adxvma
     df['ADXVMA_Signal'] = trend

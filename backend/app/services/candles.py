@@ -19,18 +19,21 @@ class CandleService:
         return self._locks[key]
 
     async def upsert_candles(
-        self, 
-        db: AsyncSession, 
-        symbol_id: int, 
-        interval: str, 
+        self,
+        db: AsyncSession,
+        symbol_id: int,
+        interval: str,
         candles_data: List[Dict[str, Any]]
     ):
         """
         Bulk upsert candles for a given symbol and interval.
         Uses a lock to prevent concurrent backfills for the same (symbol, interval).
+
+        Normalizes timestamps to midnight (00:00:00 UTC) for 1d and 1wk intervals
+        to prevent duplicate candles with different times for the same day.
         """
         lock = self._get_lock(symbol_id, interval)
-        
+
         async with lock:
             if not candles_data:
                 return
@@ -38,10 +41,23 @@ class CandleService:
             # Prepare values for bulk insert
             values = []
             for c in candles_data:
+                timestamp = c["timestamp"]
+
+                # Normalize timestamps to midnight for 1d and 1wk intervals
+                # This prevents duplicate entries where one has time component and one doesn't
+                if interval in ('1d', '1wk'):
+                    if isinstance(timestamp, str):
+                        timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                    # Truncate to midnight (00:00:00) for daily/weekly intervals
+                    from datetime import datetime, timezone
+                    if timestamp.tzinfo is None:
+                        timestamp = timestamp.replace(tzinfo=timezone.utc)
+                    timestamp = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+
                 values.append({
                     "symbol_id": symbol_id,
                     "interval": interval,
-                    "timestamp": c["timestamp"],
+                    "timestamp": timestamp,
                     "open": c["open"],
                     "high": c["high"],
                     "low": c["low"],

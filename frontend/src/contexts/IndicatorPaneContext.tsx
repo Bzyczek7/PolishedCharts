@@ -5,6 +5,7 @@
 
 import React, { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { IndicatorPane, IndicatorType } from '../components/types/indicators';
+import { formatIndicatorParams } from '@/utils/indicatorDisplay';
 
 interface IndicatorPaneContextValue {
   panes: IndicatorPane[];
@@ -35,12 +36,12 @@ function generatePaneId(): string {
 
 /**
  * Create default display name for an indicator
+ * Feature 010: Use shared formatter to filter null/default params
  */
 function getIndicatorDisplayName(indicator: IndicatorType): string {
-  const params = Object.entries(indicator.params)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(', ');
-  return params ? `${indicator.name} (${params})` : indicator.name;
+  const displayName = indicator.name.toUpperCase();
+  const params = formatIndicatorParams(indicator.params);
+  return params ? `${displayName} ${params}` : displayName;
 }
 
 export function IndicatorPaneProvider({ children }: IndicatorPaneProviderProps) {

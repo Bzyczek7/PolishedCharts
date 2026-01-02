@@ -16,31 +16,28 @@ interface IndicatorSearchProps {
   onSelect: (indicator: string) => void
 }
 
+/**
+ * Quick-add indicator search dialog (Cmd+K style)
+ * Note: This is a curated list for quick access. For full indicator list,
+ * use IndicatorDialog which fetches from the API.
+ */
 const IndicatorSearch = ({ open, onOpenChange, onSelect }: IndicatorSearchProps) => {
   const categories = [
     {
       name: "Trend",
       icon: LineChart,
       indicators: [
-        { name: "ADXVMA", description: "Adaptive Directional Volatility Moving Average" },
-        { name: "Moving Average Exponential", description: "Standard EMA" },
+        { id: "adxvma", name: "ADXVMA", description: "Adaptive Directional Volatility Moving Average" },
+        { id: "sma", name: "SMA", description: "Simple Moving Average" },
+        { id: "ema", name: "EMA", description: "Exponential Moving Average" },
       ],
     },
     {
       name: "Momentum",
       icon: Zap,
       indicators: [
-        { name: "TDFI", description: "Trend Direction Force Index" },
-        { name: "cRSI", description: "Cyclic Smoothed Relative Strength Index" },
-        { name: "Relative Strength Index", description: "Standard RSI" },
-      ],
-    },
-    {
-      name: "Volatility",
-      icon: Activity,
-      indicators: [
-        { name: "Bollinger Bands", description: "Standard deviation bands" },
-        { name: "Average True Range", description: "Measures market volatility" },
+        { id: "tdfi", name: "TDFI", description: "Trend Direction Force Index" },
+        { id: "crsi", name: "cRSI", description: "Cyclic Smoothed Relative Strength Index" },
       ],
     },
   ]
@@ -56,9 +53,9 @@ const IndicatorSearch = ({ open, onOpenChange, onSelect }: IndicatorSearchProps)
             <CommandGroup heading={category.name}>
               {category.indicators.map((indicator) => (
                 <CommandItem
-                  key={indicator.name}
+                  key={indicator.id}
                   onSelect={() => {
-                    onSelect(indicator.name.toLowerCase())
+                    onSelect(indicator.id)  // Use stable ID instead of name.toLowerCase()
                     onOpenChange(false)
                   }}
                   className="flex items-center gap-3 cursor-pointer py-3"

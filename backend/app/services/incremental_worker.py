@@ -5,6 +5,7 @@ from sqlalchemy.future import select
 from app.services.orchestrator import DataOrchestrator
 from app.models.symbol import Symbol
 from app.services.alert_engine import AlertEngine
+from app.services.market_schedule import MarketSchedule
 import pandas as pd
 from app.services import indicators
 
@@ -28,7 +29,15 @@ class IncrementalUpdateWorker:
         """
         ticker = ticker.upper()
         interval = interval.lower()
-        
+
+        # Skip incremental updates when market is closed for intraday intervals
+        is_intraday = interval in ('1m', '2m', '5m', '15m', '30m', '1h', '4h')
+        if is_intraday:
+            market_schedule = MarketSchedule()
+            if not market_schedule.is_market_open():
+                logger.debug(f"Skipping incremental update for {ticker} ({interval}): market closed")
+                return
+
         async with self.db_session_factory() as db:
             # 1. Resolve symbol
             result = await db.execute(select(Symbol).where(Symbol.ticker == ticker))

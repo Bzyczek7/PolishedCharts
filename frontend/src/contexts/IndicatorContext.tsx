@@ -18,6 +18,7 @@ interface IndicatorContextValue {
   removeIndicator: (indicatorId: string) => void;
   toggleIndicator: (indicatorId: string) => void;
   updateIndicatorParams: (indicatorId: string, params: Record<string, number | string>) => void;
+  updateIndicatorStyle: (indicatorId: string, style: Record<string, any>) => void;
   setActiveIndicatorId: (id: string | null) => void;
 }
 
@@ -25,14 +26,14 @@ const IndicatorContext = createContext<IndicatorContextValue | undefined>(undefi
 
 export interface IndicatorProviderProps {
   children: ReactNode;
-  symbol: string;
+  // symbol removed - indicators are now global
 }
 
 /**
  * IndicatorProvider - Wraps the app to provide indicator state management
  */
-export function IndicatorProvider({ children, symbol }: IndicatorProviderProps) {
-  const indicatorState = useIndicators(symbol);
+export function IndicatorProvider({ children }: IndicatorProviderProps) {
+  const indicatorState = useIndicators();
 
   return (
     <IndicatorContext.Provider value={indicatorState}>

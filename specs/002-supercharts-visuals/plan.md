@@ -73,7 +73,7 @@ Implement a TradingView Supercharts-style dark theme UI for the TradingAlert app
 ### Architecture for Extensibility
 
 - [x] Indicators use plugin registry pattern - FR-021, FR-022 separate oscillator vs overlay, existing IndicatorRegistry from 001-initial-setup
-- [x] Data providers implement common interface - Existing YFinanceProvider, AlphaVantageProvider from 001-initial-setup
+- [x] Data providers implement common interface - Existing YFinanceProvider from 001-initial-setup
 - [x] Provider-specific logic isolated from UI - UI calls backend API, provider logic in backend
 
 ### Security & Privacy
@@ -116,7 +116,7 @@ backend/                    # Python FastAPI (from 001-initial-setup)
 │   │   └── alert_trigger.py   # AlertTrigger model
 │   └── services/
 │       ├── indicators/       # Indicator registry and calculations
-│       ├── providers.py       # YFinance and AlphaVantage providers
+│       ├── providers.py       # YFinance provider
 │       └── orchestrator.py    # Data orchestration service
 └── tests/
 

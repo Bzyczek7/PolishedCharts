@@ -12,16 +12,25 @@ import {
 } from "@/components/ui/context-menu"
 
 export interface Alert {
-  id: string
+  id: string | number
   symbol: string
+  symbol_ticker?: string  // Backend uses symbol_ticker
   condition: string
   threshold: number | null
-  status: 'active' | 'triggered' | 'muted'
-  createdAt: string
+  status?: 'active' | 'triggered' | 'muted'  // Optional for backend compatibility
+  createdAt?: string  // Optional for backend compatibility
+  created_at?: string  // Backend uses created_at
+  is_active?: boolean  // Backend uses is_active
+  interval?: string  // Timeframe: '1d', '1h', '15m', etc.
   // Indicator fields
   indicator_name?: string | null
   indicator_field?: string | null
   indicator_params?: Record<string, number | string> | null
+  // Flexible enabled conditions (maps condition_type to enabled state)
+  enabled_conditions?: Record<string, boolean>
+  // Flexible messages (maps condition_type to message)
+  messages?: Record<string, string>
+  // Optional history and statistics
   history?: { timestamp: string; price?: number; indicator_value?: number }[]
   statistics?: {
     triggerCount24h: number
@@ -44,8 +53,10 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
 
   const filteredAlerts = alerts.filter(alert => {
     const matchesFilter = filter === 'all' || alert.status === filter
-    const matchesSearch = alert.symbol.toLowerCase().includes(search.toLowerCase()) ||
-                         alert.condition.toLowerCase().includes(search.toLowerCase())
+    const symbolStr = alert.symbol || ''
+    const conditionStr = alert.condition || ''
+    const matchesSearch = symbolStr.toLowerCase().includes(search.toLowerCase()) ||
+                         conditionStr.toLowerCase().includes(search.toLowerCase())
     return matchesFilter && matchesSearch
   })
 
@@ -127,8 +138,13 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                     >
                     <div className="flex items-start justify-between">
                         <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-slate-200">{alert.symbol}</span>
+                            {alert.interval && (
+                            <Badge variant="outline" className="text-[10px] uppercase h-4 px-1 text-slate-400 border-slate-600 bg-slate-800">
+                                {alert.interval}
+                            </Badge>
+                            )}
                             {alert.indicator_name && (
                             <Badge variant="outline" className="text-[10px] uppercase h-4 px-1 text-blue-400 border-blue-500/20 bg-blue-500/5">
                                 {alert.indicator_name.toUpperCase()}
@@ -145,34 +161,52 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                         </div>
                         <p className="text-xs text-slate-400 leading-relaxed">
                             {alert.indicator_name
-                            ? `${alert.indicator_name.toUpperCase()}${alert.indicator_field ? `.${alert.indicator_field}` : ''}: ${alert.condition.replace('indicator_', '').replace('_', ' ')}`
+                            ? (() => {
+                                const indicatorLabel = `${alert.indicator_name.toUpperCase()}${alert.indicator_field ? `.${alert.indicator_field}` : ''}`;
+                                // Format enabled conditions based on enabled_conditions
+                                if (alert.enabled_conditions) {
+                                  const enabledKeys = Object.entries(alert.enabled_conditions)
+                                    .filter(([, enabled]) => enabled)
+                                    .map(([key]) => key);
+                                  if (enabledKeys.length > 0) {
+                                    const conditionText = enabledKeys
+                                      .map(k => k.replace('indicator_', '').replace(/_/g, ' '))
+                                      .join(', ');
+                                    return `${indicatorLabel} - ${conditionText}`;
+                                  }
+                                }
+                                // Fallback to single condition
+                                return `${indicatorLabel} - ${alert.condition.replace('indicator_', '').replace('_', ' ')}`;
+                              })()
                             : alert.condition.replace('_', ' ')
                             }
                             {alert.threshold !== null && alert.threshold !== undefined && ` @ ${alert.threshold}`}
                         </p>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-7 w-7 text-slate-400 hover:text-white"
+                            title={`View ${alert.symbol} on chart`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onSelect(alert.symbol);
                             }}
                         >
-                            <ExternalLink className="h3.5 w-3.5" />
+                            <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
+                        <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-7 w-7 text-slate-400 hover:text-white"
+                            title={`${alert.status === 'muted' ? 'Unmute' : 'Mute'} alert for ${alert.symbol}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 onToggleMute(alert.id);
                             }}
                         >
-                            {alert.status === 'muted' ? <Bell className="h3.5 w-3.5" /> : <BellOff className="h3.5 w-3.5" />}
+                            {alert.status === 'muted' ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
                         </Button>
                         </div>
                     </div>

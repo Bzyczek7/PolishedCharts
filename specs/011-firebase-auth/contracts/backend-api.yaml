@@ -1,0 +1,430 @@
+openapi: 3.0.3
+info:
+  title: PolishedCharts Firebase Authentication API
+  description: Backend API endpoints for Firebase Authentication, user management, and data synchronization
+  version: 1.0.0
+  contact:
+    name: PolishedCharts
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.polishedcharts.com
+    description: Production
+
+tags:
+  - name: auth
+    description: Authentication operations
+  - name: user
+    description: User profile operations
+  - name: merge
+    description: Guest-to-user data merge operations
+
+paths:
+  /api/v1/auth/user:
+    get:
+      tags: [auth]
+      summary: Get current user profile
+      description: Returns the authenticated user's profile from Firebase token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/EmailVerificationRequired'
+
+  /api/v1/auth/verify-token:
+    post:
+      tags: [auth]
+      summary: Verify Firebase ID token
+      description: Verifies a Firebase ID token and returns user claims. Used for client-side token verification.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Token verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uid:
+                    type: string
+                    description: Firebase user ID
+                  email:
+                    type: string
+                    description: User email address
+                  email_verified:
+                    type: boolean
+                    description: Email verification status
+                  iss:
+                    type: string
+                    description: Token issuer
+                  exp:
+                    type: integer
+                    description: Token expiration timestamp
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/EmailVerificationRequired'
+
+  /api/v1/auth/sign-out:
+    post:
+      tags: [auth]
+      summary: Sign out user
+      description: Clears the user's session on the backend (client handles Firebase sign-out)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Signed out successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Signed out successfully"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/merge/sync:
+    post:
+      tags: [merge]
+      summary: Merge guest data with cloud data
+      description: Merges localStorage guest data (alerts, watchlist, layouts) with the authenticated user's cloud data using upsert-by-UUID strategy
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeRequest'
+      responses:
+        '200':
+          description: Merge completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/EmailVerificationRequired'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/merge/status:
+    get:
+      tags: [merge]
+      summary: Get merge status
+      description: Returns statistics about the user's stored data (counts of alerts, watchlists, layouts)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Merge status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeStatus'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID Token
+      description: Firebase ID token from client (sent via Authorization: Bearer <token>)
+
+  schemas:
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Internal database user ID
+        firebase_uid:
+          type: string
+          description: Firebase user ID
+        email:
+          type: string
+          format: email
+          description: User email address
+        email_verified:
+          type: boolean
+          description: Email verification status (mirrored from Firebase)
+        display_name:
+          type: string
+          nullable: true
+          description: User display name
+        photo_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Profile photo URL
+        created_at:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last profile update timestamp
+      required:
+        - id
+        - firebase_uid
+        - email
+        - email_verified
+
+    MergeRequest:
+      type: object
+      description: Guest data from localStorage to merge with cloud data
+      properties:
+        schemaVersion:
+          type: integer
+          description: LocalStorage schema version
+          example: 1
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuestAlert'
+        watchlist:
+          $ref: '#/components/schemas/GuestWatchlist'
+        layouts:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuestLayout'
+      required:
+        - schemaVersion
+        - alerts
+        - watchlist
+        - layouts
+
+    GuestAlert:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          description: Unique identifier for merge operations
+        symbol:
+          type: string
+          description: Stock symbol
+        condition:
+          type: string
+          enum: [above, below, crosses-up, crosses-down]
+          description: Alert condition
+        target:
+          type: number
+          description: Target price value
+        enabled:
+          type: boolean
+          description: Alert enabled status
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp (ISO 8601)
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (ISO 8601)
+      required:
+        - uuid
+        - symbol
+        - condition
+        - target
+        - enabled
+        - created_at
+        - updated_at
+
+    GuestWatchlist:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        symbols:
+          type: array
+          items:
+            type: string
+          description: Array of stock symbols
+        sort_order:
+          type: array
+          items:
+            type: string
+          description: Display order of symbols
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - uuid
+        - symbols
+        - sort_order
+        - created_at
+        - updated_at
+
+    GuestLayout:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Layout name
+        config:
+          type: object
+          description: Serialized layout configuration (indicators, settings, etc.)
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - uuid
+        - name
+        - config
+        - created_at
+        - updated_at
+
+    MergeResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Merge completed successfully"
+        stats:
+          type: object
+          properties:
+            alerts:
+              type: object
+              properties:
+                added:
+                  type: integer
+                  example: 3
+                updated:
+                  type: integer
+                  example: 1
+                skipped:
+                  type: integer
+                  example: 5
+            watchlist:
+              type: object
+              properties:
+                added:
+                  type: integer
+                  example: 1
+                updated:
+                  type: integer
+                  example: 0
+                skipped:
+                  type: integer
+                  example: 0
+            layouts:
+              type: object
+              properties:
+                added:
+                  type: integer
+                  example: 2
+                updated:
+                  type: integer
+                  example: 0
+                skipped:
+                  type: integer
+                  example: 0
+      required:
+        - message
+        - stats
+
+    MergeStatus:
+      type: object
+      properties:
+        alerts:
+          type: integer
+          description: Count of alerts stored for user
+          example: 8
+        watchlists:
+          type: integer
+          description: Count of watchlists stored for user
+          example: 1
+        layouts:
+          type: integer
+          description: Count of layouts stored for user
+          example: 3
+      required:
+        - alerts
+        - watchlists
+        - layouts
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+          example: "Authentication failed. If an account exists, check your email for verification or password reset options"
+      required:
+        - detail
+
+  responses:
+    Unauthorized:
+      description: Authentication failed or token invalid/missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Authentication failed"
+
+    EmailVerificationRequired:
+      description: Email verification required (token valid but email not verified)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Email verification required. Please check your email for a verification link."
+
+    ValidationError:
+      description: Request validation failed (invalid request body)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail:
+                type: string
+                example: "Validation error: 'uuid' is a required property"
+
+# Public Endpoints (no authentication required)
+# These remain accessible to guest users:
+# - GET /api/v1/candles - Public candle data
+# - GET /api/v1/indicators - Public indicator calculations
+# - GET /api/health - Health check
+
+# Protected Endpoints (require Bearer token + email_verified check)
+# All /api/v1/auth/* and /api/v1/merge/* endpoints are protected.
+#
+# AUTHENTICATION MIDDLEWARE ENFORCEMENT (FR-005a, FR-035a):
+# - Single shared middleware (get_current_user) enforces token verification
+# - Dual email verification check: both client-side (user.emailVerified) AND backend-side (email_verified claim)
+# - Automated test enumerates all /api/v1/* routes to verify protected endpoints use the middleware
+# - New protected endpoints automatically inherit email_verified enforcement via shared middleware
+# - Per-route enforcement is PROHIBITED (must use shared middleware)

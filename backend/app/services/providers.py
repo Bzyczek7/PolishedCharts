@@ -46,49 +46,50 @@ class YFinanceProvider(MarketDataProvider):
     }
 
     async def fetch_candles(
-        self, 
-        symbol: str, 
-        interval: str, 
-        start: Optional[datetime] = None, 
+        self,
+        symbol: str,
+        interval: str,
+        start: Optional[datetime] = None,
         end: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
         Fetch candles from yfinance with chunking and limit enforcement.
         """
-        if not start or not end:
+        if start and end:
+            # Fetch for specific date range
+            # Enforce hard limits
+            limit = self.LOOKBACK_LIMITS.get(interval)
+            if start and limit:
+                earliest_possible = datetime.now(timezone.utc) - limit
+                if start < earliest_possible:
+                    logger.warning(f"Start date {start} exceeds limit for {interval}. Clamping to {earliest_possible}")
+                    start = earliest_possible
+
+            chunk_days = self.CHUNK_POLICIES.get(interval, 30)
+            chunk_delta = timedelta(days=chunk_days)
+
+            all_candles = []
+            current_start = start
+
+            while current_start < end:
+                current_end = min(current_start + chunk_delta, end)
+
+                try:
+                    candles = await self._fetch_with_retries(symbol, interval, current_start, current_end)
+                    all_candles.extend(candles)
+                except Exception as e:
+                    logger.error(f"Failed to fetch chunk {current_start} to {current_end} for {symbol}: {e}")
+                    # We continue to next chunk or stop?
+                    # For historical backfill, we might want to collect what we can.
+
+                current_start = current_end
+
+            # Deduplicate and sort
+            unique_candles = {c["timestamp"]: c for c in all_candles}
+            return sorted(unique_candles.values(), key=lambda x: x["timestamp"])
+        else:
             # Fallback to single non-chunked call for default period
-            return await self._fetch_chunk(symbol, interval, start, end)
-
-        # Enforce hard limits
-        limit = self.LOOKBACK_LIMITS.get(interval)
-        if start and limit:
-            earliest_possible = datetime.now(timezone.utc) - limit
-            if start < earliest_possible:
-                logger.warning(f"Start date {start} exceeds limit for {interval}. Clamping to {earliest_possible}")
-                start = earliest_possible
-
-        chunk_days = self.CHUNK_POLICIES.get(interval, 30)
-        chunk_delta = timedelta(days=chunk_days)
-        
-        all_candles = []
-        current_start = start
-        
-        while current_start < end:
-            current_end = min(current_start + chunk_delta, end)
-            
-            try:
-                candles = await self._fetch_with_retries(symbol, interval, current_start, current_end)
-                all_candles.extend(candles)
-            except Exception as e:
-                logger.error(f"Failed to fetch chunk {current_start} to {current_end} for {symbol}: {e}")
-                # We continue to next chunk or stop? 
-                # For historical backfill, we might want to collect what we can.
-            
-            current_start = current_end
-
-        # Deduplicate and sort
-        unique_candles = {c["timestamp"]: c for c in all_candles}
-        return sorted(unique_candles.values(), key=lambda x: x["timestamp"])
+            return await self._fetch_chunk(symbol, interval)
 
     async def _fetch_with_retries(
         self,
@@ -194,26 +195,31 @@ class YFinanceProvider(MarketDataProvider):
                 except (KeyError, ValueError):
                     df.columns = df.columns.get_level_values(0)
 
+            # Process candles and handle potential duplicates for all intervals
             candles = []
+            daily_candles = {}  # For daily intervals, keep track of candles by date to avoid duplicates
+            daily_original_timestamps = {}  # Store original timestamps for comparison
+
             for timestamp, row in df.iterrows():
                 try:
-                    # Ensure timestamp is aware UTC and rounded to midnight for non-intraday
-                    dt = timestamp.to_pydatetime()
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
+                    # Ensure timestamp is aware UTC
+                    original_ts = timestamp.to_pydatetime()
+                    if original_ts.tzinfo is None:
+                        original_ts = original_ts.replace(tzinfo=timezone.utc)
                     else:
-                        dt = dt.astimezone(timezone.utc)
+                        original_ts = original_ts.astimezone(timezone.utc)
 
                     # Normalize to midnight for 1d+ intervals
+                    normalized_dt = original_ts
                     if interval in ["1d", "1wk", "1w", "1mo", "3mo"]:
-                        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                        normalized_dt = original_ts.replace(hour=0, minute=0, second=0, microsecond=0)
 
                     if interval in ["1wk", "1w"]:
                         # Normalize to Monday 00:00
-                        dt = dt - timedelta(days=dt.weekday())
+                        normalized_dt = normalized_dt - timedelta(days=normalized_dt.weekday())
                     elif interval == "1mo":
                         # Normalize to 1st of the month 00:00
-                        dt = dt.replace(day=1)
+                        normalized_dt = normalized_dt.replace(day=1)
 
                     vol = row.get('Volume')
                     vol = int(vol) if vol is not None and not pd.isna(vol) else None
@@ -225,17 +231,53 @@ class YFinanceProvider(MarketDataProvider):
                     close_val = row.get('Close')
 
                     if all(pd.notna(v) for v in [open_val, high_val, low_val, close_val]):
-                        candles.append({
-                            "timestamp": dt,
+                        candle_data = {
+                            "timestamp": normalized_dt,
                             "open": float(open_val),
                             "high": float(high_val),
                             "low": float(low_val),
                             "close": float(close_val),
                             "volume": vol
-                        })
+                        }
+
+                        # For daily intervals, if we have multiple entries for the same date,
+                        # keep the one with the latest time of day (typically the closing values)
+                        if interval in ["1d", "1wk", "1mo", "1w", "3mo"]:  # Apply to all daily+ intervals
+                            date_key = normalized_dt.date()
+                            if date_key not in daily_candles:
+                                daily_candles[date_key] = candle_data
+                                daily_original_timestamps[date_key] = original_ts
+                            else:
+                                # If current entry has a later time of day, use it
+                                if original_ts.time() > daily_original_timestamps[date_key].time():
+                                    daily_candles[date_key] = candle_data
+                                    daily_original_timestamps[date_key] = original_ts
+                        else:
+                            # For other intervals, just add to candles list (no deduplication needed for intraday)
+                            # But we'll still add a general deduplication by timestamp to be safe
+                            candles.append(candle_data)
                 except Exception as e:
                     logger.warning(f"Error processing row for {symbol}: {e}")
                     continue
+
+            # Add daily candles to the result list
+            candles.extend(daily_candles.values())
+
+            # Apply general deduplication for all intervals to prevent any duplicates
+            # This handles cases where Yahoo Finance returns multiple entries for same timestamp
+            unique_candles = {}
+            for candle in candles:
+                timestamp_key = candle["timestamp"]
+                if timestamp_key not in unique_candles:
+                    unique_candles[timestamp_key] = candle
+                else:
+                    # If we have multiple entries for same timestamp, keep the one with latest original time
+                    # For this, we'd need to track original times, but for now let's just keep the first one
+                    # The daily intervals are handled above, so this is mainly for intraday
+                    pass
+
+            # Convert back to list
+            candles = list(unique_candles.values())
 
             logger.info(f"Successfully fetched {len(candles)} candles for {symbol}")
             return candles
@@ -259,141 +301,3 @@ class YFinanceProvider(MarketDataProvider):
         }
         return mapping.get(interval, timedelta(days=365))
 
-class AlphaVantageProvider(MarketDataProvider):
-    BASE_URL = "https://www.alphavantage.co/query"
-
-    def __init__(self, api_key: str, calls_per_minute: int = 5, calls_per_day: int = 500):
-        self.api_key = api_key
-        self.calls_per_minute = calls_per_minute
-        self.calls_per_day = calls_per_day
-        self._last_call_ts = 0
-        self._min_interval = 60.0 / calls_per_minute
-
-    async def fetch_candles(
-        self, 
-        symbol: str, 
-        interval: str, 
-        start: Optional[datetime] = None, 
-        end: Optional[datetime] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Fetch incremental candles from Alpha Vantage with retry and rate limit support.
-        """
-        import time
-        import random
-
-        # Simple client-side throttling
-        now = time.time()
-        elapsed = now - self._last_call_ts
-        if elapsed < self._min_interval:
-            await asyncio.sleep(self._min_interval - elapsed)
-
-        max_retries = 3
-        current_retry = 0
-        
-        while current_retry <= max_retries:
-            try:
-                self._last_call_ts = time.time()
-                candles = await self._do_fetch(symbol, interval, start, end)
-                return candles
-            except Exception as e:
-                if "RATE_LIMIT_EXCEEDED" in str(e):
-                    current_retry += 1
-                    if current_retry > max_retries:
-                        raise e
-                    
-                    # Exponential backoff with jitter
-                    wait_time = (2 ** current_retry) + random.uniform(0, 1)
-                    logger.warning(f"Alpha Vantage rate limit hit for {symbol}. Retrying in {wait_time:.2f}s...")
-                    await asyncio.sleep(wait_time)
-                else:
-                    raise e
-        
-        return []
-
-    async def _do_fetch(self, symbol: str, interval: str, start: Optional[datetime] = None, end: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        if interval in ["1m", "5m", "15m", "30m", "60m", "1h"]:
-            func = "TIME_SERIES_INTRADAY"
-            mapping = {
-                "1m": "1min",
-                "5m": "5min",
-                "15m": "15min",
-                "30m": "30min",
-                "60m": "60min",
-                "1h": "60min"
-            }
-            av_interval = mapping.get(interval)
-        elif interval == "1d":
-            func = "TIME_SERIES_DAILY"
-            av_interval = None
-        elif interval in ["1wk", "1w"]:
-            func = "TIME_SERIES_WEEKLY"
-            av_interval = None
-        elif interval == "1mo":
-            func = "TIME_SERIES_MONTHLY"
-            av_interval = None
-        else:
-            raise ValueError(f"Interval {interval} not supported by Alpha Vantage provider")
-
-        params = {
-            "function": func,
-            "symbol": symbol,
-            "apikey": self.api_key,
-            "outputsize": "full"
-        }
-        if av_interval:
-            params["interval"] = av_interval
-
-        import httpx
-        async with httpx.AsyncClient() as client:
-            response = await client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-
-            if "Note" in data and "rate limit" in data["Note"]:
-                logger.error(f"Alpha Vantage rate limit exceeded for {symbol}")
-                raise Exception("RATE_LIMIT_EXCEEDED")
-            
-            if "Error Message" in data:
-                logger.error(f"Alpha Vantage error for {symbol}: {data['Error Message']}")
-                return []
-
-            ts_key = None
-            for key in data.keys():
-                if "Time Series" in key:
-                    ts_key = key
-                    break
-            
-            if not ts_key:
-                return []
-
-            time_series = data[ts_key]
-            candles = []
-            for ts_str, values in time_series.items():
-                try:
-                    dt = pd.to_datetime(ts_str).to_pydatetime()
-                    if dt.tzinfo is None:
-                        dt = dt.replace(tzinfo=timezone.utc)
-                    else:
-                        dt = dt.astimezone(timezone.utc)
-                    
-                    if interval == "1d":
-                        dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
-                    
-                    if start and dt < start:
-                        continue
-                    if end and dt > end:
-                        continue
-
-                    candles.append({
-                        "timestamp": dt,
-                        "open": float(values["1. open"]),
-                        "high": float(values["2. high"]),
-                        "low": float(values["3. low"]),
-                        "close": float(values["4. close"]),
-                        "volume": int(values["5. volume"])
-                    })
-                except Exception as e:
-                    logger.warning(f"Failed to parse AV candle at {ts_str}: {e}")
-
-            return sorted(candles, key=lambda x: x["timestamp"])

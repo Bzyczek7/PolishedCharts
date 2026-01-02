@@ -8,11 +8,13 @@ interface LayoutProps {
   watchlistContent: React.ReactNode
   alertsContent: React.ReactNode
   alertsBadgeCount?: number
+  // Feature 011: User menu slot for authenticated users
+  userMenuContent?: React.ReactNode
 }
 
 const STORAGE_KEY = 'trading-alert-sidebar-state'
 
-const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 0 }: LayoutProps) => {
+const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 0, userMenuContent }: LayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -62,6 +64,12 @@ const Layout = ({ children, watchlistContent, alertsContent, alertsBadgeCount = 
         <Tabs defaultValue="watchlist" className="flex flex-row w-full h-full">
           {/* Sidebar Navigation (Icon Strip) */}
           <div className="flex flex-col items-center py-4 border-r border-slate-800 w-[56px] shrink-0">
+            {/* Feature 011: User menu at top of icon strip */}
+            {userMenuContent && (
+              <div className="mb-4">
+                {userMenuContent}
+              </div>
+            )}
             <TabsList className="flex flex-col h-auto bg-transparent gap-4">
               <TabsTrigger 
                 value="watchlist" 

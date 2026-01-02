@@ -29,9 +29,9 @@ describe('Rendering Performance Tests', () => {
     const indicators = [
       { id: 'crsi', params: { period: 14 }, visible: true },
       { id: 'tdfi', params: { period: 14 }, visible: true },
-      { id: 'adxvma', params: { period: 14 }, visible: true },
-      { id: 'ema_20', params: { period: 20 }, visible: true },
-      { id: 'sma_50', params: { period: 50 }, visible: true }
+      { id: 'adxvma', params: { adxvma_period: 14 }, visible: true },
+      { id: 'ema', params: { period: 20 }, visible: true },
+      { id: 'sma', params: { period: 50 }, visible: true }
     ];
 
     const startTime = performance.now();

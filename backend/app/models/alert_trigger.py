@@ -8,6 +8,10 @@ class AlertTrigger(Base):
 
     Tracks both price-based and indicator-based alert triggers,
     including delivery status for notification retry logic.
+
+    For indicator-based alerts:
+    - Stores trigger_type to distinguish which condition fired (upper/lower)
+    - Stores trigger_message with the direction-specific message used
     """
     __tablename__ = "alert_trigger"
 
@@ -18,6 +22,10 @@ class AlertTrigger(Base):
     # Observed values at trigger time
     observed_price = Column(Float, nullable=True)  # Price value (for price alerts)
     indicator_value = Column(Float, nullable=True)  # Indicator value (for indicator alerts)
+
+    # Direction-specific tracking for indicator alerts
+    trigger_type = Column(String(10), nullable=True, server_default="upper")  # "upper" or "lower" - which condition fired
+    trigger_message = Column(String(200), nullable=True, server_default="Alert triggered")  # Message used for this trigger
 
     # Delivery tracking
     delivery_status = Column(String(20), nullable=True, default="pending")  # pending, delivered, failed, retrying

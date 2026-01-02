@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -52,6 +53,9 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           <DialogTitle className="text-lg font-semibold text-white">
             Chart Settings
           </DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Customize chart appearance, scales, and display options
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

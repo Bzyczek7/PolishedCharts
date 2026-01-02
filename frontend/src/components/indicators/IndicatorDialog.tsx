@@ -1,6 +1,8 @@
 /**
  * IndicatorDialog - Modal for selecting and adding indicators
  * Feature: 002-supercharts-visuals, 003-advanced-indicators
+ * Feature 010: pandas-ta-indicators (Phase 2 UI fixes)
+ * Feature 008: Route overlay indicators to useIndicatorInstances for multi-instance support
  * T044 [US2]: Update IndicatorDialog to use useIndicators hook
  */
 
@@ -16,19 +18,29 @@ import { Button } from '@/components/ui/button';
 import type { IndicatorType, IndicatorInfo } from '../types/indicators';
 import { listIndicators, listIndicatorsWithMetadata } from '@/api/indicators';
 import { useIndicatorContext } from '../../contexts/IndicatorContext';
+import type { AddIndicatorResult } from '../../hooks/useIndicatorInstances';
+import {
+  getIndicatorTitle,
+  formatIndicatorParams,
+  extractParameterValues,
+} from '@/utils/indicatorDisplay';
+
+// Feature 008: Default parameters for overlay indicators (MVP)
+const OVERLAY_DEFAULT_PARAMS: Record<string, Record<string, number | string>> = {
+  'sma': { period: 20 },
+  'ema': { period: 20 },
+  'tdfi': { period: 20 },
+  'adxvma': { adxvma_period: 15 },
+  'crsi': { period: 3, lookahead: 3 },
+  // pandas-ta indicators
+  'bbands': { length: 20, std: 2.0 },
+};
 
 export interface IndicatorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-/**
- * Format indicator parameters for display
- */
-function formatParams(params: Record<string, number | string>): string {
-  const entries = Object.entries(params);
-  if (entries.length === 0) return '';
-  return `(${entries.map(([k, v]) => `${k}=${v}`).join(', ')})`;
+  // Feature 008: Optional callback for overlay indicators (multi-instance support)
+  onAddOverlayInstance?: (indicatorName: string, params: Record<string, number | string>) => AddIndicatorResult;
 }
 
 /**
@@ -78,6 +90,7 @@ function indicatorInfoToType(info: IndicatorInfo): IndicatorType {
 export function IndicatorDialog({
   open,
   onOpenChange,
+  onAddOverlayInstance,
 }: IndicatorDialogProps) {
   const { addIndicator } = useIndicatorContext();
   const [selectedCategory, setSelectedCategory] = React.useState<'all' | 'overlay' | 'oscillator'>('all');
@@ -163,21 +176,35 @@ export function IndicatorDialog({
               ) : (
                 filteredIndicators.map((indicator) => {
                   const indicatorType = indicatorInfoToType(indicator);
+                  const isOverlay = indicator.category === 'overlay';
+                  // Feature 010: Use shared formatter for consistent display
+                  const displayTitle = getIndicatorTitle(indicator);
+                  const displayParams = formatIndicatorParams(indicatorType.params);
                   return (
                     <button
                       key={indicator.name}
                       onClick={() => {
-                        addIndicator(indicatorType);
+                        // Feature 008: Route overlay indicators to useIndicatorInstances (multi-instance)
+                        // Route oscillator indicators to IndicatorContext (single pane)
+                        if (isOverlay && onAddOverlayInstance) {
+                          // Use extracted params from indicatorInfoToType instead of hardcoded defaults
+                          onAddOverlayInstance(indicator.name, indicatorType.params);
+                        } else {
+                          // Oscillators use the old single-pane system
+                          addIndicator(indicatorType);
+                        }
                         onOpenChange(false);
                       }}
                       className="w-full flex items-center justify-between px-3 py-2 rounded hover:bg-[#2a2e39] transition-colors text-left"
                     >
                       <div className="flex flex-col">
                         <span className="text-sm text-slate-200">
-                          {indicator.name.toUpperCase()}
-                          <span className="text-slate-500 text-xs ml-1">
-                            {formatParams(indicatorType.params)}
-                          </span>
+                          {displayTitle}
+                          {displayParams && (
+                            <span className="text-slate-500 text-xs ml-1">
+                              {displayParams}
+                            </span>
+                          )}
                         </span>
                         <span className="text-xs text-slate-500 text-left">
                           {indicator.description}

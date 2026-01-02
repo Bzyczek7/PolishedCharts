@@ -1,0 +1,548 @@
+openapi: 3.0.3
+info:
+  title: TradingAlert Alerts API
+  description: API for managing indicator-based alerts
+  version: 1.0.0
+  contact:
+    name: TradingAlert Project
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+
+tags:
+  - name: alerts
+    description: Alert management operations
+
+paths:
+  /alerts/:
+    post:
+      tags: [alerts]
+      summary: Create a new alert
+      description: Create a new indicator-based alert with configurable conditions and messages
+      operationId: createAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCreate'
+            examples:
+              crsiBothConditions:
+                summary: cRSI alert with both upper and lower band conditions
+                value:
+                  symbol: "AAPL"
+                  indicator_name: "crsi"
+                  indicator_params:
+                    domcycle: 20
+                    vibration: 14
+                    leveling: 11.0
+                    cyclicmemory: 40
+                  enabled_conditions:
+                    upper: true
+                    lower: true
+                  message_upper: "It's time to sell!"
+                  message_lower: "It's time to buy!"
+                  cooldown: 60
+              crsiUpperOnly:
+                summary: cRSI alert with upper band condition only
+                value:
+                  symbol: "TSLA"
+                  indicator_name: "crsi"
+                  indicator_params:
+                    domcycle: 14
+                  enabled_conditions:
+                    upper: true
+                    lower: false
+                  message_upper: "TSLA overbought!"
+                  message_lower: "It's time to buy!"
+                  cooldown: 30
+      responses:
+        '201':
+          description: Alert created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                noConditionsEnabled:
+                  summary: No trigger conditions enabled
+                  value:
+                    detail: "At least one trigger condition must be enabled (upper or lower)"
+                emptyMessage:
+                  summary: Empty message for enabled condition
+                  value:
+                    detail: "message_upper cannot be empty when upper condition is enabled"
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+
+    get:
+      tags: [alerts]
+      summary: List alerts
+      description: Retrieve a list of alerts, optionally filtered by symbol or status
+      operationId: listAlerts
+      parameters:
+        - name: symbol
+          in: query
+          description: Filter by stock symbol (e.g., "AAPL")
+          schema:
+            type: string
+          example: "AAPL"
+        - name: symbol_id
+          in: query
+          description: Filter by symbol ID (alternative to symbol parameter)
+          schema:
+            type: integer
+          deprecated: true
+        - name: is_active
+          in: query
+          description: Filter by active status
+          schema:
+            type: boolean
+        - name: indicator_name
+          in: query
+          description: Filter by indicator name
+          schema:
+            type: string
+            enum: [crsi, tdfi, vtx]
+      responses:
+        '200':
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertResponse'
+
+  /alerts/{alert_id}:
+    get:
+      tags: [alerts]
+      summary: Get alert by ID
+      description: Retrieve a single alert with its configuration
+      operationId: getAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags: [alerts]
+      summary: Update alert
+      description: Update an existing alert's configuration (conditions, messages, cooldown, etc.)
+      operationId: updateAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertUpdate'
+      responses:
+        '200':
+          description: Alert updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      tags: [alerts]
+      summary: Delete alert
+      description: Delete an alert and all its trigger history
+      operationId: deleteAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Alert deleted successfully
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /alerts/{alert_id}/triggers:
+    get:
+      tags: [alerts]
+      summary: Get alert trigger history
+      description: Retrieve all trigger events for a specific alert
+      operationId: getAlertTriggers
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          description: Maximum number of triggers to return
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: List of trigger events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TriggerResponse'
+
+  /alerts/{alert_id}/mute:
+    post:
+      tags: [alerts]
+      summary: Mute alert
+      description: Mute an alert (stop trigger evaluation)
+      operationId: muteAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert muted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+
+  /alerts/{alert_id}/unmute:
+    post:
+      tags: [alerts]
+      summary: Unmute alert
+      description: Unmute an alert (resume trigger evaluation)
+      operationId: unmuteAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          description: Alert ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Alert unmuted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertResponse'
+
+components:
+  schemas:
+    AlertCreate:
+      type: object
+      required:
+        - symbol
+        - indicator_name
+        - indicator_params
+        - enabled_conditions
+        - message_upper
+        - message_lower
+      properties:
+        symbol:
+          type: string
+          description: Stock symbol (e.g., "AAPL")
+          example: "AAPL"
+        indicator_name:
+          type: string
+          enum: [crsi, tdfi, vtx]
+          description: Indicator type
+          example: "crsi"
+        indicator_params:
+          type: object
+          description: Indicator parameters (must match indicator's schema)
+          additionalProperties:
+            oneOf:
+              - type: integer
+              - type: number
+              - type: string
+          example:
+            domcycle: 20
+            vibration: 14
+            leveling: 11.0
+            cyclicmemory: 40
+        enabled_conditions:
+          type: object
+          description: Which trigger conditions are enabled
+          properties:
+            upper:
+              type: boolean
+              description: Enable upper band cross trigger
+            lower:
+              type: boolean
+              description: Enable lower band cross trigger
+          example:
+            upper: true
+            lower: true
+        message_upper:
+          type: string
+          maxLength: 200
+          description: Message triggered when upper band is crossed
+          example: "It's time to sell!"
+        message_lower:
+          type: string
+          maxLength: 200
+          description: Message triggered when lower band is crossed
+          example: "It's time to buy!"
+        cooldown:
+          type: integer
+          minimum: 5
+          description: Cooldown period in seconds (minimum 5)
+          example: 60
+
+    AlertUpdate:
+      type: object
+      properties:
+        enabled_conditions:
+          type: object
+          description: Update which trigger conditions are enabled
+          properties:
+            upper:
+              type: boolean
+            lower:
+              type: boolean
+        message_upper:
+          type: string
+          maxLength: 200
+          description: Update upper band trigger message
+        message_lower:
+          type: string
+          maxLength: 200
+          description: Update lower band trigger message
+        cooldown:
+          type: integer
+          minimum: 5
+          description: Update cooldown period in seconds
+
+    AlertResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Alert ID
+          example: 123
+        alert_label:
+          type: string
+          description: Computed human-readable label for this alert (e.g., "cRSI(20) band cross", "cRSI(14) upper only")
+          example: "cRSI(20) band cross"
+        symbol:
+          type: string
+          description: Stock symbol
+          example: "AAPL"
+        condition:
+          type: string
+          description: Alert condition type
+          example: "indicator_crosses_upper"
+        threshold:
+          type: number
+          nullable: true
+          description: Threshold value (if applicable)
+          example: null
+        indicator_name:
+          type: string
+          nullable: true
+          description: Indicator type
+          example: "crsi"
+        indicator_field:
+          type: string
+          nullable: true
+          description: Indicator field being monitored
+          example: "cRSI"
+        indicator_params:
+          type: object
+          nullable: true
+          description: Indicator parameters used
+          additionalProperties:
+            oneOf:
+              - type: integer
+              - type: number
+              - type: string
+          example:
+            domcycle: 20
+            vibration: 14
+        message_upper:
+          type: string
+          description: Upper band trigger message
+          example: "It's time to sell!"
+        message_lower:
+          type: string
+          description: Lower band trigger message
+          example: "It's time to buy!"
+        enabled_conditions:
+          type: object
+          description: Enabled trigger conditions
+          properties:
+            upper:
+              type: boolean
+            lower:
+              type: boolean
+          example:
+            upper: true
+            lower: true
+        is_active:
+          type: boolean
+          description: Whether alert is active (not muted)
+          example: true
+        status:
+          type: string
+          enum: [active, triggered, muted]
+          description: Alert status
+          example: "active"
+        created_at:
+          type: string
+          format: date-time
+          description: Alert creation timestamp (UTC)
+          example: "2025-12-26T10:30:00Z"
+        cooldown:
+          type: integer
+          nullable: true
+          description: Cooldown period in seconds
+          example: 60
+        statistics:
+          type: object
+          description: Alert statistics
+          properties:
+            triggerCount24h:
+              type: integer
+              description: Number of triggers in last 24 hours
+              example: 5
+            lastTriggered:
+              type: string
+              format: date-time
+              nullable: true
+              description: Last trigger timestamp
+              example: "2025-12-26T14:25:00Z"
+
+    TriggerResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Trigger ID
+          example: 456
+        alert_id:
+          type: integer
+          description: Associated alert ID
+          example: 123
+        alert_label:
+          type: string
+          description: Computed label of the alert that generated this trigger
+          example: "cRSI(20) band cross"
+        trigger_type:
+          type: string
+          enum: [upper, lower]
+          description: Which condition triggered this event (upper band cross or lower band cross)
+          example: "upper"
+        symbol:
+          type: string
+          description: Stock symbol
+          example: "AAPL"
+        triggered_at:
+          type: string
+          format: date-time
+          description: When the trigger occurred (UTC)
+          example: "2025-12-26T14:25:00Z"
+        observed_price:
+          type: number
+          nullable: true
+          description: Price at trigger time
+          example: 185.50
+        indicator_value:
+          type: number
+          nullable: true
+          description: Indicator value at trigger time
+          example: 75.5
+        trigger_message:
+          type: string
+          description: The specific message used for this trigger
+          example: "It's time to sell!"
+        delivery_status:
+          type: string
+          enum: [pending, sent, failed]
+          description: Notification delivery status
+          example: "sent"
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Error message
+          example: "Alert not found"
+
+    ValidationError:
+      type: object
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  type: string
+                example: ["body", "enabled_conditions"]
+              msg:
+                type: string
+                example: "At least one condition must be enabled"
+              type:
+                type: string
+                example: "value_error"

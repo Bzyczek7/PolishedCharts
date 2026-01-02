@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 from datetime import datetime, timezone, timedelta
 from app.models.alert import Alert
 from app.models.alert_trigger import AlertTrigger
-from app.core.enums import AlertCondition
+from app.core.enums import AlertCondition, AlertTriggerMode
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,8 @@ ALERT_EVALUATION_BUDGET_MS = 500
 # Threshold for enabling batch evaluation
 BATCH_EVALUATION_THRESHOLD = 1000
 # T110a: Minimum cooldown to prevent rapid signal oscillations (in seconds)
-MINIMUM_COOLDOWN_SECONDS = 5
+# Note: Frontend sends cooldown in minutes, backend converts to seconds for internal use
+MINIMUM_COOLDOWN_SECONDS = 60  # 1 minute minimum
 
 
 class AlertEngine:
@@ -28,7 +29,8 @@ class AlertEngine:
         symbol_id: int,
         current_price: float,
         previous_price: Optional[float] = None,
-        indicator_data: dict = None
+        indicator_data: dict = None,
+        bar_timestamp: Optional[datetime] = None
     ) -> List[Alert]:
         """
         Evaluate alerts for a symbol based on price changes.
@@ -42,11 +44,17 @@ class AlertEngine:
         - crosses_up: Triggers when previous < threshold AND current >= threshold
         - crosses_down: Triggers when previous > threshold AND current <= threshold
 
+        Trigger modes:
+        - once: Alert fires once and is automatically disabled
+        - once_per_bar: Alert fires at most once per bar update
+        - once_per_bar_close: Alert fires at most once per bar close (respects bar timestamps)
+
         Args:
             symbol_id: The symbol ID to evaluate alerts for
             current_price: The current price
             previous_price: The previous price (required for above/below/crosses conditions)
             indicator_data: Optional indicator data for indicator-based alerts
+            bar_timestamp: The timestamp of the current bar (for bar-based trigger modes)
 
         Returns:
             List of triggered Alert objects
@@ -68,21 +76,35 @@ class AlertEngine:
             # T106b: Use batch evaluation for high alert volumes
             if len(active_alerts) >= BATCH_EVALUATION_THRESHOLD:
                 triggered_alerts = await self._evaluate_alerts_batch(
-                    active_alerts, current_price, previous_price, indicator_data, session
+                    active_alerts, current_price, previous_price, indicator_data, bar_timestamp, session
                 )
             else:
                 for alert in active_alerts:
                     is_triggered = False
 
-                    # Check cooldown
+                    # TXXX: Trigger mode checks - BEFORE cooldown check
+                    trigger_mode = alert.trigger_mode or AlertTriggerMode.ONCE_PER_BAR_CLOSE.value
+
+                    # "once" mode: skip if already triggered
+                    if trigger_mode == AlertTriggerMode.ONCE.value and alert.last_triggered_at:
+                        logger.debug(f"Alert {alert.id} already triggered (once mode), skipping")
+                        continue
+
+                    # "once_per_bar" and "once_per_bar_close" modes: skip if already triggered for this bar
+                    if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                        if bar_timestamp and alert.last_triggered_bar_timestamp == bar_timestamp:
+                            logger.debug(f"Alert {alert.id} already triggered for this bar, skipping")
+                            continue
+
+                    # Check cooldown (convert minutes to seconds)
                     # T110a: Enforce minimum cooldown to prevent rapid signal oscillations
-                    effective_cooldown = alert.cooldown if alert.cooldown else MINIMUM_COOLDOWN_SECONDS
-                    effective_cooldown = max(effective_cooldown, MINIMUM_COOLDOWN_SECONDS)
+                    effective_cooldown_seconds = (alert.cooldown or 1) * 60  # minutes -> seconds
+                    effective_cooldown_seconds = max(effective_cooldown_seconds, MINIMUM_COOLDOWN_SECONDS)
 
                     if alert.id in self._last_triggered:
                         elapsed = (datetime.now(timezone.utc) - self._last_triggered[alert.id]).total_seconds()
-                        if elapsed < effective_cooldown:
-                            logger.debug(f"Alert {alert.id} in cooldown ({effective_cooldown}s), skipping")
+                        if elapsed < effective_cooldown_seconds:
+                            logger.debug(f"Alert {alert.id} in cooldown ({effective_cooldown_seconds}s), skipping")
                             continue
 
                     # Evaluate based on condition type
@@ -154,23 +176,59 @@ class AlertEngine:
 
                     # T074 [US5] [P]: Add indicator condition evaluation
                     elif condition.startswith("indicator_") and indicator_data:
-                        # Generic indicator-based alerts
-                        is_triggered = self._evaluate_indicator_condition(
-                            condition, indicator_data, threshold
+                        # Feature 001: Indicator-based alerts with direction-specific messages
+                        # T032: Implement cRSI band-cross detection using current + previous values
+                        # T037: Handle multi-trigger edge case (both upper and lower in same cycle)
+                        triggers = self._evaluate_indicator_condition_with_direction(
+                            alert, condition, indicator_data, threshold, session
                         )
+                        if triggers:
+                            triggered_alerts.append(alert)
+                            # Record trigger time for cooldown (alert-level, not per-condition)
+                            now = datetime.now(timezone.utc)
+                            self._last_triggered[alert.id] = now
+
+                            # Update alert state based on trigger mode
+                            alert.last_triggered_at = now
+
+                            # "once" mode: disable alert after trigger
+                            if trigger_mode == AlertTriggerMode.ONCE.value:
+                                alert.is_active = False
+                                logger.info(f"Alert {alert.id} disabled (once mode)")
+
+                            # Bar modes: track bar timestamp
+                            if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                                if bar_timestamp:
+                                    alert.last_triggered_bar_timestamp = bar_timestamp
+                        # Skip the default trigger creation below since we handle it with direction info
+                        continue
 
                     if is_triggered:
                         logger.info(f"ALERT TRIGGERED: {alert.id} ({condition}) for symbol {symbol_id} at {current_price}")
                         triggered_alerts.append(alert)
 
                         # Record trigger time for cooldown
-                        self._last_triggered[alert.id] = datetime.now(timezone.utc)
+                        now = datetime.now(timezone.utc)
+                        self._last_triggered[alert.id] = now
+
+                        # Update alert state based on trigger mode
+                        alert.last_triggered_at = now
+
+                        # "once" mode: disable alert after trigger
+                        if trigger_mode == AlertTriggerMode.ONCE.value:
+                            alert.is_active = False
+                            logger.info(f"Alert {alert.id} disabled (once mode)")
+
+                        # Bar modes: track bar timestamp
+                        if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                            if bar_timestamp:
+                                alert.last_triggered_bar_timestamp = bar_timestamp
 
                         # Create AlertTrigger record
                         # T084 [US5]: Update alert trigger creation to include indicator_value
                         trigger_data = {
                             "alert_id": alert.id,
-                            "triggered_at": datetime.now(timezone.utc),
+                            "triggered_at": now,
                             "observed_price": current_price
                         }
 
@@ -206,6 +264,7 @@ class AlertEngine:
         current_price: float,
         previous_price: Optional[float],
         indicator_data: Optional[dict],
+        bar_timestamp: Optional[datetime],
         session
     ) -> List[Alert]:
         """
@@ -220,6 +279,7 @@ class AlertEngine:
             current_price: The current price
             previous_price: The previous price
             indicator_data: Optional indicator data for indicator-based alerts
+            bar_timestamp: The timestamp of the current bar (for bar-based trigger modes)
             session: Database session
 
         Returns:
@@ -228,16 +288,28 @@ class AlertEngine:
         triggered_alerts = []
         now = datetime.now(timezone.utc)
 
-        # T110a: Filter out alerts in cooldown (batch operation)
+        # T110a: Filter out alerts in cooldown and trigger mode skips (batch operation)
         # Enforce minimum cooldown to prevent rapid signal oscillations
         active_alerts = []
         for alert in alerts:
-            effective_cooldown = alert.cooldown if alert.cooldown else MINIMUM_COOLDOWN_SECONDS
-            effective_cooldown = max(effective_cooldown, MINIMUM_COOLDOWN_SECONDS)
+            trigger_mode = alert.trigger_mode or AlertTriggerMode.ONCE_PER_BAR_CLOSE.value
+
+            # "once" mode: skip if already triggered
+            if trigger_mode == AlertTriggerMode.ONCE.value and alert.last_triggered_at:
+                continue
+
+            # "once_per_bar" and "once_per_bar_close" modes: skip if already triggered for this bar
+            if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                if bar_timestamp and alert.last_triggered_bar_timestamp == bar_timestamp:
+                    continue
+
+            # Check cooldown (convert minutes to seconds)
+            effective_cooldown_seconds = (alert.cooldown or 1) * 60  # minutes -> seconds
+            effective_cooldown_seconds = max(effective_cooldown_seconds, MINIMUM_COOLDOWN_SECONDS)
 
             if alert.id in self._last_triggered:
                 elapsed = (now - self._last_triggered[alert.id]).total_seconds()
-                if elapsed < effective_cooldown:
+                if elapsed < effective_cooldown_seconds:
                     continue  # Skip alerts in cooldown
             active_alerts.append(alert)
 
@@ -269,6 +341,19 @@ class AlertEngine:
             if is_triggered:
                 triggered_alerts.append(alert)
                 self._last_triggered[alert.id] = now
+
+                # Update alert state based on trigger mode
+                trigger_mode = alert.trigger_mode or AlertTriggerMode.ONCE_PER_BAR_CLOSE.value
+                alert.last_triggered_at = now
+
+                # "once" mode: disable alert after trigger
+                if trigger_mode == AlertTriggerMode.ONCE.value:
+                    alert.is_active = False
+
+                # Bar modes: track bar timestamp
+                if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                    if bar_timestamp:
+                        alert.last_triggered_bar_timestamp = bar_timestamp
 
                 # Create trigger
                 trigger_data = {
@@ -302,9 +387,13 @@ class AlertEngine:
         T079 [US5]: Implement indicator_slope_bullish condition
         T080 [US5]: Implement indicator_slope_bearish condition
 
+        cRSI Band Conditions:
+        - indicator_above_upper: cRSI is above upper band (sell signal)
+        - indicator_below_lower: cRSI is below lower band (buy signal)
+
         Args:
             condition: The alert condition type
-            indicator_data: Dict with 'value' and 'prev_value' keys
+            indicator_data: Dict with 'value', 'prev_value', and band keys
             threshold: The threshold value for comparison
 
         Returns:
@@ -316,7 +405,22 @@ class AlertEngine:
         if current_value is None:
             return False
 
-        if condition == AlertCondition.INDICATOR_CROSSES_UPPER.value:
+        # cRSI band conditions - use band values from indicator_data
+        if condition == AlertCondition.INDICATOR_ABOVE_UPPER.value:
+            # Triggers when cRSI is above upper band (sell signal)
+            upper_band = indicator_data.get("upper_band") or indicator_data.get("crsi_upper")
+            if upper_band is not None:
+                return current_value > upper_band
+            return False
+
+        elif condition == AlertCondition.INDICATOR_BELOW_LOWER.value:
+            # Triggers when cRSI is below lower band (buy signal)
+            lower_band = indicator_data.get("lower_band") or indicator_data.get("crsi_lower")
+            if lower_band is not None:
+                return current_value < lower_band
+            return False
+
+        elif condition == AlertCondition.INDICATOR_CROSSES_UPPER.value:
             # Triggers when indicator crosses above threshold
             if prev_value is not None:
                 return prev_value < threshold and current_value >= threshold
@@ -371,3 +475,97 @@ class AlertEngine:
             return False
 
         return False
+
+    def _evaluate_indicator_condition_with_direction(
+        self,
+        alert: Alert,
+        condition: str,
+        indicator_data: dict,
+        threshold: float,
+        session
+    ) -> List[AlertTrigger]:
+        """
+        Feature 001: Evaluate indicator-based alerts with direction-specific trigger messages.
+
+        T032: Implement cRSI band-cross detection using current + previous values
+        T033: Create trigger events for both upper and lower crosses independently
+        T034: Store trigger_type ("upper" or "lower") with each AlertTrigger
+        T035: Store trigger_message (direction-specific from Alert config) with each AlertTrigger
+        T037: Handle multi-trigger edge case (both upper and lower can trigger in same cycle)
+
+        For cRSI alerts with enabled_conditions:
+        - Checks upper band cross: prev_value <= upper_band AND current_value > upper_band
+        - Checks lower band cross: prev_value >= lower_band AND current_value < lower_band
+        - Creates separate AlertTrigger for each condition that fires
+        - Each trigger includes trigger_type and trigger_message
+
+        Args:
+            alert: The Alert object with enabled_conditions, message_upper, message_lower
+            condition: The alert condition type (e.g., "indicator_crosses_upper")
+            indicator_data: Dict with 'value', 'prev_value', and optionally 'upper_band', 'lower_band'
+            threshold: The threshold value (not used for band-cross detection)
+            session: Database session for creating triggers
+
+        Returns:
+            List of AlertTrigger objects created (may be 0, 1, or 2 for multi-trigger case)
+        """
+        triggers_created = []
+        now = datetime.now(timezone.utc)
+
+        # Get indicator values
+        current_value = indicator_data.get("value")
+        prev_value = indicator_data.get("prev_value")
+
+        if current_value is None or prev_value is None:
+            return triggers_created
+
+        # For cRSI band-cross detection, we need band values
+        upper_band = indicator_data.get("upper_band", indicator_data.get("crsi_upper", 70))
+        lower_band = indicator_data.get("lower_band", indicator_data.get("crsi_lower", 30))
+
+        # Check enabled_conditions from alert config
+        enabled_conditions = alert.enabled_conditions or {"upper": True, "lower": True}
+        upper_enabled = enabled_conditions.get("upper", True)
+        lower_enabled = enabled_conditions.get("lower", True)
+
+        # Direction-specific messages from alert config
+        message_upper = alert.message_upper or "It's time to sell!"
+        message_lower = alert.message_lower or "It's time to buy!"
+
+        # Check upper band cross (if enabled)
+        if upper_enabled and condition in ["indicator_crosses_upper", "indicator_crosses_lower", "crsi_band_cross"]:
+            # T032: prev_value <= upper_band AND current_value > upper_band
+            if prev_value <= upper_band and current_value > upper_band:
+                trigger = AlertTrigger(
+                    alert_id=alert.id,
+                    triggered_at=now,
+                    observed_price=indicator_data.get("price"),
+                    indicator_value=float(current_value),
+                    trigger_type="upper",
+                    trigger_message=message_upper
+                )
+                session.add(trigger)
+                triggers_created.append(trigger)
+                logger.info(f"UPPER BAND CROSS: Alert {alert.id} triggered at {current_value} > {upper_band}")
+
+        # Check lower band cross (if enabled)
+        if lower_enabled and condition in ["indicator_crosses_upper", "indicator_crosses_lower", "crsi_band_cross"]:
+            # T032: prev_value >= lower_band AND current_value < lower_band
+            if prev_value >= lower_band and current_value < lower_band:
+                trigger = AlertTrigger(
+                    alert_id=alert.id,
+                    triggered_at=now,
+                    observed_price=indicator_data.get("price"),
+                    indicator_value=float(current_value),
+                    trigger_type="lower",
+                    trigger_message=message_lower
+                )
+                session.add(trigger)
+                triggers_created.append(trigger)
+                logger.info(f"LOWER BAND CROSS: Alert {alert.id} triggered at {current_value} < {lower_band}")
+
+        # Update alert's last_triggered_at timestamp if any triggers were created
+        if triggers_created:
+            alert.last_triggered_at = now
+
+        return triggers_created
