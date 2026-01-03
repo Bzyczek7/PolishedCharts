@@ -5,11 +5,18 @@ from app.core.config import settings
 from app.api.api import api_router
 from app.services.data_poller import DataPoller
 from app.services.alert_engine import AlertEngine
+from app.services.indicator_service import IndicatorService
 from app.services.worker_manager import WorkerManager
 from app.db.session import AsyncSessionLocal
 import asyncio
 import traceback
 import logging
+
+# Configure logging to show INFO level messages
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 # Set all CORS enabled origins - MUST BE ADDED BEFORE ROUTER
 app = FastAPI(
@@ -109,6 +116,10 @@ async def startup_event():
     app.state.market_hours_service = MarketHoursService()
     print("MarketHoursService initialized")
 
+    # Initialize IndicatorService for custom indicator calculation
+    indicator_service = IndicatorService(orchestrator=app.state.orchestrator)
+    print("IndicatorService initialized")
+
     # Initialize DataPoller with market-hours gating
     # Crypto assets (24/7) are kept as base symbols; watchlist equities are loaded from DB
     from app.services.data_poller import DataPoller
@@ -117,6 +128,7 @@ async def startup_event():
         symbols=["BTC/USD"],  # Crypto assets (24/7) - equities loaded from DB via load_watchlist_from_db()
         db_session_factory=AsyncSessionLocal,
         alert_engine=engine,
+        indicator_service=indicator_service,
         interval=3600,
         market_hours_service=app.state.market_hours_service
     )

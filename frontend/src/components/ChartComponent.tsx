@@ -336,6 +336,28 @@ const ChartComponent = ({
   useEffect(() => {
     if (!candlestickSeriesRef.current) return
 
+    // CRITICAL: Unsubscribe from range changes BEFORE setting new data
+    // This prevents lightweight-charts from calling getVisibleRange() during
+    // the data update transition, which causes "Value is null" errors
+    if (chartRef.current) {
+      if (handleVisibleLogicalRangeChangeRef.current) {
+        try {
+          chartRef.current.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleLogicalRangeChangeRef.current)
+        } catch (e) {
+          // Ignore - may not have been subscribed yet
+        }
+      }
+      if (onVisibleTimeRangeChangeRef.current) {
+        try {
+          chartRef.current.timeScale().unsubscribeVisibleTimeRangeChange(onVisibleTimeRangeChangeRef.current)
+        } catch (e) {
+          // Ignore - may not have been subscribed yet
+        }
+      }
+      // Mark that we don't have stable data during the transition
+      hasDataRef.current = false
+    }
+
     // T017: Instrument chart rendering with performance logging
     const renderStart = performance.now()
 
@@ -364,9 +386,9 @@ const ChartComponent = ({
         candlestickSeriesRef.current.setData(uniqueData);
 
         // Subscribe to range changes now that we have data
-        // Use setTimeout to defer subscription until after current call stack completes
-        // This prevents lightweight-charts from calling getVisibleRange() during initialization
-        setTimeout(() => {
+        // Use requestAnimationFrame to ensure the chart has fully processed
+        // the new data before we attach callbacks that query its state
+        requestAnimationFrame(() => {
           if (chartRef.current) {
             if (handleVisibleLogicalRangeChangeRef.current) {
               chartRef.current.timeScale().subscribeVisibleLogicalRangeChange(
@@ -378,13 +400,17 @@ const ChartComponent = ({
                 onVisibleTimeRangeChangeRef.current
               )
             }
-            // Signal that we now have data AFTER subscriptions are set up
+            // Signal that we now have stable data AFTER subscriptions are set up
             // This prevents the useEffect on lines 90-108 from subscribing too early
             hasDataRef.current = true
           }
-        }, 0)
+        })
     } else {
         candlestickSeriesRef.current.setData([]);
+        // Still need to mark as having data (even if empty) to allow re-subscription
+        requestAnimationFrame(() => {
+          hasDataRef.current = true
+        })
     }
 
     // T017: Log chart render performance

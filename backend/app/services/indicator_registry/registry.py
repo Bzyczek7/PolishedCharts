@@ -5,6 +5,32 @@ indicators without modifying core charting code. Each indicator provides:
 - Calculation function
 - Metadata for generic frontend rendering
 - Optional alert condition templates
+
+## IMPORTANT: Standard Field Names for Alert Engine Compatibility
+
+When adding new indicators, ensure they return STANDARD field names that the
+alert engine expects. The alert engine (alert_engine.py) looks for these
+specific field names when evaluating alert conditions:
+
+  - Bands: upper_band, lower_band (e.g., BBANDS, cRSI band extremes)
+  - RSI-type: rsi, rsi_upper (overbought), rsi_lower (oversold)
+  - General: value (main indicator value)
+
+If your indicator uses custom field names, add standard field name mapping
+in your calculate() method:
+
+    def calculate(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+        result_df = your_calculation_logic(df, **kwargs)
+
+        # Add standard field names for alert engine compatibility
+        if 'Custom_UpperBand' in result_df.columns:
+            result_df['upper_band'] = result_df['Custom_UpperBand']
+        if 'Custom_LowerBand' in result_df.columns:
+            result_df['lower_band'] = result_df['Custom_LowerBand']
+
+        return result_df
+
+This ensures your indicator works with the alert engine out of the box.
 """
 
 from typing import Callable, Dict, Any, Optional, List, List as ListType
@@ -60,6 +86,28 @@ class Indicator(ABC):
 
     All indicators must extend this class and implement the required properties.
     The metadata property enables generic frontend rendering without per-indicator code.
+
+    ## ALERT ENGINE COMPATIBILITY
+
+    CRITICAL: Your calculate() method MUST return standard field names for the
+    alert engine to work correctly. The alert engine (alert_engine.py) expects:
+
+        - Band indicators: upper_band, lower_band
+        - RSI-type indicators: rsi, rsi_upper (overbought), rsi_lower (oversold)
+        - General indicators: value (main indicator value)
+
+    Example of proper field name mapping in calculate():
+
+        def calculate(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
+            result_df = your_calculation_logic(df, **kwargs)
+
+            # Add standard field names for alert engine compatibility
+            if 'MyCustom_Upper' in result_df.columns:
+                result_df['upper_band'] = result_df['MyCustom_Upper']
+            if 'MyCustom_Lower' in result_df.columns:
+                result_df['lower_band'] = result_df['MyCustom_Lower']
+
+            return result_df
     """
 
     def __init__(self, **default_params):
@@ -671,13 +719,22 @@ class cRSIIndicator(Indicator):
         vibration = kwargs.get('vibration', self._vibration)
         leveling = kwargs.get('leveling', self._leveling)
         cyclicmemory = kwargs.get('cyclicmemory', self._cyclicmemory)
-        return indicators_module.calculate_crsi(
+        result_df = indicators_module.calculate_crsi(
             df,
             domcycle=domcycle,
             vibration=vibration,
             leveling=leveling,
             cyclicmemory=cyclicmemory
         )
+        
+        # Add standard field names for alert engine compatibility
+        # Map cRSI-specific names to standard names expected by alert engine
+        if 'cRSI_UpperBand' in result_df.columns and 'upper_band' not in result_df.columns:
+            result_df['upper_band'] = result_df['cRSI_UpperBand']
+        if 'cRSI_LowerBand' in result_df.columns and 'lower_band' not in result_df.columns:
+            result_df['lower_band'] = result_df['cRSI_LowerBand']
+        
+        return result_df
 
     @property
     def metadata(self) -> IndicatorMetadata:

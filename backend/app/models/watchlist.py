@@ -4,11 +4,11 @@ from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
 
-class WatchlistEntry(Base):
-    """Model for the global shared watchlist table.
+class DefaultWatchlist(Base):
+    """Model for the default/global watchlist table for unauthenticated access.
 
-    Stores tickers that should be polled for data. This is a global
-    application-wide watchlist shared by all users (no authentication).
+    Stores tickers that should be polled for data when no user is logged in.
+    This is a fallback watchlist used when user_watchlists is not available.
     """
     __tablename__ = "watchlist"
 
@@ -25,3 +25,6 @@ class WatchlistEntry(Base):
         Index('ix_watchlist_symbol_id', 'symbol_id', unique=True),
         Index('ix_watchlist_sort_order', 'sort_order'),
     )
+
+# Keep alias for backward compatibility
+WatchlistEntry = DefaultWatchlist

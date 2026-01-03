@@ -78,13 +78,13 @@ export interface NotificationSettingsResponse {
 // =============================================================================
 
 export interface AlertNotificationSettingsBase {
-  /** Override global toast setting (null = use global) */
+  /** Enable toast notifications for this alert (null = use global default) */
   toastEnabled: boolean | null;
-  /** Override global sound setting (null = use global) */
+  /** Enable sound notifications for this alert (null = use global default) */
   soundEnabled: boolean | null;
   /** Alert-specific sound type (null = use global) */
   soundType: SoundType | null;
-  /** Override global Telegram setting (null = use global) */
+  /** Enable Telegram notifications for this alert (null = use global default) */
   telegramEnabled: boolean | null;
 }
 
@@ -100,13 +100,13 @@ export interface AlertNotificationSettings extends AlertNotificationSettingsBase
 }
 
 export interface AlertNotificationSettingsUpdate {
-  /** Override global toast setting */
+  /** Enable/disable toast notifications (null = use global default) */
   toastEnabled?: boolean | null;
-  /** Override global sound setting */
+  /** Enable/disable sound notifications (null = use global default) */
   soundEnabled?: boolean | null;
   /** Alert-specific sound type */
   soundType?: SoundType | null;
-  /** Override global Telegram setting */
+  /** Enable/disable Telegram notifications (null = use global default) */
   telegramEnabled?: boolean | null;
 }
 

@@ -99,19 +99,19 @@ Implement three notification channels for alerts: on-screen toast notifications,
 - [X] T015 Create toast queue manager in frontend/src/lib/toastManager.ts
   - **UX MVP compliant**: Max 5 concurrent, FIFO dismiss, 100-char truncation, Escape key dismiss
 - [X] T016 Create ToastNotification component in frontend/src/components/ToastNotification.tsx
-- [ ] T017 [P] Implement hybrid toast logic:
+- [X] T017 [P] Implement hybrid toast logic:
   - Detect tab visibility (document.hidden)
   - Use react-hot-toast for active tab (5s duration for standard, 8s for Telegram)
   - Use Notification API for background tab (tab must be open)
   - No push when tab is closed (push/PWA out of scope)
   - Fallback gracefully if permission denied
 - [X] T018 Create useNotifications orchestration hook in frontend/src/hooks/useNotifications.ts
-- [ ] T019 Integrate hybrid toast trigger in useNotifications hook (alert → showToast)
+- [X] T019 Integrate hybrid toast trigger in useNotifications hook (alert → showToast)
 - [X] T020 Add react-hot-toast provider to frontend/src/main.tsx
 
 ### Integration
 
-- [ ] T021 Connect useNotifications hook to alert system in frontend/src/hooks/useAlertData.ts
+- [X] T021 Connect useNotifications hook to alert system in frontend/src/hooks/useAlertTriggerListener.ts
 
 **Checkpoint**: Toast notifications work in both active and background tab modes
 
@@ -133,9 +133,9 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 - [X] T022 Create sound manager in frontend/src/lib/soundManager.ts
   - **UX MVP compliant**: Play at most 1 sound per trigger, 70% default volume, queue if autoplay blocked
-- [ ] T023 [P] Implement sound playback with browser autoplay policy handling
+- [X] T023 [P] Implement sound playback with browser autoplay policy handling
 - [ ] T024 Add sound selection UI in NotificationSettings component (deferred to US4)
-- [ ] T025 Integrate sound playback in useNotifications hook (alert → playSound)
+- [X] T025 Integrate sound playback in useNotifications hook (alert → playSound)
 
 **Checkpoint**: Sound notifications play when alerts trigger and sound is enabled
 
@@ -148,41 +148,41 @@ Implement three notification channels for alerts: on-screen toast notifications,
 **Independent Test**: Configure Telegram credentials, trigger an alert, and verify a message is delivered to the configured Telegram chat.
 
 **Acceptance Criteria**:
-- [ ] Telegram credentials validated before saving
-- [ ] Credentials encrypted with AES-256-GCM before storage
+- [x] Telegram credentials validated before saving
+- [x] Credentials encrypted with AES-256-GCM before storage
 - [ ] Telegram messages sent within 5 seconds of trigger
 - [ ] Delivery failures logged but don't block toast/sound
-- [ ] 401 returned for unauthenticated requests (guests blocked)
+- [x] 401 returned for unauthenticated requests (guests blocked)
 
 ### Backend Implementation
 
-- [ ] T026 Create Telegram bot service in backend/app/services/telegram.py
-- [ ] T027 [P] Implement send_message method with Telegram Bot API HTTP calls
-- [ ] T028 Create validation endpoint for Telegram credentials (POST /api/v1/notifications/telegram/validate)
+- [x] T026 Create Telegram bot service in backend/app/services/telegram.py
+- [x] T027 [P] Implement send_message method with Telegram Bot API HTTP calls
+- [x] T028 Create validation endpoint for Telegram credentials (POST /api/v1/notifications/telegram/validate)
   - **FR-AUTHZ/FR-AUDIT compliant**: Use `notification_authz`, log credential access
   - Must require authentication (401 for guests)
   - Must encrypt credentials before any storage
-- [ ] T029 Create test endpoint for Telegram configuration (POST /api/v1/notifications/telegram/test)
+- [x] T029 Create test endpoint for Telegram configuration (POST /api/v1/notifications/telegram/test)
   - **FR-AUTHZ/FR-AUDIT compliant**: Use `notification_authz`, log test notification
   - Must require authentication
-- [ ] T030 Create send alert notification endpoint (POST /api/v1/notifications/telegram/send)
+- [x] T030 Create send alert notification endpoint (POST /api/v1/notifications/telegram/send)
   - **FR-AUTHZ/FR-AUDIT compliant**: Use `notification_authz`, log delivery
   - Must require authentication
   - Must log NotificationDelivery record with alert_trigger_id
 
 ### Frontend Implementation
 
-- [ ] T031 Create Telegram configuration form in NotificationSettings component
+- [x] T031 Create Telegram configuration form in NotificationSettings component
   - **UX MVP compliant**: Credentials masked (****abcd), test notification on save, disconnect clears storage
   - Must check `useAuth().isAuthenticated` before rendering
   - Hidden/not accessible for guests
-- [ ] T032 [P] Integrate Telegram API calls in frontend/src/api/notifications.ts
+- [x] T032 [P] Integrate Telegram API calls in frontend/src/api/notifications.ts
 - [ ] T033 Add Telegram notification trigger in useNotifications hook (alert → sendTelegram)
 
 ### Guest Gate (Centralized)
 
-- [ ] T034 Use `notification_authz` dependency to return 401 for guests on all Telegram endpoints
-- [ ] T035 Add frontend guard to hide Telegram settings from guest users (single check, not per-screen)
+- [x] T034 Use `notification_authz` dependency to return 401 for guests on all Telegram endpoints
+- [x] T035 Add frontend guard to hide Telegram settings from guest users (single check, not per-screen)
 
 **Checkpoint**: Telegram notifications sent when configured and enabled (authenticated users only)
 
@@ -203,21 +203,21 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 ### Backend API
 
-- [ ] T036 Create settings endpoint (GET /api/v1/notifications/settings)
+- [x] T036 Create settings endpoint (GET /api/v1/notifications/settings)
   - **FR-AUTHZ/FR-AUDIT compliant**: Use `get_notification_preference_or_403()`, log settings access/update
   - Returns NotificationPreference for authenticated users
   - Returns 401 for guests (Telegram not available)
-- [ ] T037 [P] Create settings update endpoint (PATCH /api/v1/notifications/settings)
+- [x] T037 [P] Create settings update endpoint (PATCH /api/v1/notifications/settings)
   - **FR-ENC/FR-AUDIT compliant**: Validate/encrypt credentials, log credential change
   - Validates and encrypts Telegram credentials
   - Creates NotificationPreference if not exists
-- [ ] T038 Add AlertNotificationSettings to Alert schema in backend/app/schemas/alert.py
+- [x] T038 Add AlertNotificationSettings to Alert schema in backend/app/schemas/alert.py
 
 ### Frontend Implementation
 
-- [ ] T039 Create NotificationSettings component in frontend/src/components/NotificationSettings.tsx
+- [x] T039 Create NotificationSettings component in frontend/src/components/NotificationSettings.tsx
   - Must check `useAuth().isAuthenticated` before showing Telegram section
-- [ ] T040 Add notification preferences to AlertForm in frontend/src/components/AlertForm.tsx
+- [x] T040 Add notification preferences to AlertForm in frontend/src/components/AlertForm.tsx
 - [ ] T041 [P] Implement global vs per-alert settings override logic in useNotifications hook
 - [ ] T042 Save preferences to localStorage for guests in useNotifications hook
 
@@ -239,7 +239,7 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 ### Backend Implementation
 
-- [ ] T043 Create history endpoint (GET /api/v1/notifications/history)
+- [x] T043 Create history endpoint (GET /api/v1/notifications/history)
   - **FR-AUTHZ/FR-AUDIT compliant**: Use `get_history_or_403()`, log history access
   - Returns NotificationDelivery records ordered by triggered_at desc
 - [ ] T044 [P] Add NotificationDelivery logging when notifications are sent in backend/app/services/alert_engine.py
@@ -248,8 +248,8 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 ### Frontend Implementation
 
-- [ ] T045 Create NotificationHistory component in frontend/src/components/NotificationHistory.tsx
-- [ ] T046 Add history API integration in frontend/src/api/notifications.ts
+- [x] T045 Create NotificationHistory component in frontend/src/components/NotificationHistory.tsx
+- [x] T046 Add history API integration in frontend/src/api/notifications.ts
 - [ ] T047 Connect notification history to useNotifications hook for logging
 
 **Checkpoint**: Notification history panel displays recent notifications with AlertTrigger linkage
@@ -263,7 +263,7 @@ Implement three notification channels for alerts: on-screen toast notifications,
 **Independent Test**: Open existing alert edit dialog, change notification settings, save, trigger alert, verify only enabled notifications fire.
 
 **Acceptance Criteria**:
-- [ ] Alert edit dialog includes notification settings controls
+- [x] Alert edit dialog includes notification settings controls
 - [ ] Modified settings persist immediately and apply to next trigger
 - [ ] Settings modify completes in under 30 seconds
 - [ ] Telegram toggle disabled when credentials not configured
@@ -271,18 +271,18 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 ### Backend Implementation
 
-- [ ] T056 [P] Add PATCH /api/v1/alerts/{alert_id}/notification-settings endpoint in backend/app/api/v1/alerts.py
+- [x] T056 [P] Add PATCH /api/v1/alerts/{alert_id}/notification-settings endpoint in backend/app/api/v1/alerts.py
   - **FR-AUTHZ compliant**: Verify alert ownership before update
   - Updates or creates AlertNotificationSettings record
-- [ ] T057 Create bulk update endpoint POST /api/v1/alerts/bulk/notification-settings in backend/app/api/v1/alerts.py
+- [x] T057 Create bulk update endpoint POST /api/v1/alerts/bulk/notification-settings in backend/app/api/v1/alerts.py
   - **FR-BULK compliant**: Process max 50 alerts per batch, return success/failure counts
   - **FR-AUTHZ compliant**: Verify ownership of all alerts before any update
 
 ### Frontend Implementation
 
-- [ ] T058 Add notification settings section to AlertForm in frontend/src/components/AlertForm.tsx
-- [ ] T059 Add notification status indicators in frontend/src/components/AlertsList.tsx
-- [ ] T060 Create useAlertNotificationSettings hook in frontend/src/hooks/useAlertNotificationSettings.ts
+- [x] T058 Add notification settings section to AlertForm in frontend/src/components/AlertForm.tsx
+- [x] T059 Add notification status indicators in frontend/src/components/AlertsList.tsx
+- [x] T060 Create useAlertNotificationSettings hook in frontend/src/hooks/useAlertNotificationSettings.ts
 - [ ] T061 Add Telegram configuration prompt when enabling without credentials
 
 **Checkpoint**: Users can modify notification settings on existing alerts
@@ -305,10 +305,11 @@ Implement three notification channels for alerts: on-screen toast notifications,
 
 ### Frontend Implementation
 
-- [ ] T062 Add bulk selection UI to AlertsList in frontend/src/components/AlertsList.tsx
-- [ ] T063 Create BulkNotificationActions component in frontend/src/components/BulkNotificationActions.tsx
-- [ ] T064 Implement bulk update API integration in frontend/src/api/alerts.ts
-- [ ] T065 Add progress indicator and completion summary UI
+- [-] T062 Add bulk selection UI to AlertsList in frontend/src/components/AlertsList.tsx
+  (Removed per UX feedback - using right-click context menu instead)
+- [x] T063 Create BulkNotificationActions component in frontend/src/components/BulkNotificationActions.tsx
+- [x] T064 Implement bulk update API integration in frontend/src/api/alerts.ts
+- [x] T065 Add progress indicator and completion summary UI
 
 **Checkpoint**: Users can batch update notification settings across multiple alerts
 

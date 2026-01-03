@@ -3,7 +3,9 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.future import select
 from app.services.orchestrator import DataOrchestrator
+from app.services.indicator_service import IndicatorService, BASELINE_CANDLE_COUNT
 from app.models.symbol import Symbol
+from app.models.alert import Alert
 from app.services.alert_engine import AlertEngine
 from app.services.market_schedule import MarketSchedule
 import pandas as pd
@@ -16,11 +18,13 @@ class IncrementalUpdateWorker:
         self, 
         orchestrator: DataOrchestrator,
         db_session_factory,
-        alert_engine: AlertEngine = None
+        alert_engine: AlertEngine = None,
+        indicator_service: IndicatorService = None
     ):
         self.orchestrator = orchestrator
         self.db_session_factory = db_session_factory
         self.alert_engine = alert_engine
+        self.indicator_service = indicator_service
 
     async def run_update(self, ticker: str, interval: str):
         """
@@ -63,46 +67,91 @@ class IncrementalUpdateWorker:
                 
                 # 4. If alert engine is provided, evaluate alerts
                 if self.alert_engine:
-                    # Fetch recent candles for indicator calculation (e.g. last 100)
                     from app.models.candle import Candle
+                    from app.core.intervals import get_interval_delta
+                    
+                    # Get active alerts for this symbol with indicator_name set
+                    alerts_result = await db.execute(
+                        select(Alert).filter(
+                            Alert.symbol_id == symbol_obj.id,
+                            Alert.interval == interval,
+                            Alert.is_active == True,
+                            Alert.indicator_name.isnot(None)
+                        )
+                    )
+                    active_alerts = alerts_result.scalars().all()
+                    
+                    if not active_alerts:
+                        logger.debug(f"No active alerts for {ticker} ({interval})")
+                        return
+                    
+                    # Calculate required candles based on the alert with max period
+                    # Load at least BASELINE_CANDLE_COUNT (500) plus the max indicator period
+                    max_required_candles = BASELINE_CANDLE_COUNT
+                    for alert in active_alerts:
+                        if alert.indicator_params:
+                            # Extract max period from params
+                            for key, value in alert.indicator_params.items():
+                                if key in ['length', 'period', 'lookback', 'window', 'fast', 'slow',
+                                          'adxvma_period', 'domcycle', 'vibration', 'cyclicmemory']:
+                                    if isinstance(value, (int, float)):
+                                        max_required_candles = max(max_required_candles, int(value))
+                    
+                    # Fetch the required number of candles from the database
                     stmt = select(Candle).where(
                         Candle.symbol_id == symbol_obj.id,
                         Candle.interval == interval
-                    ).order_by(Candle.timestamp.desc()).limit(100)
+                    ).order_by(Candle.timestamp.desc()).limit(max_required_candles)
                     
                     res = await db.execute(stmt)
                     candles = res.scalars().all()
                     if not candles:
+                        logger.warning(f"No candles found for {ticker} ({interval})")
                         return
-                        
-                    # Reverse to chronological
-                    candles = candles[::-1]
                     
-                    df = pd.DataFrame([
-                        {
-                            "timestamp": c.timestamp,
-                            "open": c.open,
-                            "high": c.high,
-                            "low": c.low,
-                            "close": c.close,
-                            "volume": c.volume
-                        } for c in candles
-                    ])
+                    # Reverse to chronological order
+                    candles = list(reversed(candles))
                     
-                    # Calculate CRSI (or other indicators)
-                    df_crsi = indicators.calculate_crsi(df)
-                    latest_crsi = df_crsi.iloc[-1]
+                    logger.debug(
+                        f"Fetched {len(candles)} candles for alert evaluation "
+                        f"(max indicator period: {max_required_candles - BASELINE_CANDLE_COUNT})"
+                    )
                     
-                    indicator_data = {
-                        "crsi": latest_crsi["cRSI"],
-                        "crsi_upper": latest_crsi["cRSI_UpperBand"],
-                        "crsi_lower": latest_crsi["cRSI_LowerBand"],
-                    }
+                    latest_close = candles[-1].close
+                    bar_timestamp = candles[-1].timestamp
                     
+                    # Calculate indicators for each alert using IndicatorService
+                    indicator_data_map = {}
+                    for alert in active_alerts:
+                        try:
+                            if self.indicator_service:
+                                # Use IndicatorService for proper calculation with sufficient candles
+                                indicator_data = await self.indicator_service.calculate_for_alert(
+                                    db=db,
+                                    alert=alert
+                                )
+                                if indicator_data:
+                                    indicator_data_map[alert.id] = indicator_data
+                                    # Add price field for alert engine
+                                    indicator_data["price"] = latest_close
+                                    logger.debug(
+                                        f"Calculated {alert.indicator_name} for alert {alert.id}: "
+                                        f"value={indicator_data.get('value')}, "
+                                        f"prev_value={indicator_data.get('prev_value')}"
+                                    )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to calculate indicator for alert {alert.id} "
+                                f"({alert.indicator_name}): {e}"
+                            )
+                    
+                    # Evaluate alerts with calculated indicator data
                     await self.alert_engine.evaluate_symbol_alerts(
-                        symbol_obj.id, 
-                        candles[-1].close, 
-                        indicator_data=indicator_data
+                        symbol_obj.id,
+                        latest_close,
+                        indicator_data=None,  # Legacy per-symbol indicator data
+                        indicator_data_map=indicator_data_map if indicator_data_map else None,
+                        bar_timestamp=bar_timestamp
                     )
                     
                 logger.info(f"Incremental update for {ticker} ({interval}) complete.")

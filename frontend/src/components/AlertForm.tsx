@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   createAlert,
+  updateAlertNotificationSettings,
   type AlertCondition,
   type AlertTriggerMode,
   getIndicatorConditions,
@@ -9,11 +10,33 @@ import {
 } from '../api/alerts'
 import { listIndicatorsWithMetadata, type IndicatorInfo } from '../api/indicators'
 import { getIndicatorTitle } from '@/utils/indicatorDisplay'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+import type { SoundType } from '@/types/notification'
 
 interface AlertFormProps {
   symbol: string
   symbolId?: number
   onAlertCreated?: (alert: any) => void
+  editMode?: boolean
+  alertId?: string
+  initialData?: {
+    alertType: 'price' | 'indicator'
+    condition: AlertCondition
+    threshold: string
+    cooldown: string
+    triggerMode: AlertTriggerMode
+    selectedIndicator?: string
+    selectedField?: string
+    indicatorParams?: Record<string, string>
+  }
+  notificationSettings?: {
+    toastEnabled: boolean | null
+    soundEnabled: boolean | null
+    soundType: SoundType | null
+    telegramEnabled: boolean | null
+  }
+  onNotificationSettingsChange?: (settings: AlertFormProps['notificationSettings']) => void
 }
 
 const priceConditionLabels: Record<string, string> = {
@@ -23,20 +46,36 @@ const priceConditionLabels: Record<string, string> = {
   crosses_down: 'Crosses Down (triggers when previous > threshold AND current <= threshold)',
 }
 
-const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => {
+const AlertForm = ({
+  symbol,
+  symbolId = 1,
+  onAlertCreated,
+  editMode = false,
+  alertId,
+  initialData,
+  notificationSettings,
+  onNotificationSettingsChange
+}: AlertFormProps) => {
   // Form state
-  const [alertType, setAlertType] = useState<'price' | 'indicator'>('price')
-  const [condition, setCondition] = useState<AlertCondition>('above')
-  const [threshold, setThreshold] = useState('')
-  const [cooldown, setCooldown] = useState('1')  // Default: 1 minute
-  const [triggerMode, setTriggerMode] = useState<AlertTriggerMode>('once_per_bar_close')  // Default
+  const [alertType, setAlertType] = useState<'price' | 'indicator'>(initialData?.alertType || 'price')
+  const [condition, setCondition] = useState<AlertCondition>(initialData?.condition || 'above')
+  const [threshold, setThreshold] = useState(initialData?.threshold || '')
+  const [cooldown, setCooldown] = useState(initialData?.cooldown || '1')
+  const [triggerMode, setTriggerMode] = useState<AlertTriggerMode>(initialData?.triggerMode || 'once_per_bar_close')
 
   // Indicator alert state
   const [indicators, setIndicators] = useState<IndicatorInfo[]>([])
-  const [selectedIndicator, setSelectedIndicator] = useState<string>('')
+  const [selectedIndicator, setSelectedIndicator] = useState(initialData?.selectedIndicator || '')
   const [indicatorConditions, setIndicatorConditions] = useState<IndicatorCondition[]>([])
-  const [selectedField, setSelectedField] = useState<string>('')
-  const [indicatorParams, setIndicatorParams] = useState<Record<string, string>>({})
+  const [selectedField, setSelectedField] = useState(initialData?.selectedField || '')
+  const [indicatorParams, setIndicatorParams] = useState<Record<string, string>>(initialData?.indicatorParams || {})
+
+  // Notification settings state
+  const [notifToastEnabled, setNotifToastEnabled] = useState(notificationSettings?.toastEnabled ?? null)
+  const [notifSoundEnabled, setNotifSoundEnabled] = useState(notificationSettings?.soundEnabled ?? null)
+  const [notifSoundType, setNotifSoundType] = useState<SoundType>(notificationSettings?.soundType || 'bell')
+  const [notifTelegramEnabled, setNotifTelegramEnabled] = useState(notificationSettings?.telegramEnabled ?? null)
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false)
 
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -136,6 +175,17 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
         setMessage('Alert created successfully!')
         setThreshold('')
         setCooldown('1')
+
+        // Save notification settings if any are set
+        if (notifToastEnabled !== null || notifSoundEnabled !== null || notifTelegramEnabled !== null) {
+          await updateAlertNotificationSettings(String(result.id), {
+            toastEnabled: notifToastEnabled,
+            soundEnabled: notifSoundEnabled,
+            soundType: notifSoundType,
+            telegramEnabled: notifTelegramEnabled,
+          });
+        }
+
         if (onAlertCreated) onAlertCreated(result)
       } catch (error) {
         console.error('Error creating alert:', error)
@@ -179,6 +229,17 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
         setThreshold('')
         setCooldown('1')
         setIndicatorParams({})
+
+        // Save notification settings if any are set
+        if (notifToastEnabled !== null || notifSoundEnabled !== null || notifTelegramEnabled !== null) {
+          await updateAlertNotificationSettings(String(result.id), {
+            toastEnabled: notifToastEnabled,
+            soundEnabled: notifSoundEnabled,
+            soundType: notifSoundType,
+            telegramEnabled: notifTelegramEnabled,
+          });
+        }
+
         if (onAlertCreated) onAlertCreated(result)
       } catch (error) {
         console.error('Error creating alert:', error)
@@ -375,13 +436,121 @@ const AlertForm = ({ symbol, symbolId = 1, onAlertCreated }: AlertFormProps) => 
           </p>
         </div>
 
+        {/* Notification Settings Toggle */}
+        <button
+          type="button"
+          onClick={() => setShowNotificationSettings(!showNotificationSettings)}
+          className="text-sm text-slate-400 hover:text-white flex items-center gap-1"
+        >
+          <span>{showNotificationSettings ? '▼' : '▶'}</span>
+          Notification Settings {editMode && '(Optional override)'}
+        </button>
+
+        {/* Notification Settings */}
+        {showNotificationSettings && (
+          <div className="p-4 bg-slate-700/50 rounded-lg space-y-4 border border-slate-600">
+            {/* Toast */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notif-toast" className="text-white">
+                Toast Notification
+              </Label>
+              <Switch
+                id="notif-toast"
+                checked={notifToastEnabled ?? true}
+                onCheckedChange={(checked) => {
+                  setNotifToastEnabled(checked ? true : null)
+                  onNotificationSettingsChange?.({
+                    toastEnabled: checked ? true : null,
+                    soundEnabled: notifSoundEnabled,
+                    soundType: notifSoundType,
+                    telegramEnabled: notifTelegramEnabled
+                  })
+                }}
+              />
+            </div>
+
+            {/* Sound */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notif-sound" className="text-white">
+                Sound Notification
+              </Label>
+              <Switch
+                id="notif-sound"
+                checked={notifSoundEnabled ?? false}
+                onCheckedChange={(checked) => {
+                  setNotifSoundEnabled(checked ? true : null)
+                  onNotificationSettingsChange?.({
+                    toastEnabled: notifToastEnabled,
+                    soundEnabled: checked ? true : null,
+                    soundType: notifSoundType,
+                    telegramEnabled: notifTelegramEnabled
+                  })
+                }}
+              />
+            </div>
+
+            {/* Sound Type (if sound enabled) */}
+            {notifSoundEnabled && (
+              <div className="grid grid-cols-3 gap-2">
+                {(['bell', 'alert', 'chime'] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setNotifSoundType(type)
+                      onNotificationSettingsChange?.({
+                        toastEnabled: notifToastEnabled,
+                        soundEnabled: notifSoundEnabled,
+                        soundType: type,
+                        telegramEnabled: notifTelegramEnabled
+                      })
+                    }}
+                    className={`p-2 rounded text-sm border ${
+                      notifSoundType === type
+                        ? 'border-[#26a69a] bg-[#26a69a]/20 text-white'
+                        : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                    }`}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Telegram */}
+            <div className="flex items-center justify-between">
+              <Label htmlFor="notif-telegram" className="text-white">
+                Telegram
+              </Label>
+              <Switch
+                id="notif-telegram"
+                checked={notifTelegramEnabled ?? false}
+                onCheckedChange={(checked) => {
+                  setNotifTelegramEnabled(checked ? true : null)
+                  onNotificationSettingsChange?.({
+                    toastEnabled: notifToastEnabled,
+                    soundEnabled: notifSoundEnabled,
+                    soundType: notifSoundType,
+                    telegramEnabled: checked ? true : null
+                  })
+                }}
+              />
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Set to "Use global" (default) to inherit settings from your notification preferences.
+              Override by changing individual settings above.
+            </p>
+          </div>
+        )}
+
         {/* Submit Button */}
         <button
           type="submit"
           disabled={isSubmitting || (alertType === 'indicator' && (!selectedIndicator || isLoadingConditions))}
           className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white font-bold py-2 px-4 rounded transition duration-200"
         >
-          {isSubmitting ? 'Creating...' : 'Create Alert'}
+          {isSubmitting ? (editMode ? 'Saving...' : 'Creating...') : (editMode ? 'Save Alert' : 'Create Alert')}
         </button>
 
         {/* Message */}

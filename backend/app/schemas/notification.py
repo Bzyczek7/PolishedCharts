@@ -121,45 +121,60 @@ class AlertNotificationSettingsBase(BaseModel):
     """Base schema for alert notification settings."""
     toast_enabled: Optional[bool] = Field(
         default=None,
-        description="Override global toast setting (null = use global)"
+        alias="toastEnabled",
+        description="Enable toast notifications (null = use global default)"
     )
     sound_enabled: Optional[bool] = Field(
         default=None,
-        description="Override global sound setting (null = use global)"
+        alias="soundEnabled",
+        description="Enable sound notifications (null = use global default)"
     )
     sound_type: Optional[str] = Field(
         default=None,
+        alias="soundType",
         description="Alert-specific sound type (null = use global)",
         pattern="^(bell|alert|chime)$"
     )
     telegram_enabled: Optional[bool] = Field(
         default=None,
-        description="Override global Telegram setting (null = use global)"
+        alias="telegramEnabled",
+        description="Enable Telegram notifications (null = use global default)"
     )
+
+    class Config:
+        populate_by_name = True  # Allow both alias and field name
 
 
 class AlertNotificationSettingsCreate(AlertNotificationSettingsBase):
     """Schema for creating alert notification settings."""
-    alert_id: UUID = Field(..., description="ID of the associated alert")
+    alert_id: int = Field(..., description="ID of the associated alert")
 
 
 class AlertNotificationSettingsUpdate(BaseModel):
     """Schema for updating alert notification settings (all fields optional)."""
-    toast_enabled: Optional[bool] = None
-    sound_enabled: Optional[bool] = None
+    toast_enabled: Optional[bool] = Field(None, alias="toastEnabled")
+    sound_enabled: Optional[bool] = Field(None, alias="soundEnabled")
     sound_type: Optional[str] = Field(
         default=None,
+        alias="soundType",
         pattern="^(bell|alert|chime)$"
     )
-    telegram_enabled: Optional[bool] = None
+    telegram_enabled: Optional[bool] = Field(None, alias="telegramEnabled")
+
+    class Config:
+        populate_by_name = True  # Allow both alias and field name
 
 
 class AlertNotificationSettingsResponse(AlertNotificationSettingsBase):
     """Schema for alert notification settings response."""
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        populate_by_name=True,
+        by_alias=True  # Serialize using camelCase aliases
+    )
 
     id: UUID
-    alert_id: UUID
+    alert_id: int
     created_at: datetime
     updated_at: datetime
 

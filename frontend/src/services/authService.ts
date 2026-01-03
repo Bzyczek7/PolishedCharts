@@ -6,7 +6,7 @@
  *
  * Feature: 011-firebase-auth
  */
-import axios from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 import { onAuthStateChanged } from 'firebase/auth';
 import type {
   UserProfile,
@@ -23,7 +23,7 @@ let authInitPromise: Promise<void> | null = null;
 
 // T036: Cache axios instance to avoid repeated token fetches and instance creation
 // This significantly improves performance for parallel indicator requests
-let cachedAuthClient: axios.AxiosInstance | null = null;
+let cachedAuthClient: AxiosInstance | null = null;
 let cachedToken: string | null = null;
 
 /**
@@ -31,11 +31,6 @@ let cachedToken: string | null = null;
  */
 async function waitForAuthReady(): Promise<void> {
   const { auth } = await import('../lib/firebase');
-
-  // If auth is already initialized, we're done
-  if (auth._initialized) {
-    return;
-  }
 
   // If a wait is already in progress, wait for that
   if (authInitPromise) {
@@ -81,7 +76,7 @@ async function getAuthToken(): Promise<string | null> {
 /**
  * Create axios instance with auth header (T036: cached for performance)
  */
-export async function createAuthenticatedAxios(): Promise<axios.AxiosInstance> {
+export async function createAuthenticatedAxios(): Promise<AxiosInstance> {
   const token = await getAuthToken();
 
   // Return cached client if token hasn't changed

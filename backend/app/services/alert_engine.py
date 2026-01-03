@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import List, Callable, Any, Optional
+from typing import List, Callable, Any, Optional, Dict
 from sqlalchemy.future import select
 from datetime import datetime, timezone, timedelta
 from app.models.alert import Alert
@@ -29,7 +29,8 @@ class AlertEngine:
         symbol_id: int,
         current_price: float,
         previous_price: Optional[float] = None,
-        indicator_data: dict = None,
+        indicator_data: Optional[dict] = None,
+        indicator_data_map: Optional[Dict[int, dict]] = None,
         bar_timestamp: Optional[datetime] = None
     ) -> List[Alert]:
         """
@@ -53,7 +54,8 @@ class AlertEngine:
             symbol_id: The symbol ID to evaluate alerts for
             current_price: The current price
             previous_price: The previous price (required for above/below/crosses conditions)
-            indicator_data: Optional indicator data for indicator-based alerts
+            indicator_data: Optional indicator data for indicator-based alerts (legacy, per-symbol)
+            indicator_data_map: Optional per-alert indicator data dict {alert_id: indicator_data} (new, custom indicators)
             bar_timestamp: The timestamp of the current bar (for bar-based trigger modes)
 
         Returns:
@@ -76,7 +78,7 @@ class AlertEngine:
             # T106b: Use batch evaluation for high alert volumes
             if len(active_alerts) >= BATCH_EVALUATION_THRESHOLD:
                 triggered_alerts = await self._evaluate_alerts_batch(
-                    active_alerts, current_price, previous_price, indicator_data, bar_timestamp, session
+                    active_alerts, current_price, previous_price, indicator_data, indicator_data_map, bar_timestamp, session
                 )
             else:
                 for alert in active_alerts:
@@ -157,31 +159,76 @@ class AlertEngine:
                         else:
                             is_triggered = current_price < threshold
 
-                    elif condition == "crsi_band_cross" and indicator_data:
-                        # Indicator-based alert (existing logic)
-                        crsi = indicator_data.get("crsi")
-                        upper = indicator_data.get("crsi_upper")
-                        lower = indicator_data.get("crsi_lower")
-                        prev_crsi = indicator_data.get("prev_crsi")
-                        prev_upper = indicator_data.get("prev_crsi_upper")
-                        prev_lower = indicator_data.get("prev_crsi_lower")
+                    elif condition == "crsi_band_cross":
+                        # Get indicator data for this alert (prefer per-alert data, fall back to legacy)
+                        alert_indicator_data = indicator_data_map.get(alert.id) if indicator_data_map else None
+                        if not alert_indicator_data:
+                            alert_indicator_data = indicator_data
 
-                        if all(v is not None for v in [crsi, upper, lower, prev_crsi, prev_upper, prev_lower]):
-                            # Cross Above Upper Band
-                            if prev_crsi <= prev_upper and crsi > upper:
-                                is_triggered = True
-                            # Cross Below Lower Band
-                            elif prev_crsi >= prev_lower and crsi < lower:
-                                is_triggered = True
+                        if alert_indicator_data:
+                            # Indicator-based alert (existing logic)
+                            crsi = alert_indicator_data.get("crsi")
+                            upper = alert_indicator_data.get("crsi_upper") or alert_indicator_data.get("upper_band")
+                            lower = alert_indicator_data.get("crsi_lower") or alert_indicator_data.get("lower_band")
+                            prev_crsi = alert_indicator_data.get("prev_crsi")
+                            prev_upper = alert_indicator_data.get("prev_crsi_upper") or alert_indicator_data.get("prev_upper_band")
+                            prev_lower = alert_indicator_data.get("prev_crsi_lower") or alert_indicator_data.get("prev_lower_band")
+
+                            if all(v is not None for v in [crsi, upper, lower, prev_crsi, prev_upper, prev_lower]):
+                                # Cross Above Upper Band
+                                if prev_crsi <= prev_upper and crsi > upper:
+                                    is_triggered = True
+                                # Cross Below Lower Band
+                                elif prev_crsi >= prev_lower and crsi < lower:
+                                    is_triggered = True
+
+                    elif condition == AlertCondition.CRSI_BAND_EXTREMES.value:
+                        # cRSI band extremes - triggers when cRSI is above upper OR below lower band
+                        # Get indicator data for this alert (prefer per-alert data, fall back to legacy)
+                        alert_indicator_data = indicator_data_map.get(alert.id) if indicator_data_map else None
+                        if not alert_indicator_data:
+                            alert_indicator_data = indicator_data
+
+                        if alert_indicator_data:
+                            # Feature 001: Indicator-based alerts with direction-specific messages
+                            triggers = self._evaluate_indicator_condition_with_direction(
+                                alert, condition, alert_indicator_data, threshold, session
+                            )
+                        if triggers:
+                            triggered_alerts.append(alert)
+                            # Record trigger time for cooldown (alert-level, not per-condition)
+                            now = datetime.now(timezone.utc)
+                            self._last_triggered[alert.id] = now
+
+                            # Update alert state based on trigger mode
+                            alert.last_triggered_at = now
+
+                            # "once" mode: disable alert after trigger
+                            if trigger_mode == AlertTriggerMode.ONCE.value:
+                                alert.is_active = False
+                                logger.info(f"Alert {alert.id} disabled (once mode)")
+
+                            # Bar modes: track bar timestamp
+                            if trigger_mode in [AlertTriggerMode.ONCE_PER_BAR.value, AlertTriggerMode.ONCE_PER_BAR_CLOSE.value]:
+                                if bar_timestamp:
+                                    alert.last_triggered_bar_timestamp = bar_timestamp
+                        # Skip the default trigger creation below since we handle it with direction info
+                        continue
 
                     # T074 [US5] [P]: Add indicator condition evaluation
-                    elif condition.startswith("indicator_") and indicator_data:
-                        # Feature 001: Indicator-based alerts with direction-specific messages
-                        # T032: Implement cRSI band-cross detection using current + previous values
-                        # T037: Handle multi-trigger edge case (both upper and lower in same cycle)
-                        triggers = self._evaluate_indicator_condition_with_direction(
-                            alert, condition, indicator_data, threshold, session
-                        )
+                    elif condition.startswith("indicator_"):
+                        # Get indicator data for this alert (prefer per-alert data, fall back to legacy)
+                        alert_indicator_data = indicator_data_map.get(alert.id) if indicator_data_map else None
+                        if not alert_indicator_data:
+                            alert_indicator_data = indicator_data
+
+                        if alert_indicator_data:
+                            # Feature 001: Indicator-based alerts with direction-specific messages
+                            # T032: Implement cRSI band-cross detection using current + previous values
+                            # T037: Handle multi-trigger edge case (both upper and lower in same cycle)
+                            triggers = self._evaluate_indicator_condition_with_direction(
+                                alert, condition, alert_indicator_data, threshold, session
+                            )
                         if triggers:
                             triggered_alerts.append(alert)
                             # Record trigger time for cooldown (alert-level, not per-condition)
@@ -264,6 +311,7 @@ class AlertEngine:
         current_price: float,
         previous_price: Optional[float],
         indicator_data: Optional[dict],
+        indicator_data_map: Optional[Dict[int, dict]],
         bar_timestamp: Optional[datetime],
         session
     ) -> List[Alert]:
@@ -278,7 +326,8 @@ class AlertEngine:
             alerts: List of Alert objects to evaluate
             current_price: The current price
             previous_price: The previous price
-            indicator_data: Optional indicator data for indicator-based alerts
+            indicator_data: Optional indicator data for indicator-based alerts (legacy, per-symbol)
+            indicator_data_map: Optional per-alert indicator data dict {alert_id: indicator_data} (new, custom indicators)
             bar_timestamp: The timestamp of the current bar (for bar-based trigger modes)
             session: Database session
 
@@ -333,10 +382,16 @@ class AlertEngine:
             elif condition == AlertCondition.CROSSES_DOWN.value:
                 is_triggered = (previous_price is not None and
                                previous_price > threshold and current_price <= threshold)
-            elif condition.startswith("indicator_") and indicator_data:
-                is_triggered = self._evaluate_indicator_condition(
-                    condition, indicator_data, threshold
-                )
+            elif condition.startswith("indicator_"):
+                # Get indicator data for this alert (prefer per-alert data, fall back to legacy)
+                alert_indicator_data = indicator_data_map.get(alert.id) if indicator_data_map else None
+                if not alert_indicator_data:
+                    alert_indicator_data = indicator_data
+
+                if alert_indicator_data:
+                    is_triggered = self._evaluate_indicator_condition(
+                        condition, alert_indicator_data, threshold
+                    )
 
             if is_triggered:
                 triggered_alerts.append(alert)
@@ -474,6 +529,24 @@ class AlertEngine:
                 return current_value != prev_value
             return False
 
+        elif condition == AlertCondition.CRSI_BAND_EXTREMES.value:
+            # Triggers when cRSI is above upper band OR below lower band
+            # Respects enabled_conditions for upper/lower
+            upper_band = indicator_data.get("upper_band") or indicator_data.get("crsi_upper")
+            lower_band = indicator_data.get("lower_band") or indicator_data.get("crsi_lower")
+            if upper_band is None or lower_band is None:
+                return False
+
+            enabled_conditions = indicator_data.get("enabled_conditions") or {"upper": True, "lower": True}
+            upper_enabled = enabled_conditions.get("upper", True)
+            lower_enabled = enabled_conditions.get("lower", True)
+
+            if upper_enabled and current_value > upper_band:
+                return True
+            if lower_enabled and current_value < lower_band:
+                return True
+            return False
+
         return False
 
     def _evaluate_indicator_condition_with_direction(
@@ -532,7 +605,39 @@ class AlertEngine:
         message_upper = alert.message_upper or "It's time to sell!"
         message_lower = alert.message_lower or "It's time to buy!"
 
-        # Check upper band cross (if enabled)
+        # Check upper band - use state check (not cross) for crsi_band_extremes
+        if upper_enabled and condition == AlertCondition.CRSI_BAND_EXTREMES.value:
+            # Triggers when cRSI is above upper band (sell signal) - STATE check, not cross
+            if current_value > upper_band:
+                trigger = AlertTrigger(
+                    alert_id=alert.id,
+                    triggered_at=now,
+                    observed_price=indicator_data.get("price"),
+                    indicator_value=float(current_value),
+                    trigger_type="upper",
+                    trigger_message=message_upper
+                )
+                session.add(trigger)
+                triggers_created.append(trigger)
+                logger.info(f"UPPER BAND EXTREME: Alert {alert.id} triggered at {current_value} > {upper_band}")
+
+        # Check lower band - use state check (not cross) for crsi_band_extremes
+        if lower_enabled and condition == AlertCondition.CRSI_BAND_EXTREMES.value:
+            # Triggers when cRSI is below lower band (buy signal) - STATE check, not cross
+            if current_value < lower_band:
+                trigger = AlertTrigger(
+                    alert_id=alert.id,
+                    triggered_at=now,
+                    observed_price=indicator_data.get("price"),
+                    indicator_value=float(current_value),
+                    trigger_type="lower",
+                    trigger_message=message_lower
+                )
+                session.add(trigger)
+                triggers_created.append(trigger)
+                logger.info(f"LOWER BAND EXTREME: Alert {alert.id} triggered at {current_value} < {lower_band}")
+
+        # Check upper band cross (if enabled) - for cross-based conditions
         if upper_enabled and condition in ["indicator_crosses_upper", "indicator_crosses_lower", "crsi_band_cross"]:
             # T032: prev_value <= upper_band AND current_value > upper_band
             if prev_value <= upper_band and current_value > upper_band:
@@ -548,7 +653,7 @@ class AlertEngine:
                 triggers_created.append(trigger)
                 logger.info(f"UPPER BAND CROSS: Alert {alert.id} triggered at {current_value} > {upper_band}")
 
-        # Check lower band cross (if enabled)
+        # Check lower band cross (if enabled) - for cross-based conditions
         if lower_enabled and condition in ["indicator_crosses_upper", "indicator_crosses_lower", "crsi_band_cross"]:
             # T032: prev_value >= lower_band AND current_value < lower_band
             if prev_value >= lower_band and current_value < lower_band:

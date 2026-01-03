@@ -197,6 +197,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   const [activeLayout, setActiveLayout] = useState<LayoutType | null>(null)
   const [candles, setCandles] = useState<Candle[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  // Track the request range for candle cache hits with indicators
+  const [candleRequestRange, setCandleRequestRange] = useState<{from: string; to: string} | null>(null)
   const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const lastFetchedToDateRef = useRef<string | null>(null)
   const [visibleRange, setVisibleRange] = useState<IRange<Time> | null>(null)
@@ -228,7 +230,7 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   useIndicatorMigration()
 
   // Phase 5: Compute TARGET date range for indicators (MUST be before hook calls to avoid circular dependency)
-  // During normal operation: same as current candle range
+  // During normal operation: use request range (for cache hits) or candle range
   // During backfill: includes pending candle data
   // IMPORTANT: Pending candle data may not be sorted - use min/max to find bounds
   const targetCandleDateRange = useMemo(() => {
@@ -240,18 +242,42 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
       )
 
       // Target range = earliest pending to latest existing
-      return {
+      const range = {
         from: pendingEarliest,
         to: candles[candles.length - 1].timestamp
       }
+      console.log('[targetCandleDateRange] Backfill mode:', {
+        pendingCount: pendingCandleData.length,
+        from: range.from,
+        to: range.to,
+        candleCount: candles.length
+      })
+      return range
     }
-    // No pending data - use current candle range
+
+    // No pending data - use request range for initial load (cache hit optimization)
+    // Fall back to actual candle timestamps for backfill
+    if (candleRequestRange) {
+      console.log('[targetCandleDateRange] Using request range for cache alignment:', {
+        from: candleRequestRange.from,
+        to: candleRequestRange.to,
+        candleCount: candles.length
+      })
+      return candleRequestRange
+    }
+
     if (candles.length === 0) return undefined
-    return {
+    const range = {
       from: candles[0].timestamp,
       to: candles[candles.length - 1].timestamp
     }
-  }, [candles, pendingCandleData])
+    console.log('[targetCandleDateRange] Normal mode (fallback):', {
+      from: range.from,
+      to: range.to,
+      candleCount: candles.length
+    })
+    return range
+  }, [candles, pendingCandleData, candleRequestRange])
 
   // Use indicator data with loading state to synchronize chart rendering
   // Pass candleDataVersion and targetCandleDateRange for synchronized loading
@@ -390,8 +416,25 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     const fetchAlerts = async () => {
       if (isAuthenticated) {
         try {
-          const { listAlerts } = await import('./api/alerts')
+          const { listAlerts, getAlertNotificationSettings } = await import('./api/alerts')
           const backendAlerts = await listAlerts()
+
+          // Fetch notification settings for all alerts in parallel
+          const notificationSettingsPromises = backendAlerts.map(async (alert) => {
+            try {
+              const settings = await getAlertNotificationSettings(String(alert.id))
+              return { alertId: alert.id, settings }
+            } catch (err) {
+              // 404 means no custom settings (use global defaults)
+              return { alertId: alert.id, settings: null }
+            }
+          })
+
+          const notificationSettingsResults = await Promise.all(notificationSettingsPromises)
+          const settingsMap = new Map(
+            notificationSettingsResults.map(r => [r.alertId, r.settings])
+          )
+
           // Convert backend alerts to local Alert format (from AlertsList)
           const convertedAlerts = backendAlerts.map(a => ({
             id: String(a.id),
@@ -405,7 +448,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
             indicator_field: a.indicator_field,
             indicator_params: a.indicator_params,
             enabled_conditions: a.enabled_conditions,
-            messages: a.messages
+            messages: a.messages,
+            notificationSettings: settingsMap.get(a.id) ?? undefined
           }))
           setAlerts(convertedAlerts)
         } catch (error) {
@@ -428,7 +472,19 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     const handleRangeChange = (range: any) => {
         if (!range) return
         indicatorTimeScalesRef.current.forEach((ts) => {
-            ts.setVisibleLogicalRange(range)
+          try {
+            // Validate time scale is in a good state before setting range
+            // This prevents errors from destroyed/invalid indicator charts
+            const currentVisible = ts.getVisibleRange()
+            if (currentVisible !== null) {
+              ts.setVisibleLogicalRange(range)
+            }
+          } catch (e) {
+            // Ignore errors from indicator charts that are being destroyed/unmounted
+            // This can happen during rapid symbol changes or when the chart is updating
+            // Also filters out invalid time scales from the ref
+            console.debug('[Chart] Ignoring time scale error from indicator chart:', e)
+          }
         })
     }
 
@@ -437,7 +493,15 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     const currentRange = mainTimeScale.getVisibleLogicalRange()
     if (currentRange) {
         indicatorTimeScalesRef.current.forEach((ts) => {
-            ts.setVisibleLogicalRange(currentRange)
+          try {
+            // Validate time scale is in a good state before setting range
+            const indicatorVisible = ts.getVisibleRange()
+            if (indicatorVisible !== null) {
+              ts.setVisibleLogicalRange(currentRange)
+            }
+          } catch (e) {
+            console.debug('[Chart] Ignoring time scale error from indicator chart:', e)
+          }
         })
     }
 
@@ -611,6 +675,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
 
   useEffect(() => {
     console.log('[Initial Fetch] Triggered for symbol:', symbol, 'interval:', chartInterval, 'dataMode:', dataMode)
+    console.log('[Initial Fetch] useEffect executing, current candles:', candles.length)
+
     // Reset pagination state when symbol or interval changes
     setHasMoreHistory(true)
     lastFetchedToDateRef.current = null
@@ -619,18 +685,39 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
 
     const fetchData = async () => {
         try {
-            const to = new Date().toISOString()
-            // T040: Reduced from 1000 to 200 candles for faster initial load
-            const INITIAL_CANDLE_COUNT = 200
+            console.log('[Initial Fetch] fetchData() called for symbol:', symbol, 'interval:', chartInterval)
+            // For daily intervals, use yesterday's close to avoid "gap" detection for today's incomplete candle
+            // For intraday intervals, use current time (real-time updates expected)
+            const now = new Date()
+            let to: Date
+            if (chartInterval === '1d' || chartInterval === '1wk') {
+                // Daily/weekly: use end of previous day
+                to = new Date(now)
+                to.setHours(23, 59, 59, 999)
+                to.setDate(to.getDate() - 1)  // Yesterday
+            } else {
+                // Intraday: use current time
+                to = now
+            }
+
+            const toStr = to.toISOString()
+            // 200 candles for chart + 500 candles warmup for indicator cache alignment
+            const INITIAL_CANDLE_COUNT = 200 + 500
             const intervalMs = getIntervalMilliseconds(chartInterval)
-            const fromDate = new Date(new Date(to).getTime() - (INITIAL_CANDLE_COUNT * intervalMs))
+            const fromDate = new Date(to.getTime() - (INITIAL_CANDLE_COUNT * intervalMs))
             const from = fromDate.toISOString()
 
-            console.log('[Initial Fetch] Fetching candles from', from, 'to', to)
+            // Store request range for indicator cache alignment
+            setCandleRequestRange({ from, to: toStr })
+
+            console.log('[Initial Fetch] Fetching candles from', from, 'to', toStr)
             // Only fetch candles - indicator data is fetched by useIndicatorDataWithLoading hook
-            const candleData = await getCandles(symbol, chartInterval, from, to).catch(() => [])
+            const candleData = await getCandles(symbol, chartInterval, from, toStr).catch((err) => {
+  console.error('[Initial Fetch] ERROR fetching candles:', err);
+  return [];
+})
             console.log('[Initial Fetch] Received', candleData.length, 'candles')
-            
+
             // CRITICAL: Only update candles if we got valid data
             // If fetch fails (returns empty), preserve existing data to prevent infinite scroll loop
             if (candleData.length > 0) {
@@ -639,6 +726,10 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                 // Invalidate indicator cache and trigger recalculation with new historical data
                 invalidateIndicatorCache(symbol)
                 setCandleDataVersion(v => v + 1)
+
+                // AUTO-BACKFILL DISABLED: Let user scroll to trigger backfill
+                // Auto-backfill was interfering with initial load timing and causing
+                // double fetches. User can scroll back to trigger historical data.
             } else if (candles.length === 0) {
                 // Only set empty state if we don't have any data yet
                 setCandles([])
@@ -694,6 +785,7 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   const [candlesDone, setCandlesDone] = useState(false)
   const [indicatorsDone, setIndicatorsDone] = useState(false)
   const indicatorDoneTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const t4CountRef = useRef<number>(0)  // Track number of T4 DONE messages
 
   // T024b: Refs to track indicator state for immediate interactivity optimization
   // These refs are updated synchronously when indicators change
@@ -737,21 +829,30 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
       }
 
       // Check for indicators done - use debounce to wait for ALL rounds
+      // Count T4 DONE messages to track when all batches are complete
       if (message.includes('[T4 DONE]')) {
+        // Increment T4 count
+        t4CountRef.current++
+
         // Capture T4 timestamp for duration breakdown
         if (loadStartTimeRef.current) {
           t4TimeRef.current = performance.now()
         }
+
         // Clear any existing timeout
         if (indicatorDoneTimeoutRef.current) {
           clearTimeout(indicatorDoneTimeoutRef.current)
         }
 
-        // Set new timeout - wait 200ms after the LAST T4 DONE message
-        // Reduced from 2000ms after eliminating duplicate fetches (US2)
+        // Set new timeout - wait 100ms after the LAST T4 DONE message
+        // Short delay to catch rapid successive T4 messages (backfill indicators)
+        // but fast enough that timer appears when chart is actually visible
         indicatorDoneTimeoutRef.current = setTimeout(() => {
+          // Check if we're in a stable state (no more T4s for a while)
+          console.log(`%c[INDICATORS DONE] Total T4 DONE messages: ${t4CountRef.current}`, 'color: #4CAF50; font-weight: bold')
           setIndicatorsDone(true)
-        }, 200)
+          t4CountRef.current = 0  // Reset for next load
+        }, 100)
       }
     }
 
@@ -775,11 +876,9 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
       setCandlesDone(false)
       setIndicatorsDone(false)
 
-      // Wait for chart rendering to complete using multiple requestAnimationFrame frames
+      // Wait for React to flush updates (single frame is enough)
       const waitForChartRender = () => {
         requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
               const endTime = performance.now()
               const loadTimeMs = endTime - loadStart
 
@@ -790,11 +889,10 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
               const tCandles = t2TimeRef.current ? t2TimeRef.current - loadStartTimeRef.current : 0
               const tIndicators = t4TimeRef.current && t2TimeRef.current ? t4TimeRef.current - t2TimeRef.current : 0
               const tRender = loadTimeMs - (t4TimeRef.current ? t4TimeRef.current - loadStartTimeRef.current : 0)
-              const tDebounce = Math.max(0, loadTimeMs - tCandles - tIndicators - tRender)
 
               // Log with phase breakdown
               console.log(
-                `%c[LOAD DONE] ${symbolForTiming} - ${loadTimeMs.toFixed(0)}ms TOTAL (candles: ${tCandles.toFixed(0)}ms, indicators: ${tIndicators.toFixed(0)}ms, render: ${tRender.toFixed(0)}ms, debounce: ${tDebounce.toFixed(0)}ms)`,
+                `%c[LOAD DONE] ${symbolForTiming} - ${loadTimeMs.toFixed(0)}ms TOTAL (candles: ${tCandles.toFixed(0)}ms, indicators: ${tIndicators.toFixed(0)}ms, render: ${tRender.toFixed(0)}ms)`,
                 `color: ${loadTimeMs < 500 ? '#4CAF50' : loadTimeMs < 1000 ? '#FF9800' : '#F44336'}; font-weight: bold; font-size: 14px`
               )
 
@@ -854,8 +952,6 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
               t2TimeRef.current = null
               t4TimeRef.current = null
             })
-          })
-        })
       }
       waitForChartRender()
     }
@@ -1764,8 +1860,21 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                 try {
                                   if (isAuthenticated) {
                                     // Authenticated: fetch all alerts from backend
-                                    const { listAlerts } = await import('./api/alerts');
+                                    const { listAlerts, getAlertNotificationSettings } = await import('./api/alerts');
                                     const backendAlerts = await listAlerts();
+
+                                    // Fetch notification settings for all alerts in parallel
+                                    const notifPromises = backendAlerts.map(async (alert) => {
+                                      try {
+                                        const settings = await getAlertNotificationSettings(String(alert.id));
+                                        return { alertId: alert.id, settings };
+                                      } catch {
+                                        return { alertId: alert.id, settings: null };
+                                      }
+                                    });
+                                    const notifResults = await Promise.all(notifPromises);
+                                    const settingsMap = new Map(notifResults.map(r => [r.alertId, r.settings]));
+
                                     // Convert backend format to frontend format
                                     const convertedAlerts = backendAlerts.map(a => ({
                                       id: String(a.id),
@@ -1779,7 +1888,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                       indicator_field: a.indicator_field,
                                       indicator_params: a.indicator_params,
                                       enabled_conditions: a.enabled_conditions,
-                                      messages: a.messages
+                                      messages: a.messages,
+                                      notificationSettings: settingsMap.get(a.id) ?? undefined
                                     }))
                                     setAlerts(convertedAlerts);
                                   } else {
@@ -2060,8 +2170,21 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                                     try {
                                                         if (isAuthenticated) {
                                                           // Authenticated: fetch all alerts from backend
-                                                          const { listAlerts } = await import('./api/alerts');
+                                                          const { listAlerts, getAlertNotificationSettings } = await import('./api/alerts');
                                                           const backendAlerts = await listAlerts();
+
+                                                          // Fetch notification settings for all alerts in parallel
+                                                          const notifPromises = backendAlerts.map(async (alert) => {
+                                                            try {
+                                                              const settings = await getAlertNotificationSettings(String(alert.id));
+                                                              return { alertId: alert.id, settings };
+                                                            } catch {
+                                                              return { alertId: alert.id, settings: null };
+                                                            }
+                                                          });
+                                                          const notifResults = await Promise.all(notifPromises);
+                                                          const settingsMap = new Map(notifResults.map(r => [r.alertId, r.settings]));
+
                                                           // Convert backend format to frontend format
                                                           const convertedAlerts = backendAlerts.map(a => ({
                                                             id: String(a.id),
@@ -2075,7 +2198,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                                             indicator_field: a.indicator_field,
                                                             indicator_params: a.indicator_params,
                                                             enabled_conditions: a.enabled_conditions,
-                                                            messages: a.messages
+                                                            messages: a.messages,
+                                                            notificationSettings: settingsMap.get(a.id) ?? undefined
                                                           }))
                                                           setAlerts(convertedAlerts);
                                                         } else {
@@ -2267,6 +2391,38 @@ function App() {
     // Initialize with placeholder - actual symbol set by useInitialSymbolFromWatchlist
     return 'LOADING'
   })
+
+  // Suppress lightweight-charts errors that occur during rapid symbol changes or zoom on empty charts
+  // These are internal lightweight-charts errors that don't affect functionality but clutter the console
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      // Check if error is from lightweight-charts
+      if (event.message.includes('Value is null') &&
+          event.filename && event.filename.includes('lightweight-charts')) {
+        // Suppress the error - it's a known edge case in lightweight-charts
+        event.preventDefault()
+        console.debug('[Chart] Suppressed lightweight-charts error (edge case during zoom/symbol change)')
+      }
+    }
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      // Check if error is from lightweight-charts
+      if (event.reason instanceof Error &&
+          event.reason.message.includes('Value is null') &&
+          event.reason.stack && event.reason.stack.includes('lightweight-charts')) {
+        // Suppress the error
+        event.preventDefault()
+        console.debug('[Chart] Suppressed lightweight-charts promise rejection (edge case during zoom/symbol change)')
+      }
+    }
+
+    window.addEventListener('error', handleError)
+    window.addEventListener('unhandledrejection', handleUnhandledRejection)
+    return () => {
+      window.removeEventListener('error', handleError)
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+    }
+  }, [])
 
   // Initialize symbol from watchlist using reusable hook pattern
   // Prevents race conditions and ensures single initialization

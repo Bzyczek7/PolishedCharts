@@ -430,3 +430,26 @@ async def get_alert_triggers(
     return triggers
 
 
+@router.delete("/triggers/{trigger_id}", status_code=204)
+@public_endpoint
+async def delete_trigger(
+    trigger_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a specific alert trigger (log entry).
+
+    This allows users to remove individual trigger entries from the log,
+    useful for cleaning up orphaned or unwanted trigger records.
+    """
+    result = await db.execute(select(AlertTrigger).where(AlertTrigger.id == trigger_id))
+    trigger = result.scalars().first()
+
+    if not trigger:
+        raise HTTPException(status_code=404, detail="Trigger not found")
+
+    await db.delete(trigger)
+    await db.commit()
+    return None
+
+

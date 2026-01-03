@@ -329,7 +329,15 @@ async def websocket_endpoint(
                     last_sent_candle_key = current_candle_key
                     logger.info(f"WebSocket sent update for {symbol} ({interval}): {latest_candle['timestamp']} - Close: {latest_candle['close']}")
 
-            await asyncio.sleep(5)
+            # Poll interval based on timeframe - daily/weekly candles don't change frequently
+            # Intraday: 5 seconds, Daily: 1 hour, Weekly: 5 minutes
+            if interval in ('1d', '1day'):
+                poll_sleep = 3600  # 1 hour - daily candles only update at market close
+            elif interval in ('1w', '1wk', '1week'):
+                poll_sleep = 300  # 5 minutes
+            else:
+                poll_sleep = 5  # 5 seconds for intraday intervals
+            await asyncio.sleep(poll_sleep)
     except WebSocketDisconnect:
         logger.info(f"Client disconnected from WebSocket for {symbol}")
     except Exception as e:

@@ -163,7 +163,7 @@ async def get_telegram_config(
 
 async def get_alert_notification_settings(
     db: AsyncSession,
-    alert_id: UUID,
+    alert_id: int,
 ) -> Optional[AlertNotificationSettings]:
     """Get per-alert notification settings."""
     result = await db.execute(
@@ -176,7 +176,7 @@ async def get_alert_notification_settings(
 
 async def create_or_update_alert_settings(
     db: AsyncSession,
-    alert_id: UUID,
+    alert_id: int,
     settings_data: dict,
 ) -> AlertNotificationSettings:
     """Create or update per-alert notification settings."""
@@ -202,8 +202,10 @@ async def create_or_update_alert_settings(
         )
         db.add(settings)
     else:
+        # Update fields that are present in settings_data
+        # Note: value=None means "use global default", which is a valid explicit setting
         for field, value in settings_data.items():
-            if value is not None and hasattr(settings, field):
+            if hasattr(settings, field):
                 setattr(settings, field, value)
         settings.updated_at = datetime.utcnow()
 

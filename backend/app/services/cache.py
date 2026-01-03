@@ -132,15 +132,16 @@ class LRUCache:
         if key in self._cache:
             entry = self._cache[key]
             self._current_memory -= entry.size_bytes
-
-            # FEATURE 014: Also remove from symbol tracking
-            # Try to extract symbol from the key string (format: symbol:...)
-            # This is a fallback for entries not tracked via _add_symbol_mapping
-            if hasattr(entry, 'key'):
-                # The original key string was hashed, so we can't extract symbol
-                pass
-
             del self._cache[key]
+
+        # FEATURE 014: Also remove from symbol tracking
+        # Extract symbol from key (format: symbol:interval:start:end or symbol:indicator:...)
+        # This ensures _symbol_to_keys stays in sync with _cache
+        if ':' in key:
+            parts = key.split(':')
+            if len(parts) >= 1:
+                symbol = parts[0]
+                self._remove_symbol_mapping(key, symbol)
 
     def _cleanup_expired(self) -> None:
         """Remove expired entries."""
@@ -308,18 +309,17 @@ def generate_indicator_cache_key(
     """
     Generate a cache key for indicator calculations.
 
-    NOTE: from_ts and to_ts are NOT included in the cache key because:
-    1. Indicator calculation is the expensive part (pandas-ta computation)
-    2. Date filtering happens AFTER calculation, so result is the same
-    3. Including timestamps prevents cache hits when reloading same symbol
+    CRITICAL: from_ts and to_ts ARE NOW included in the cache key to support backfill.
+    When users scroll left to load historical data, indicators need to be recalculated
+    for the extended date range. Different date ranges create separate cache entries.
 
     Args:
         symbol: Stock symbol
         interval: Time interval
         indicator_name: Name of the indicator
         params: Indicator parameters
-        from_ts: Start date (for zooming/scrolling) - NOT used in key
-        to_ts: End date (for zooming/scrolling) - NOT used in key
+        from_ts: Start date (for zooming/scrolling) - INCLUDED in key for backfill support
+        to_ts: End date (for zooming/scrolling) - INCLUDED in key for backfill support
 
     Returns:
         A cache key
@@ -327,10 +327,20 @@ def generate_indicator_cache_key(
     # Sort params for consistency
     sorted_params = sorted(params.items())
 
-    # Create param string - NO date range (see docstring)
+    # Create param string - include date range for backfill support
     param_str = ",".join(f"{k}={v}" for k, v in sorted_params)
 
-    return generate_cache_key(symbol, interval, indicator_name, param_str)
+    # Add date range to cache key if provided
+    date_range_str = ""
+    if from_ts and to_ts:
+        # Format dates as ISO strings for consistent cache keys
+        date_range_str = f":{from_ts.isoformat()}:{to_ts.isoformat()}"
+    elif from_ts:
+        date_range_str = f":{from_ts.isoformat()}:"
+    elif to_ts:
+        date_range_str = f"::{to_ts.isoformat()}"
+
+    return generate_cache_key(symbol, interval, indicator_name, param_str + date_range_str)
 
 
 # Global cache instances
@@ -398,8 +408,9 @@ def generate_candle_cache_key(
     """
     Generate a cache key for candle data.
 
-    NOTE: Uses rounded timestamps to enable cache hits for same day requests.
-    Candles for same symbol+interval+date are typically the same.
+    OPTIMIZATION: Normalize to day boundaries for better cache hits.
+    Requests within the same day (even with different times) use the same cache key.
+    This allows the initial chart fetch to serve subsequent indicator requests.
 
     Args:
         symbol: Stock symbol
@@ -410,13 +421,13 @@ def generate_candle_cache_key(
     Returns:
         A cache key
     """
-    # Round to nearest minute for better cache hits
-    # This allows cache hits even when milliseconds differ
-    start_rounded = start.replace(second=0, microsecond=0)
-    end_rounded = end.replace(second=0, microsecond=0)
+    # Normalize to day boundaries for cache hits
+    # This allows "latest data" requests to share cache entries
+    start_normalized = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_normalized = end.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    start_str = start_rounded.isoformat() if start_rounded.tzinfo else start_rounded.isoformat() + "Z"
-    end_str = end_rounded.isoformat() if end_rounded.tzinfo else end_rounded.isoformat() + "Z"
+    start_str = start_normalized.isoformat() if start_normalized.tzinfo else start_normalized.isoformat() + "Z"
+    end_str = end_normalized.isoformat() if end_normalized.tzinfo else end_normalized.isoformat() + "Z"
 
     return generate_cache_key(symbol, interval, start_str, end_str)
 

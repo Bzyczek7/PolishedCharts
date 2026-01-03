@@ -22,7 +22,7 @@ export interface WatchlistPollingState {
   lastUpdate: Date | null;
 }
 
-const WATCHLIST_POLL_INTERVAL_MS = 60000; // 60 seconds per spec
+const WATCHLIST_POLL_INTERVAL_MS = 1800000; // 30 minutes - daily candles don't change more frequently
 
 export function useWatchlistData(symbols: string[]) {
   const [state, setState] = useState<WatchlistPollingState>({

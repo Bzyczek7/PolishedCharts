@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.candles import CandleService
@@ -16,38 +16,58 @@ class DataOrchestrator:
         self.yf_provider = yf_provider
 
     async def get_candles(
-        self, 
-        db: AsyncSession, 
-        symbol_id: int, 
-        ticker: str, 
-        interval: str, 
-        start: Optional[datetime] = None, 
+        self,
+        db: AsyncSession,
+        symbol_id: int,
+        ticker: str,
+        interval: str,
+        start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         local_only: bool = False
     ) -> List[Dict[str, Any]]:
         """
-        Main entry point for getting candles. 
+        Main entry point for getting candles.
         Checks cache, identifies gaps, fetches missing segments, and returns merged result.
         """
+        import time
+        total_start = time.time()
+
         if not start or not end:
             # Default window if not provided
             delta = self.yf_provider._get_default_lookback(interval)
             end = end or datetime.now(timezone.utc)
             start = start or (end - delta)
-        
+
         # Ensure start and end are aware (UTC) if they were passed as naive
         if start.tzinfo is None:
             start = start.replace(tzinfo=timezone.utc)
         if end.tzinfo is None:
             end = end.replace(tzinfo=timezone.utc)
 
+        # FIX: For daily intervals, don't include "today" in the request
+        # Today's candle doesn't exist until the day closes, so requesting up to "now"
+        # returns 0 candles and causes useless cache churn
+        if interval == '1d' or interval == '1d':
+            now_utc = datetime.now(timezone.utc)
+            # If end is today, set it to yesterday (last complete trading day)
+            # This prevents requesting candles that don't exist yet
+            if end.date() == now_utc.date():
+                # Use end of day (23:59:59) to include candles stored with timestamps later in the day
+                # Candles are stored as 06:00:00+01 (CET), so we need to include the full day
+                end = end.replace(hour=23, minute=59, second=59, microsecond=999999) - timedelta(days=1)
+
         # FEATURE 014: Check candle cache first
-        from app.services.cache import get_candle_data, cache_candle_data
+        from app.services.cache import get_candle_data, cache_candle_data, candle_cache
         from app.services.performance import performance_logger
+
+        # DEBUG: Log cache stats before checking
+        cache_stats = candle_cache.get_stats()
+        logger.debug(f"[CACHE DEBUG] Request: {ticker} {interval} {start.date()} to {end.date()}")
+        logger.debug(f"[CACHE DEBUG] Cache stats: {cache_stats['entries']} entries, {cache_stats['hits']} hits, {cache_stats['misses']} misses")
 
         cached_candles = get_candle_data(ticker, interval, start, end)
         if cached_candles is not None:
-            logger.debug(f"Candle cache hit for {ticker} ({interval})")
+            logger.debug(f"🎯 CANDLE CACHE HIT for {ticker} ({interval}) - returned {len(cached_candles)} candles from cache")
             performance_logger.record(
                 operation="get_candles_cache_hit",
                 duration_ms=0.5,  # Sub-millisecond for cache hit
@@ -56,29 +76,57 @@ class DataOrchestrator:
             )
             return cached_candles
 
-        logger.debug(f"Candle cache miss for {ticker} ({interval})")
+        logger.debug(f"❌ CANDLE CACHE MISS for {ticker} ({interval}) - will fetch from DB/yfinance")
 
-        # 1. Identify Gaps (only if not local_only)
-        if not local_only:
+        # 1. Query DB FIRST - return what we have immediately
+        # Only fetch gaps if DB is empty or missing significant data
+        from sqlalchemy.future import select
+        from app.models.candle import Candle
+        from app.core.intervals import get_interval_delta
+
+        db_start = time.time()
+        stmt = select(Candle).where(
+            Candle.symbol_id == symbol_id,
+            Candle.interval == interval,
+            Candle.timestamp >= start,
+            Candle.timestamp <= end
+        ).order_by(Candle.timestamp.asc())
+
+        result = await db.execute(stmt)
+        candles = result.scalars().all()
+        db_time = (time.time() - db_start) * 1000
+        logger.info(f"[TIMING] Database query took {db_time:.0f}ms for {ticker} ({interval}), returned {len(candles)} candles")
+
+        # 2. Only fetch gaps if DB is empty OR missing significant data
+        # This prevents blocking on yfinance when we already have most of the data
+        gap_fill_start = time.time()
+        gaps_to_fill = None
+        interval_delta = get_interval_delta(interval)
+        expected_candles = (end - start).total_seconds() / interval_delta.total_seconds() + 1
+        coverage_ratio = len(candles) / expected_candles if expected_candles > 0 else 0
+
+        # Only fetch from yfinance if:
+        # - DB is empty (0 candles) OR
+        # - Coverage is less than 50% (significant gap)
+        should_fetch_from_yf = len(candles) == 0 or coverage_ratio < 0.5
+
+        if not local_only and should_fetch_from_yf:
             gaps = await self.candle_service.find_gaps(db, symbol_id, ticker, interval, start, end)
+            gap_time = (time.time() - gap_fill_start) * 1000
 
             if gaps:
-                logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) in range {start} to {end}")
+                logger.info(f"Found {len(gaps)} gaps for {ticker} ({interval}) - DB has {len(candles)}/{int(expected_candles)} candles ({coverage_ratio*100:.0f}% coverage)")
 
                 # Check if total missing bars exceed hard cap
                 total_missing = 0
-                from app.core.intervals import get_interval_delta
-                delta = get_interval_delta(interval)
                 for g_start, g_end in gaps:
-                    total_missing += (g_end - g_start) / delta + 1
+                    total_missing += (g_end - g_start).total_seconds() / interval_delta.total_seconds() + 1
 
-                HARD_CAP = 10000 # Increased to allow more history in dynamic fills
+                HARD_CAP = 10000
                 if total_missing > HARD_CAP:
                     logger.warning(f"Gap size {total_missing} exceeds hard cap of {HARD_CAP}. Skipping dynamic fill.")
-                    # In Phase 3/4 we might return 'needs_backfill: True'
                 else:
-                    # Optimize: Instead of filling each gap individually,
-                    # find the total range covering all gaps and fetch it once.
+                    # Find the total range covering all gaps and fetch it once
                     all_gap_starts = [g[0] for g in gaps]
                     all_gap_ends = [g[1] for g in gaps]
 
@@ -91,39 +139,30 @@ class DataOrchestrator:
                     if fill_end.tzinfo is None:
                         fill_end = fill_end.replace(tzinfo=timezone.utc)
 
-                    logger.info(f"Filling gaps with single fetch: {fill_start} to {fill_end}")
+                    logger.info(f"🔄 Fetching missing data from yfinance: {fill_start.date()} to {fill_end.date()}")
+                    fetch_start = time.time()
                     try:
-                        # Timeout protection: don't hang the API request (increased from 10s to 30s)
                         await asyncio.wait_for(
                             self.fetch_and_save(db, symbol_id, ticker, interval, fill_start, fill_end),
                             timeout=30.0
                         )
+                        fetch_time = (time.time() - fetch_start) * 1000
+                        logger.info(f"[TIMING] Gap fill (yfinance) took {fetch_time:.0f}ms for {ticker}")
+
+                        # Re-query DB after filling gaps to get fresh data
+                        result = await db.execute(stmt)
+                        candles = result.scalars().all()
+                        logger.info(f"📊 After gap fill: {len(candles)} candles")
                     except asyncio.TimeoutError:
                         logger.error(f"Gap filling timed out for {ticker} ({interval})")
-                        # Rollback the transaction to prevent "invalid transaction" errors
                         await db.rollback()
                     except Exception as e:
                         logger.error(f"Error filling gaps for {ticker}: {e}")
-                        # Rollback on any error to prevent transaction issues
                         await db.rollback()
+        elif len(candles) > 0:
+            logger.info(f"✅ DB has sufficient data ({len(candles)} candles, {coverage_ratio*100:.0f}% coverage) - skipping yfinance fetch")
 
-        # 2. Fetch all from DB
-        # We re-query the full range to ensure we have a continuous, sorted, deduplicated set.
-        # This is slightly less efficient than merging in memory, but much safer for data integrity.
-        from sqlalchemy.future import select
-        from app.models.candle import Candle
-        
-        stmt = select(Candle).where(
-            Candle.symbol_id == symbol_id,
-            Candle.interval == interval,
-            Candle.timestamp >= start,
-            Candle.timestamp <= end
-        ).order_by(Candle.timestamp.asc())
-        
-        result = await db.execute(stmt)
-        candles = result.scalars().all()
-
-        # Filter out candles with invalid price data
+        # 3. Filter out candles with invalid price data
         valid_candles = []
         for c in candles:
             # Check if any of the price values are invalid
@@ -145,7 +184,7 @@ class DataOrchestrator:
         # FEATURE 014: Cache the results after DB query
         try:
             cache_candle_data(ticker, interval, start, end, valid_candles)
-            logger.debug(f"Cached {len(valid_candles)} candles for {ticker} ({interval})")
+            logger.debug(f"💾 CACHED {len(valid_candles)} candles for {ticker} ({interval})")
         except Exception as e:
             # Graceful degradation: cache failure should not break the endpoint
             logger.warning(f"Failed to cache candle data for {ticker}: {e}")

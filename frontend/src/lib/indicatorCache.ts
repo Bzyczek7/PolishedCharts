@@ -31,23 +31,114 @@ interface IndicatorCacheConfig {
  * Default configuration
  */
 const DEFAULT_CONFIG: IndicatorCacheConfig = {
-  maxSize: 50,              // Cache up to 50 indicator results
-  ttl: 60000,               // 1 minute TTL
+  maxSize: 100,             // Increased from 50 - cache more indicator results
+  ttl: 300000,              // Increased from 60s to 5 minutes - since we normalize to day boundaries
   memoryBudget: 100 * 1024 * 1024,  // 100MB budget
 };
 
 /**
+ * Normalize date range for cache key generation
+ * For "latest data" requests, round to period end to enable cache hits
+ * within the same time period (e.g., same day for daily intervals)
+ */
+function normalizeDateRangeForCache(
+  from?: string,
+  to?: string,
+  interval: string = '1d'
+): { from?: string; to?: string } {
+  if (!from || !to) {
+    return { from, to };
+  }
+
+  const toDate = new Date(to);
+  const fromDate = new Date(from);
+  const now = new Date();
+
+  // Check if the 'to' date is at a period boundary (e.g., 00:00:00 for daily)
+  // This indicates "latest available data" rather than a specific historical range
+  const intervalMs = getIntervalMs(interval);
+
+  // For daily intervals: check if to is at day boundary (00:00:00) and within reasonable range
+  const isAtDayBoundary = toDate.getHours() === 0 && toDate.getMinutes() === 0 &&
+                          toDate.getSeconds() === 0 && toDate.getMilliseconds() === 0;
+
+  // Check if this could be "latest data" (within 7 days or at period boundary)
+  const daysDiff = (now.getTime() - toDate.getTime()) / (24 * 60 * 60 * 1000);
+  const isLikelyLatest = daysDiff < 7 || isAtDayBoundary;
+
+  if (!isLikelyLatest) {
+    // Not latest data (backfill request) - use exact dates for cache key
+    return { from, to };
+  }
+
+  // Latest data - normalize to period boundary for better cache hits
+  // For daily: round to end of day (23:59:59.999)
+  const normalizedTo = normalizeToPeriodEnd(toDate, interval);
+  const normalizedFrom = new Date(normalizedTo.getTime() - (toDate.getTime() - fromDate.getTime()));
+
+  return {
+    from: normalizedFrom.toISOString(),
+    to: normalizedTo.toISOString()
+  };
+}
+
+/**
+ * Get interval duration in milliseconds
+ */
+function getIntervalMs(interval: string): number {
+  const map: Record<string, number> = {
+    '1m': 60000, '2m': 120000, '5m': 300000, '15m': 900000,
+    '30m': 1800000, '1h': 3600000, '4h': 14400000,
+    '1d': 86400000, '1wk': 604800000
+  };
+  return map[interval] || 86400000;
+}
+
+/**
+ * Normalize date to end of period for caching
+ */
+function normalizeToPeriodEnd(date: Date, interval: string): Date {
+  const normalized = new Date(date);
+
+  switch (interval) {
+    case '1d':
+    case '1wk':
+      // Round to end of day (23:59:59.999)
+      normalized.setHours(23, 59, 59, 999);
+      break;
+    case '1h':
+    case '4h':
+      // Round to end of hour
+      normalized.setMinutes(59, 59, 999);
+      break;
+    case '1m':
+    case '2m':
+    case '5m':
+    case '15m':
+    case '30m':
+      // Round to end of minute
+      normalized.setSeconds(59, 999);
+      break;
+  }
+
+  return normalized;
+}
+
+/**
  * Generate cache key from indicator parameters
- * NOTE: Date range NOT included because indicator calculation is expensive,
- * filtering happens after. Same symbol/indicator/params = same cache.
+ * Date range IS included to support backfill - different date ranges
+ * require different indicator data (not just filtering).
+ *
+ * OPTIMIZATION: For "latest data" requests, dates are normalized to period
+ * boundaries to enable cache hits within the same time period.
  */
 function generateIndicatorCacheKey(
   symbol: string,
   interval: string,
   indicatorName: string,
   params: Record<string, number | string>,
-  _from?: string,  // Optional date range start - NOT used in key
-  _to?: string     // Optional date range end - NOT used in key
+  from?: string,  // Date range start - INCLUDED in key for backfill support
+  to?: string     // Date range end - INCLUDED in key for backfill support
 ): string {
   // Sort params for consistency
   const sortedParams = Object.entries(params)
@@ -55,8 +146,17 @@ function generateIndicatorCacheKey(
     .map(([k, v]) => `${k}=${v}`)
     .join('&');
 
-  // No date range in key (see function docstring)
-  return `${symbol.toLowerCase()}:${interval}:${indicatorName}:${sortedParams}`;
+  // OPTIMIZATION: Normalize dates for cache key to enable hits within same period
+  const normalized = normalizeDateRangeForCache(from, to, interval);
+
+  // Include date range in key (critical for backfill)
+  const dateRangeKey = normalized.from && normalized.to
+    ? `:${normalized.from}:${normalized.to}`
+    : '';
+
+  const fullKey = `${symbol.toLowerCase()}:${interval}:${indicatorName}:${sortedParams}${dateRangeKey}`;
+
+  return fullKey;
 }
 
 /**

@@ -144,21 +144,40 @@ async def require_authenticated_user(
 
 
 async def check_notification_ownership(
-    resource_user_id: UUID,
-    current_user: User,
+    resource_user_id: int | None,
+    current_user: User | Dict[str, Any],
 ) -> None:
     """
     Verify user owns the resource they're trying to access.
 
     Args:
-        resource_user_id: User ID from the resource (e.g., notification preference)
-        current_user: Authenticated user making the request
+        resource_user_id: User ID from the resource (e.g., alert). Can be None for guest alerts.
+        current_user: Authenticated user making the request (can be User object or dict from Firebase)
 
     Raises:
         HTTPException 403: If user doesn't own the resource
     """
-    if resource_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this resource"
-        )
+    # Handle both User object and dict (from Firebase token)
+    if isinstance(current_user, dict):
+        # Firebase auth returns a dict with 'uid' field
+        current_user_id = current_user.get('uid')
+    else:
+        current_user_id = current_user.id
+
+    # Allow if resource has no owner (NULL user_id - guest alert)
+    if resource_user_id is None:
+        return
+
+    # Allow if the current user owns the resource
+    if resource_user_id == current_user_id:
+        return
+
+    logger.warning(
+        f"Ownership check failed: resource_user_id={resource_user_id}, "
+        f"current_user_id={current_user_id}"
+    )
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have permission to access this resource"
+    )

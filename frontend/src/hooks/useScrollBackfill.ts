@@ -66,7 +66,7 @@ export function useScrollBackfill({
 
   // Add cooldown to prevent rapid-fire fetches
   const lastFetchTimeRef = useRef<number>(0)
-  const FETCH_COOLDOWN_MS = 2000  // Minimum 2 seconds between backfills
+  const FETCH_COOLDOWN_MS = 500  // Reduced from 2000ms - allow faster backfills
 
   const handleScrollRangeChange = useCallback((range: LogicalRange | null) => {
     if (!range || isFetching) return
@@ -87,9 +87,9 @@ export function useScrollBackfill({
     // range.from < 0 means scrolled past first candle
     // range.from = 0 means first candle is at left edge
     // range.from = 500 means 501st candle is at left edge
-    // Trigger when within 368 candles of edge (includes scrolled past edge)
-    const PREDICTIVE_TRIGGER_CANDLES = 368
-    const BACKFILL_CANDLE_COUNT = 1000
+    // Increased to 500 candles - trigger backfill earlier to prevent gaps
+    const PREDICTIVE_TRIGGER_CANDLES = 500
+    const BACKFILL_CANDLE_COUNT = 1500  // Increased from 1000 - fetch more per request
 
     if (hasMore && range.from <= PREDICTIVE_TRIGGER_CANDLES) {
       lastFetchTimeRef.current = now  // Set fetch timestamp to prevent rapid-fire

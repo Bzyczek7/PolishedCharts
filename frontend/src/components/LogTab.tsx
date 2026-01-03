@@ -10,9 +10,9 @@
  */
 
 import * as React from 'react';
-import { Clock, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
+import { Clock, TrendingUp, TrendingDown, RefreshCw, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getRecentTriggers, type AlertTrigger } from '../api/alerts';
+import { getRecentTriggers, deleteTrigger, type AlertTrigger } from '../api/alerts';
 
 /**
  * Props for LogTab component
@@ -65,6 +65,7 @@ export function LogTab({ symbol, className }: LogTabProps) {
   const [triggers, setTriggers] = React.useState<AlertTrigger[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [deletingIds, setDeletingIds] = React.useState<Set<number>>(new Set());
 
   // T065-T068: Load triggers and auto-refresh
   const loadTriggers = React.useCallback(async () => {
@@ -85,6 +86,24 @@ export function LogTab({ symbol, className }: LogTabProps) {
     }
   }, [symbol]);
 
+  // Handle delete trigger
+  const handleDeleteTrigger = React.useCallback(async (triggerId: number) => {
+    setDeletingIds(prev => new Set([...prev, triggerId]));
+    try {
+      await deleteTrigger(triggerId);
+      setTriggers(prev => prev.filter(t => t.id !== triggerId));
+    } catch (err) {
+      console.error('Failed to delete trigger:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete trigger');
+    } finally {
+      setDeletingIds(prev => {
+        const next = new Set(prev);
+        next.delete(triggerId);
+        return next;
+      });
+    }
+  }, []);
+
   // Initial load and refresh every 30 seconds
   React.useEffect(() => {
     loadTriggers();
@@ -99,9 +118,7 @@ export function LogTab({ symbol, className }: LogTabProps) {
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-slate-400" />
           <h2 className="text-sm font-semibold text-slate-300">Trigger Log</h2>
-          {symbol && (
-            <span className="text-xs text-slate-500">({symbol})</span>
-          )}
+          <span className="text-xs text-slate-500">(All Symbols)</span>
         </div>
         <button
           onClick={loadTriggers}
@@ -134,57 +151,62 @@ export function LogTab({ symbol, className }: LogTabProps) {
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-slate-900 z-10">
-              <tr className="text-left text-xs text-slate-500 border-b border-slate-800">
-                <th className="px-4 py-2 font-medium">Time</th>
-                <th className="px-4 py-2 font-medium">Symbol</th>
-                <th className="px-4 py-2 font-medium">Alert</th>
-                <th className="px-4 py-2 font-medium">Type</th>
-                <th className="px-4 py-2 font-medium">Message</th>
-                <th className="px-4 py-2 font-medium text-right">Price</th>
-                <th className="px-4 py-2 font-medium text-right">Value</th>
-              </tr>
-            </thead>
             <tbody>
               {triggers.map((trigger) => (
                 <tr
                   key={trigger.id}
-                  className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors"
+                  className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors group"
                 >
-                  <td className="px-4 py-2 text-slate-400 whitespace-nowrap">
-                    {formatTimestamp(trigger.triggered_at)}
-                  </td>
-                  <td className="px-4 py-2 font-medium text-slate-200">
-                    {trigger.alert_label?.split(' ')[0] || 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 text-slate-300">
-                    {trigger.alert_label || 'Unknown Alert'}
-                  </td>
-                  <td className="px-4 py-2">
-                    {trigger.trigger_type === 'upper' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs font-medium">
-                        <TrendingUp className="h-3 w-3" />
-                        Upper
-                      </span>
-                    ) : trigger.trigger_type === 'lower' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 text-xs font-medium">
-                        <TrendingDown className="h-3 w-3" />
-                        Lower
-                      </span>
-                    ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 text-xs">
-                        {trigger.trigger_type || 'Unknown'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2 text-slate-300">
-                    {trigger.trigger_message || '-'}
-                  </td>
-                  <td className="px-4 py-2 text-right text-slate-400 font-mono">
-                    {formatPrice(trigger.observed_price)}
-                  </td>
-                  <td className="px-4 py-2 text-right text-blue-400 font-mono">
-                    {formatIndicatorValue(trigger.indicator_value)}
+                  <td className="p-2">
+                    <div className="space-y-0.5">
+                      {/* Line 1: Symbol, Alert, Type, Delete */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-xs font-semibold text-slate-200 whitespace-nowrap">
+                            {trigger.alert_label?.split(' ')[0] || 'N/A'}
+                          </span>
+                          <span className="text-xs text-slate-400 truncate" title={trigger.alert_label || 'Unknown Alert'}>
+                            {trigger.alert_label || 'Unknown Alert'}
+                          </span>
+                          {trigger.trigger_type === 'upper' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 text-xs font-medium whitespace-nowrap">
+                              <TrendingUp className="h-3 w-3" />
+                              Sell
+                            </span>
+                          ) : trigger.trigger_type === 'lower' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 text-xs font-medium whitespace-nowrap">
+                              <TrendingDown className="h-3 w-3" />
+                              Buy
+                            </span>
+                          ) : (
+                            <span className="inline-flex px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 text-xs whitespace-nowrap">
+                              {trigger.trigger_type || 'Unknown'}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteTrigger(trigger.id)}
+                          disabled={deletingIds.has(trigger.id)}
+                          className={cn(
+                            'p-1 rounded transition-colors flex-shrink-0',
+                            'text-slate-500 hover:bg-red-500/20 hover:text-red-400',
+                            'disabled:opacity-50 disabled:cursor-not-allowed'
+                          )}
+                          title="Delete trigger"
+                        >
+                          <Trash2 className={cn('h-3.5 w-3.5', deletingIds.has(trigger.id) && 'animate-pulse')} />
+                        </button>
+                      </div>
+                      {/* Line 2: Time, Price */}
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="text-slate-500 whitespace-nowrap">
+                          {formatTimestamp(trigger.triggered_at)}
+                        </span>
+                        <span className="font-mono whitespace-nowrap text-slate-200">
+                          {formatPrice(trigger.observed_price)}
+                        </span>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}

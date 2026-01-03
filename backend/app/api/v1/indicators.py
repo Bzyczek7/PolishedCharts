@@ -318,25 +318,17 @@ async def get_indicator(
     if not db_symbol:
         raise HTTPException(status_code=404, detail=f"Invalid ticker symbol: {symbol}")
 
-    # 2. Determine fetch range with warm-up consideration
+    # 2. Determine fetch range
+    # IMPORTANT: When from_ts is provided, use it directly WITHOUT adding warmup.
+    # The frontend chart already fetches 700 candles (200 + 500 warmup), so all
+    # indicators should use the exact same range to hit the candle cache.
+    # Warmup is still applied when filtering the OUTPUT, not the fetch range.
     end = to_ts if to_ts else datetime.now(timezone.utc)
 
     if from_ts:
-        # Calculate warm-up period using the actual normalized parameter names
-        warmup_periods = _calculate_warmup_period(indicator_name, indicator_params)
-
-        # Convert periods to time delta
-        interval_seconds = {
-            '1m': 60, '5m': 300, '15m': 900, '30m': 1800,
-            '1h': 3600, '4h': 14400, '1d': 86400, '1wk': 604800
-        }.get(interval, 86400)
-
-        warmup_delta = timedelta(seconds=warmup_periods * interval_seconds)
-        start = from_ts - warmup_delta
-
-        # Guard: ensure start < end (edge case for tiny windows)
-        if start >= end:
-            start = from_ts  # Fall back to requested range without warmup
+        # Use the exact requested range - no warmup adjustment for cache hit!
+        # The chart already includes sufficient warmup (500 candles)
+        start = from_ts
     else:
         # Default behavior: fetch all data from 1990
         start = datetime(1990, 1, 1, tzinfo=timezone.utc)
@@ -657,6 +649,13 @@ async def calculate_batch_indicators(
             # Calculate
             df_result = indicator.calculate(df, **params)
 
+            # Filter results to requested range (for consistency with single endpoint)
+            # This ensures indicators match the candle window exactly
+            if req.from_ts:
+                df_result = df_result[df_result['timestamp'] >= req.from_ts]
+            if req.to_ts:
+                df_result = df_result[df_result['timestamp'] <= req.to_ts]
+
             # Build output
             metadata = indicator.metadata
             data = {}
@@ -702,20 +701,190 @@ async def calculate_batch_indicators(
             # Return None for error - caller will add to errors list
             return None
 
+    async def process_single_indicator_with_candles(
+        idx: int,
+        req: IndicatorRequest,
+        candles_data: Any,
+        db_symbol: Any,
+    ) -> Optional[IndicatorOutput]:
+        """Process a single indicator using pre-fetched candles (optimized)."""
+        nonlocal cache_hits, cache_misses
+
+        try:
+            params = req.params or {}
+            req_signature = f"{req.symbol}:{req.interval}:{req.indicator_name}:{sorted(params.items())}"
+
+            # Check if this exact request was already processed
+            if req_signature in processed_signatures:
+                logger.debug(f"Duplicate request detected: {req_signature}, reusing cached result")
+                return processed_signatures[req_signature]
+
+            # Check cache first
+            cached = get_indicator_result(
+                symbol=req.symbol.upper(),
+                interval=req.interval,
+                indicator_name=req.indicator_name,
+                params=params,
+                from_ts=req.from_ts,
+                to_ts=req.to_ts
+            )
+
+            if cached is not None:
+                cache_hits += 1
+                logger.info(f"Batch: Cache hit for {req.symbol}/{req.indicator_name}")
+                processed_signatures[req_signature] = cached
+                return cached
+
+            cache_misses += 1
+            logger.info(f"Batch: Cache miss for {req.symbol}/{req.indicator_name}")
+
+            # Convert to DataFrame (using shared candles)
+            df = pd.DataFrame(candles_data)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = df.sort_values("timestamp")
+            df = df.drop_duplicates(subset=["timestamp"], keep="first")
+
+            # Get indicator from registry
+            registry = get_registry()
+            indicator = registry.get(req.indicator_name)
+            if not indicator:
+                indicator = registry.get_by_base_name(req.indicator_name)
+            if not indicator:
+                raise ValueError(f"Indicator '{req.indicator_name}' not found")
+
+            # Calculate
+            df_result = indicator.calculate(df, **params)
+
+            # Filter results to requested range
+            if req.from_ts:
+                df_result = df_result[df_result['timestamp'] >= req.from_ts]
+            if req.to_ts:
+                df_result = df_result[df_result['timestamp'] <= req.to_ts]
+
+            # Build output
+            metadata = indicator.metadata
+            data = {}
+            for series_meta in metadata.series_metadata:
+                field = series_meta.field
+                if field in df_result.columns:
+                    data[field] = _clean_series(df_result[field])
+
+            timestamps = [
+                int(ts.replace(tzinfo=timezone.utc).timestamp())
+                for ts in df_result["timestamp"]
+            ]
+
+            result = IndicatorOutput(
+                symbol=req.symbol.upper(),
+                interval=req.interval,
+                indicator_name=req.indicator_name,
+                timestamps=timestamps,
+                data=data,
+                metadata=metadata,
+                calculated_at=datetime.utcnow(),
+                data_points=len(timestamps)
+            )
+
+            # Cache the result
+            cache_indicator_result(
+                symbol=req.symbol.upper(),
+                interval=req.interval,
+                indicator_name=req.indicator_name,
+                params=params,
+                result=result,
+                from_ts=req.from_ts,
+                to_ts=req.to_ts
+            )
+
+            # Store in processed signatures for deduplication
+            processed_signatures[req_signature] = result
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error processing indicator {req.indicator_name} for {req.symbol}: {e}")
+            return None
+
+    # OPTIMIZATION: Group requests by (symbol, interval, from_ts, to_ts) to share candles
+    # This prevents fetching the same candle data multiple times
+    from collections import defaultdict
+
+    # Group requests that can share candles
+    request_groups: Dict[str, List[tuple[int, IndicatorRequest]]] = defaultdict(list)
+    for idx, req in enumerate(batch_request.requests):
+        # Create fetch signature - requests with same signature can share candles
+        fetch_signature = f"{req.symbol.upper()}:{req.interval}:{req.from_ts}:{req.to_ts}"
+        request_groups[fetch_signature].append((idx, req))
+
+    # Pre-fetch candles for each group, then process indicators
+    candles_cache: Dict[str, Any] = {}
+
+    async def fetch_candles_for_group(
+        req: IndicatorRequest,
+        db: AsyncSession
+    ) -> Optional[tuple[Any, Any]]:
+        """Fetch candles for a request. Returns (candles_data, db_symbol) or None."""
+        db_symbol = await get_or_create_symbol(db, req.symbol.upper())
+        if not db_symbol:
+            return None
+
+        end = req.to_ts if req.to_ts else datetime.now(timezone.utc)
+        start = req.from_ts if req.from_ts else datetime(1990, 1, 1, tzinfo=timezone.utc)
+
+        candles_data = await orchestrator.get_candles(
+            db=db,
+            symbol_id=db_symbol.id,
+            ticker=db_symbol.ticker,
+            interval=req.interval,
+            start=start,
+            end=end
+        )
+
+        if not candles_data:
+            return None
+
+        return (candles_data, db_symbol)
+
+    # Fetch candles for each unique group
+    for fetch_signature, reqs_in_group in request_groups.items():
+        _, first_req = reqs_in_group[0]
+        candles_result = await fetch_candles_for_group(first_req, db)
+        candles_cache[fetch_signature] = candles_result
+
+    # Now process all indicators using the shared candles
     # T035: Process all requests in parallel using asyncio.gather
     # T037: Timeout protection - wrap with asyncio.wait_for
     try:
-        # batch_request.requests is already a list of IndicatorRequest objects (validated by Pydantic)
-        tasks = [
-            process_single_indicator(idx, req)
-            for idx, req in enumerate(batch_request.requests)
-        ]
+        # Initialize outputs array
+        all_outputs = [None] * len(batch_request.requests)
+
+        # Create tasks for valid requests, tracking their indices
+        task_indices = []
+        tasks = []
+        for idx, req in enumerate(batch_request.requests):
+            fetch_signature = f"{req.symbol.upper()}:{req.interval}:{req.from_ts}:{req.to_ts}"
+            candles_data, db_symbol = candles_cache.get(fetch_signature, (None, None))
+
+            if candles_data is None:
+                # No candles available - mark as failed
+                all_outputs[idx] = None
+            else:
+                task_indices.append(idx)
+                tasks.append(process_single_indicator_with_candles(
+                    idx, req, candles_data, db_symbol
+                ))
 
         # T037: Add 5-second timeout protection
-        outputs = await asyncio.wait_for(
+        task_results = await asyncio.wait_for(
             asyncio.gather(*tasks, return_exceptions=True),
             timeout=5.0
         )
+
+        # Map results back to their original indices
+        for task_idx, result in zip(task_indices, task_results):
+            all_outputs[task_idx] = result
+
+        outputs = all_outputs
     except asyncio.TimeoutError:
         logger.error("Batch processing timed out after 5 seconds")
         raise HTTPException(

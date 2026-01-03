@@ -24,7 +24,11 @@ import {
   type Alert,
   type IndicatorCondition,
   type AlertTriggerMode,
+  updateAlertNotificationSettings,
 } from '../api/alerts';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import type { SoundType } from '@/types/notification';
 
 /**
  * Props for IndicatorAlertModal component
@@ -95,6 +99,12 @@ export function IndicatorAlertModal({
   const [triggerMode, setTriggerMode] = React.useState<AlertTriggerMode>('once_per_bar_close');  // Default
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Notification settings state - initialize from props or default to null (use global)
+  const [notifToastEnabled, setNotifToastEnabled] = React.useState<boolean | null>(null);
+  const [notifSoundEnabled, setNotifSoundEnabled] = React.useState<boolean | null>(null);
+  const [notifSoundType, setNotifSoundType] = React.useState<SoundType>('bell');
+  const [notifTelegramEnabled, setNotifTelegramEnabled] = React.useState<boolean | null>(null);
 
   // Fetch indicator conditions when modal opens
   React.useEffect(() => {
@@ -215,6 +225,20 @@ export function IndicatorAlertModal({
         }
       }
 
+      // Determine the condition type based on enabled conditions
+      let condition: 'indicator_above_upper' | 'indicator_below_lower' | 'crsi_band_extremes' = 'indicator_above_upper';
+      const enabledKeys = Object.keys(enabledConditionsMap);
+      const hasUpper = enabledKeys.some(k => k.includes('upper'));
+      const hasLower = enabledKeys.some(k => k.includes('lower'));
+
+      if (hasUpper && hasLower) {
+        condition = 'crsi_band_extremes';
+      } else if (hasLower) {
+        condition = 'indicator_below_lower';
+      } else {
+        condition = 'indicator_above_upper';
+      }
+
       const alertData = {
         symbol,
         interval,  // Timeframe for the alert
@@ -225,7 +249,7 @@ export function IndicatorAlertModal({
         messages: messagesMap,
         cooldown,
         trigger_mode: triggerMode,
-        condition: 'indicator_above_upper' as const, // Will be evaluated based on enabled_conditions
+        condition,
         threshold: 0, // Not used for indicator alerts
         is_active: true,
       };
@@ -244,6 +268,16 @@ export function IndicatorAlertModal({
         // Create new alert
         alert = await createAlert(alertData);
         toast.success('Alert created successfully');
+      }
+
+      // Save notification settings if any are set (only call API if at least one value is non-null)
+      if (notifToastEnabled !== null || notifSoundEnabled !== null || notifTelegramEnabled !== null) {
+        await updateAlertNotificationSettings(String(alert.id), {
+          toastEnabled: notifToastEnabled,
+          soundEnabled: notifSoundEnabled,
+          soundType: notifSoundType,
+          telegramEnabled: notifTelegramEnabled,
+        });
       }
 
       onAlertCreated?.(alert);
@@ -526,17 +560,74 @@ export function IndicatorAlertModal({
             </div>
           )}
 
-          {/* Notifications Tab - Placeholder */}
+          {/* Notifications Tab */}
           {activeTab === 'notifications' && (
-            <div className="flex h-48 items-center justify-center rounded border border-dashed border-slate-600 bg-slate-700/50">
-              <div className="text-center">
-                <p className="text-sm text-slate-400">
-                  Notification delivery options coming soon!
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Configure email, webhook, push notifications, and sound alerts here.
-                </p>
+            <div className="space-y-4 p-4">
+              <p className="text-sm text-slate-400">
+                Configure how you want to be notified when this alert triggers.
+                Leave as "Use global" to inherit your default notification preferences.
+              </p>
+
+              {/* Toast */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="notif-toast" className="text-white">
+                  Toast Notification
+                </Label>
+                <Switch
+                  id="notif-toast"
+                  checked={notifToastEnabled ?? true}
+                  onCheckedChange={(checked) => setNotifToastEnabled(checked ? true : null)}
+                />
               </div>
+
+              {/* Sound */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="notif-sound" className="text-white">
+                  Sound Notification
+                </Label>
+                <Switch
+                  id="notif-sound"
+                  checked={notifSoundEnabled ?? false}
+                  onCheckedChange={(checked) => setNotifSoundEnabled(checked ? true : null)}
+                />
+              </div>
+
+              {/* Sound Type (if sound enabled) */}
+              {notifSoundEnabled && (
+                <div className="grid grid-cols-3 gap-2">
+                  {(['bell', 'alert', 'chime'] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setNotifSoundType(type)}
+                      className={`p-2 rounded text-sm border ${
+                        notifSoundType === type
+                          ? 'border-[#26a69a] bg-[#26a69a]/20 text-white'
+                          : 'border-slate-600 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Telegram */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="notif-telegram" className="text-white">
+                  Telegram
+                </Label>
+                <Switch
+                  id="notif-telegram"
+                  checked={notifTelegramEnabled ?? false}
+                  onCheckedChange={(checked) => setNotifTelegramEnabled(checked ? true : null)}
+                />
+              </div>
+
+              <p className="text-xs text-slate-500">
+                Set to "Use global" (default) to inherit settings from your notification preferences.
+                Override by changing individual settings above.
+              </p>
             </div>
           )}
 

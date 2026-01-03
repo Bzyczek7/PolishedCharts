@@ -53,6 +53,8 @@ class AlertCondition(str, Enum):
     INDICATOR_SLOPE_BULLISH = "indicator_slope_bullish"
     INDICATOR_SLOPE_BEARISH = "indicator_slope_bearish"
     INDICATOR_SIGNAL_CHANGE = "indicator_signal_change"
+    # Band extremes - triggers when cRSI is above upper OR below lower band
+    CRSI_BAND_EXTREMES = "crsi_band_extremes"
 
     @classmethod
     def price_conditions(cls) -> set:

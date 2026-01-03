@@ -17,7 +17,7 @@ Base URL: /api/v1/notifications
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -47,7 +47,7 @@ from app.services.notification_service import (
     get_user_preference,
     create_or_update_preference,
     get_telegram_config,
-    get_alert_notification_settings,
+    get_alert_notification_settings as get_alert_notification_settings_svc,
     create_or_update_alert_settings,
     get_notification_history,
     log_notification_delivery,
@@ -125,23 +125,17 @@ async def update_notification_settings(
 
 @router.get("/alert-settings/{alert_id}", response_model=AlertNotificationSettingsResponse)
 async def get_alert_notification_settings(
-    alert_id: UUID,
-    user: User = Depends(get_current_user),
+    alert_id: int,
+    user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertNotificationSettingsResponse:
     """
     Get per-alert notification settings overrides.
 
     Returns null values for any setting that uses the global default.
+    If no custom settings exist for this alert, returns default response with all
+    notification fields set to null (indicating "use global defaults").
     """
-    settings = await get_alert_notification_settings(db, alert_id)
-
-    if not settings:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No notification settings found for alert {alert_id}"
-        )
-
     # Verify ownership (alerts table has user_id column)
     from sqlalchemy import select
     from app.models.alert import Alert
@@ -155,6 +149,27 @@ async def get_alert_notification_settings(
         )
 
     await check_notification_ownership(alert.user_id, user)
+
+    settings = await get_alert_notification_settings_svc(db, alert_id)
+
+    # If no custom settings exist, return default response with all notification fields set to null
+    # This indicates "use global defaults" for all notification types
+    if not settings:
+        from datetime import datetime
+        from uuid import uuid4
+
+        # Return default response structure with all notification fields as null
+        # The required fields (id, alert_id, timestamps) are set to placeholder values
+        return AlertNotificationSettingsResponse(
+            id=uuid4(),
+            alert_id=alert_id,
+            toast_enabled=None,
+            sound_enabled=None,
+            sound_type=None,
+            telegram_enabled=None,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
 
     return AlertNotificationSettingsResponse.model_validate(settings)
 
@@ -195,9 +210,9 @@ async def create_alert_notification_settings(
 
 @router.patch("/alert-settings/{alert_id}", response_model=AlertNotificationSettingsResponse)
 async def update_alert_notification_settings(
-    alert_id: UUID,
+    alert_id: int,
     settings_update: AlertNotificationSettingsUpdate,
-    user: User = Depends(get_current_user),
+    user: Dict[str, Any] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertNotificationSettingsResponse:
     """

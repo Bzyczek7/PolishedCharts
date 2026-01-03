@@ -10,6 +10,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import type { AlertNotificationSettingsUpdate } from "@/types/notification"
 
 export interface Alert {
   id: string | number
@@ -36,6 +37,8 @@ export interface Alert {
     triggerCount24h: number
     lastTriggered?: string
   }
+  // Notification settings (optional - shows notification status indicators)
+  notificationSettings?: AlertNotificationSettingsUpdate | null
 }
 
 interface AlertsListProps {
@@ -44,9 +47,10 @@ interface AlertsListProps {
   onDelete: (id: string) => void
   onSelect: (symbol: string) => void
   onTriggerDemo?: (id: string) => void
+  onToggleNotification?: (alertId: string | number, channel: 'toast' | 'sound' | 'telegram') => void
 }
 
-const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }: AlertsListProps) => {
+const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo, onToggleNotification }: AlertsListProps) => {
   const [filter, setFilter] = useState<'all' | 'active' | 'triggered'>('all')
   const [search, setSearch] = useState('')
   const [expandedAlertId, setExpandedAlertId] = useState<string | null>(null)
@@ -60,15 +64,68 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
     return matchesFilter && matchesSearch
   })
 
+  // Get notification icons based on settings - clickable to toggle
+  const getNotificationIcons = (
+    alertId: string | number,
+    settings: AlertNotificationSettingsUpdate | null | undefined,
+    onToggle?: (channel: 'toast' | 'sound' | 'telegram') => void
+  ) => {
+    const channels: { key: 'toast' | 'sound' | 'telegram'; label: string }[] = [
+      { key: 'toast', label: 'Toast' },
+      { key: 'sound', label: 'Sound' },
+      { key: 'telegram', label: 'Telegram' },
+    ]
+
+    return channels.map(({ key, label }) => {
+      const enabled = settings?.[key === 'toast' ? 'toastEnabled' : key === 'sound' ? 'soundEnabled' : 'telegramEnabled']
+
+      const iconMap = {
+        toast: '💬',
+        sound: '🔊',
+        telegram: '📨',
+      }
+      const icon = iconMap[key]
+
+      const isEnabled = enabled === true
+      const colorClass = isEnabled ? "text-emerald-400" : "text-red-400"
+
+      const title = isEnabled ? `${label}: enabled (click to disable)` : `${label}: disabled (click to enable)`
+
+      const handleClick = onToggle ? () => onToggle(key) : undefined
+
+      return (
+        <button
+          key={key}
+          type="button"
+          onClick={handleClick}
+          disabled={!onToggle}
+          className={cn(
+            "text-lg transition-transform hover:scale-110 focus:outline-none focus:ring-1 focus:ring-blue-500 rounded p-0.5 relative",
+            colorClass,
+            onToggle ? "cursor-pointer" : "cursor-default"
+          )}
+          title={title}
+        >
+          {icon}
+          {!isEnabled && (
+            <span className="absolute -top-1 -right-1 flex items-center justify-center">
+              <span className="text-[10px] leading-none font-bold text-red-500 drop-shadow-md">⊘</span>
+            </span>
+          )}
+        </button>
+      )
+    })
+  }
+
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full" data-testid="alerts-list-container">
         <div className="sticky top-0 z-10 bg-slate-900 flex items-center justify-between px-1 shrink-0 mb-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
             Monitoring
             </h2>
-            <Button 
-                variant="ghost" 
-                size="icon" 
+            <Button
+                variant="ghost"
+                size="icon"
                 className="h-8 w-8 text-slate-400 hover:text-white"
                 onClick={onTriggerDemo ? () => onTriggerDemo('new') : undefined}
                 title="Add Alert"
@@ -81,14 +138,14 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
             {/* search and filter buttons unchanged */}
             <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-500" />
-            <Input 
-                placeholder="Filter alerts..." 
+            <Input
+                placeholder="Filter alerts..."
                 className="pl-8 bg-slate-900 border-slate-800"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
             />
             </div>
-            
+
             <div className="flex gap-1 p-1 bg-slate-900 rounded-md border border-slate-800">
             {(['all', 'active', 'triggered'] as const).map((f) => (
                 <Button
@@ -117,7 +174,7 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
             filteredAlerts.map((alert) => (
                 <ContextMenu key={alert.id}>
                 <ContextMenuTrigger asChild>
-                    <div 
+                    <div
                     tabIndex={0}
                     onClick={() => setExpandedAlertId(expandedAlertId === alert.id ? null : alert.id)}
                     onKeyDown={(e) => {
@@ -159,6 +216,12 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                             {alert.status}
                             </Badge>
                         </div>
+
+                        {/* Notification icons */}
+                        <div className="flex items-center gap-1" title="Notification settings - click to toggle">
+                          {getNotificationIcons(alert.id, alert.notificationSettings, onToggleNotification ? (channel) => onToggleNotification(alert.id, channel) : undefined)}
+                        </div>
+
                         <p className="text-xs text-slate-400 leading-relaxed">
                             {alert.indicator_name
                             ? (() => {
@@ -210,7 +273,7 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                         </Button>
                         </div>
                     </div>
-                    
+
                     {expandedAlertId === alert.id && (
                         <div className="pt-2 border-t border-slate-800/50 space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
                         {alert.statistics && (
@@ -222,14 +285,14 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                             <div className="bg-slate-950/50 p-1.5 rounded border border-slate-800/50">
                                 <p className="text-slate-500 uppercase font-semibold mb-0.5">Last triggered</p>
                                 <p className="text-slate-300">
-                                {alert.statistics.lastTriggered 
-                                    ? new Date(alert.statistics.lastTriggered).toLocaleTimeString() 
+                                {alert.statistics.lastTriggered
+                                    ? new Date(alert.statistics.lastTriggered).toLocaleTimeString()
                                     : 'Never'}
                                 </p>
                             </div>
                             </div>
                         )}
-                        
+
                         {alert.history && alert.history.length > 0 && (
                             <div className="space-y-1.5">
                             <p className="text-[10px] text-slate-500 uppercase font-semibold">Trigger History</p>
@@ -271,7 +334,7 @@ const AlertsList = ({ alerts, onToggleMute, onDelete, onSelect, onTriggerDemo }:
                             <Zap className="mr-2 h-4 w-4" /> Trigger (Demo)
                         </ContextMenuItem>
                     )}
-                    <ContextMenuItem 
+                    <ContextMenuItem
                         className="hover:bg-slate-800 cursor-pointer text-rose-500 focus:text-rose-400"
                         onClick={() => onDelete(alert.id)}
                     >

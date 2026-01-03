@@ -21,7 +21,7 @@ Note: When any field is null, the global NotificationPreference value is used.
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, String, DateTime, ForeignKey, Column
+from sqlalchemy import Boolean, String, DateTime, ForeignKey, Column, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -34,11 +34,11 @@ class AlertNotificationSettings(Base):
     __tablename__ = "alert_notification_settings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    alert_id = Column(UUID(as_uuid=True), ForeignKey("alert.uuid"), unique=True, nullable=False, index=True)
-    toast_enabled = Column(Boolean, nullable=True)
-    sound_enabled = Column(Boolean, nullable=True)
-    sound_type = Column(String(20), nullable=True)  # bell, alert, chime
-    telegram_enabled = Column(Boolean, nullable=True)
+    alert_id = Column(Integer, ForeignKey("alert.id"), unique=True, nullable=False, index=True)
+    toast_enabled = Column(Boolean, nullable=True, default=None)  # null = use global default
+    sound_enabled = Column(Boolean, nullable=True, default=None)  # null = use global default
+    sound_type = Column(String(20), nullable=True)  # bell, alert, chime (null = use global)
+    telegram_enabled = Column(Boolean, nullable=True, default=None)  # null = use global default
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 

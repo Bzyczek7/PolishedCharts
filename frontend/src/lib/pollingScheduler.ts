@@ -32,7 +32,7 @@ export interface PollTimer {
  * Refresh intervals per spec clarification (in milliseconds):
  * - 1m, 5m: 5000ms (5 seconds)
  * - 15m, 1h: 15000ms (15 seconds)
- * - 1d: 60000ms (60 seconds)
+ * - 1d: 3600000ms (1 hour) - Daily candles only update at market close, no need for frequent polling
  * - 1w: 300000ms (5 minutes)
  */
 const POLL_INTERVALS_MS: Record<string, number> = {
@@ -40,7 +40,7 @@ const POLL_INTERVALS_MS: Record<string, number> = {
   '5m': 5000,
   '15m': 15000,
   '1h': 15000,
-  '1d': 60000,
+  '1d': 3600000,  // 1 hour - daily candles don't change more frequently
   '1w': 300000,
   '1wk': 300000,
 };

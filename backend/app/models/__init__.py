@@ -1,7 +1,6 @@
 from app.models.alert import Alert
 from app.models.alert_trigger import AlertTrigger
-# AlertNotificationSettings temporarily excluded from imports due to fk constraint issues in tests
-# from app.models.alert_notification_settings import AlertNotificationSettings
+from app.models.alert_notification_settings import AlertNotificationSettings
 from app.models.backfill_job import BackfillJob
 from app.models.candle import Candle
 from app.models.layout import Layout
@@ -16,7 +15,7 @@ from app.models.watchlist import WatchlistEntry
 __all__ = [
     "Alert",
     "AlertTrigger",
-    # "AlertNotificationSettings",  # Temporarily excluded due to fk constraint issues in tests
+    "AlertNotificationSettings",
     "BackfillJob",
     "Candle",
     "Layout",

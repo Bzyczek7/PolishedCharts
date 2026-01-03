@@ -214,3 +214,69 @@ export const getADXVMA = async (symbol: string, interval: string = '1d'): Promis
   const response = await authClient.get<ADXVMAOutput>(`/indicators/${validSymbol}/adxvma`, { params: { interval } })
   return response.data
 }
+
+/**
+ * Batch request type for fetching multiple indicators
+ */
+export interface IndicatorBatchRequest {
+  symbol: string;
+  interval: string;
+  indicator_name: string;
+  params?: Record<string, number | string>;
+  from_ts?: string;
+  to_ts?: string;
+}
+
+/**
+ * Batch response type from backend
+ */
+export interface IndicatorBatchResponse {
+  results: IndicatorOutput[];
+  errors: Array<{
+    index: number;
+    symbol: string;
+    indicator_name: string;
+    error: string;
+  }>;
+  total_duration_ms: number;
+  cache_hits: number;
+  cache_misses: number;
+}
+
+/**
+ * Batch fetch multiple indicators for the same symbol/interval
+ * POST /api/v1/indicators/batch
+ *
+ * This is optimized to fetch candles once for all indicators
+ * that share the same symbol/interval/date_range combination.
+ *
+ * @param requests Array of indicator requests to batch
+ */
+export const batchGetIndicators = async (
+  requests: IndicatorBatchRequest[]
+): Promise<IndicatorBatchResponse> => {
+  const authClient = await createAuthenticatedAxios()
+
+  // Prepare batch request with properly clamped parameters
+  const preparedRequests = requests.map((req) => {
+    const safeParams = req.params
+      ? clampIndicatorParams(req.indicator_name, req.params)
+      : undefined
+
+    return {
+      symbol: req.symbol,
+      interval: req.interval,
+      indicator_name: req.indicator_name,
+      params: safeParams,
+      from_ts: req.from_ts,
+      to_ts: req.to_ts,
+    }
+  })
+
+  const response = await authClient.post<IndicatorBatchResponse>(
+    '/indicators/batch',
+    { requests: preparedRequests }
+  )
+
+  return response.data
+}

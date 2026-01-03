@@ -12,7 +12,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { IndicatorPane } from '../components/types/indicators';
 import type { IndicatorOutput, IndicatorMetadata } from '../components/types/indicators';
 import type { Candle } from '../api/candles';
-import { getIndicator } from '../api/indicators';
+import { getIndicator, batchGetIndicators, type IndicatorBatchRequest } from '../api/indicators';
 import { isFixtureMode, loadFixture, getFixtureId, type FixtureData } from '../lib/fixtureLoader';
 import { isValidSymbol } from '../utils/validation';
 import { measurePerformance } from '../lib/performance';
@@ -259,6 +259,10 @@ export function useIndicatorData(
   // T031: Track current symbol:interval cache key to prevent re-fetching on candle updates
   const currentCacheKeyRef = useRef<string>('');
 
+  // Track previous dataVersion to detect when backfill occurs
+  // When dataVersion changes, we need to refetch indicators with the extended date range
+  const prevDataVersionRef = useRef<number>(0);
+
   // Cache for fixture data to avoid loading multiple times
   const fixtureCacheRef = useRef<FixtureData | null>(null);
 
@@ -295,6 +299,7 @@ export function useIndicatorData(
     try {
       // T036: Check cache first
       const indicatorName = migrateIndicatorNameForFetch(indicator.indicatorType.name);
+
       const cached = getCachedIndicator(
         symbol,
         interval,
@@ -309,6 +314,7 @@ export function useIndicatorData(
       }
 
       // T011: Instrument with performance logging
+      console.log('[API] Fetching indicator from API:', indicatorName, 'range:', candleDateRange?.from, 'to', candleDateRange?.to);
       const data = await measurePerformance(
         `calculate_${indicatorName}`,
         'calculation',
@@ -360,7 +366,6 @@ export function useIndicatorData(
   useEffect(() => {
     // Guard: Only fetch when we have candle data (FR-001)
     // This prevents duplicate indicator fetches before candles arrive
-    // Check if candles exist AND the count matches expected (1000 for initial load)
     const hasCandles = candles && candles.length > 0;
 
     if (!hasCandles) {
@@ -381,11 +386,22 @@ export function useIndicatorData(
 
     // T031: Only clear fetched cache when symbol or interval changes
     // This prevents re-fetching when candles update (e.g., websocket updates)
+    // CRITICAL: Also clear when dataVersion changes to force refetch with extended range (backfill)
     const cacheKey = `${symbol}:${interval}`;
     const isNewSymbol = currentCacheKeyRef.current !== cacheKey;
-    if (isNewSymbol) {
+
+    // Track dataVersion changes for backfill detection
+    const dataVersionChanged = dataVersion && dataVersion !== prevDataVersionRef.current;
+
+    // Clear fetchedRefs when needed: symbol change OR backfill (dataVersion change)
+    if (isNewSymbol || dataVersionChanged) {
+      if (dataVersionChanged) {
+        console.log('[useIndicatorData] dataVersion changed from', prevDataVersionRef.current, 'to', dataVersion, '- clearing fetchedRefs to trigger refetch with extended range');
+      }
+      if (isNewSymbol) {
+        currentCacheKeyRef.current = cacheKey;
+      }
       fetchedRefs.current.clear();
-      currentCacheKeyRef.current = cacheKey;
     }
 
     // Check if we need to fetch anything
@@ -396,14 +412,22 @@ export function useIndicatorData(
     });
 
     // If no indicators need fetching and we have data, skip the fetchAll call
+    // T015: Always re-fetch when dataVersion changes (e.g., during backfill)
+    // This ensures indicators are recalculated with the new extended date range
     const hasExistingData = indicators.every(ind => {
       const fetchKey = getIndicatorFetchKey(ind);
       return fetchedRefs.current.has(fetchKey) && dataMapRef.current[ind.id] !== undefined;
     });
 
-    if (hasExistingData && !isNewSymbol && indicatorsToFetch.length === 0) {
-      // Already have all indicator data, skip fetching
+    // Skip fetch only if we have all data AND version hasn't changed
+    if (hasExistingData && !isNewSymbol && indicatorsToFetch.length === 0 && dataVersion === prevDataVersionRef.current) {
+      // Already have all indicator data for this version, skip fetching
       return;
+    }
+
+    // Update prevDataVersionRef AFTER skip guard to ensure version change triggers fetch
+    if (dataVersionChanged) {
+      prevDataVersionRef.current = dataVersion;
     }
 
     // Initialize data map with null values for new indicators to prevent race conditions
@@ -427,24 +451,87 @@ export function useIndicatorData(
 
       const currentDataMap = dataMapRef.current;
       const results: IndicatorDataMap = { ...currentDataMap }; // Start with current state
-      const newFetches: Promise<{ id: string; data: IndicatorOutput | null }>[] = [];
 
+      // Collect indicators that need fetching
+      const indicatorsToFetch: IndicatorPane[] = [];
       for (const indicator of indicators) {
-        // T030: Use composite key (id:params) to detect when params change
         const fetchKey = getIndicatorFetchKey(indicator);
-
-        // Only fetch if not already in progress
         if (!fetchedRefs.current.has(fetchKey)) {
-          newFetches.push(fetchIndicatorData(indicator));
+          indicatorsToFetch.push(indicator);
           fetchedRefs.current.add(fetchKey);
         }
       }
 
-      if (newFetches.length > 0) {
-        const fetchedResults = await Promise.all(newFetches);
-        for (const { id, data } of fetchedResults) {
-          results[id] = data;
+      if (indicatorsToFetch.length > 0) {
+        // OPTIMIZATION: Use batch endpoint for multiple indicators (2+)
+        // All indicators in this hook share the same symbol/interval by design
+        const canBatch = indicatorsToFetch.length > 1;
+
+        if (canBatch && !isFixtureMode()) {
+          // Use batch endpoint
+          try {
+            console.log(`[Batch] Fetching ${indicatorsToFetch.length} indicators via batch endpoint`);
+
+            // Prepare batch requests
+            const batchRequests: IndicatorBatchRequest[] = indicatorsToFetch.map(ind => ({
+              symbol,
+              interval,
+              indicator_name: migrateIndicatorNameForFetch(ind.indicatorType.name),
+              params: ind.indicatorType.params,
+              from_ts: candleDateRange?.from,
+              to_ts: candleDateRange?.to,
+            }));
+
+            // Batch fetch
+            const batchResponse = await batchGetIndicators(batchRequests);
+
+            // Process results
+            for (let i = 0; i < indicatorsToFetch.length; i++) {
+              const indicator = indicatorsToFetch[i];
+              const result = batchResponse.results[i];
+
+              if (result) {
+                // Cache the result
+                const indicatorName = migrateIndicatorNameForFetch(indicator.indicatorType.name);
+                setCachedIndicator(
+                  symbol,
+                  interval,
+                  indicatorName,
+                  indicator.indicatorType.params,
+                  result,
+                  candleDateRange?.from,
+                  candleDateRange?.to
+                );
+                results[indicator.id] = result;
+              } else {
+                // Check if there was an error for this indicator
+                const error = batchResponse.errors.find(e => e.index === i);
+                if (error) {
+                  console.error(`[Batch] Failed to fetch ${indicator.indicatorType.name}:`, error.error);
+                }
+                results[indicator.id] = null;
+              }
+            }
+
+            console.log(`[Batch] Completed: ${batchResponse.cache_hits} cache hits, ${batchResponse.cache_misses} cache misses, ${batchResponse.total_duration_ms}ms`);
+          } catch (err) {
+            console.error('[Batch] Batch fetch failed, falling back to individual fetches:', err);
+            // Fallback to individual fetches
+            const individualFetches = indicatorsToFetch.map(ind => fetchIndicatorData(ind));
+            const fetchedResults = await Promise.all(individualFetches);
+            for (const { id, data } of fetchedResults) {
+              results[id] = data;
+            }
+          }
+        } else {
+          // Use individual fetches (mixed symbol/interval or fixture mode)
+          const individualFetches = indicatorsToFetch.map(ind => fetchIndicatorData(ind));
+          const fetchedResults = await Promise.all(individualFetches);
+          for (const { id, data } of fetchedResults) {
+            results[id] = data;
+          }
         }
+
         setDataMap(results);
       }
 

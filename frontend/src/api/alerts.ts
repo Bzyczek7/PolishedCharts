@@ -1,5 +1,7 @@
 import client from './client'
 import type { GuestAlert, AlertCondition as GuestAlertCondition } from '../types/auth'
+import type { AlertNotificationSettingsUpdate } from '../types/notification'
+import { createAuthenticatedAxios } from '@/services/authService'
 
 export type AlertCondition =
   | 'above'
@@ -15,6 +17,7 @@ export type AlertCondition =
   | 'indicator_slope_bullish'
   | 'indicator_slope_bearish'
   | 'indicator_signal_change'
+  | 'crsi_band_extremes'
 
 export type AlertTriggerMode =
   | 'once'
@@ -343,6 +346,14 @@ export const getRecentTriggers = async (options?: {
 }
 
 /**
+ * Delete a specific alert trigger (log entry)
+ * DELETE /api/v1/alerts/triggers/{trigger_id}
+ */
+export const deleteTrigger = async (triggerId: number): Promise<void> => {
+  await client.delete(`/alerts/triggers/${triggerId}`)
+}
+
+/**
  * Get available alert conditions for a specific indicator
  * GET /api/v1/alerts/indicator-conditions?indicator_name=crsi
  */
@@ -353,5 +364,27 @@ export const getIndicatorConditions = async (indicatorName: string): Promise<Ind
       _t: Date.now()  // Cache-busting timestamp
     }
   })
+  return response.data
+}
+
+/**
+ * Update notification settings for an alert
+ * PATCH /api/v1/notifications/alert-settings/{alert_id}
+ */
+export const updateAlertNotificationSettings = async (
+  alertId: string,
+  settings: AlertNotificationSettingsUpdate
+): Promise<void> => {
+  const authClient = await createAuthenticatedAxios()
+  await authClient.patch(`/notifications/alert-settings/${alertId}`, settings)
+}
+
+/**
+ * Get notification settings for an alert
+ * GET /api/v1/notifications/alert-settings/{alert_id}
+ */
+export const getAlertNotificationSettings = async (alertId: string): Promise<AlertNotificationSettingsUpdate> => {
+  const authClient = await createAuthenticatedAxios()
+  const response = await authClient.get(`/notifications/alert-settings/${alertId}`)
   return response.data
 }

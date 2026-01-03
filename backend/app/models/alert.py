@@ -87,8 +87,7 @@ class Alert(Base):
     symbol_obj = relationship("Symbol", back_populates="alerts")
 
     # Relationship to notification settings (per-alert overrides)
-    # Temporarily commented out due to fk constraint issues in tests
-    # notification_settings = relationship("AlertNotificationSettings", back_populates="alert", cascade="all, delete-orphan")
+    notification_settings = relationship("AlertNotificationSettings", back_populates="alert", cascade="all, delete-orphan")
 
     @property
     def alert_label(self) -> str:
