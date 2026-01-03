@@ -279,12 +279,22 @@ If the constitution conflicts with a spec or plan, the constitution wins until e
 
 ### Project Defaults
 
-The following defaults apply to all features unless revised via ADR:
+The following defaults apply to all features unless revised via ADR 
+- Initial market focus US equities 
+- Notifications in-app only desktop notifications deferred 
+- Packaging pure local web app desktop wrapper deferred 
 
-- Initial market focus: US equities
-- Notifications: in-app only (desktop notifications deferred)
-- Packaging: pure local web app (desktop wrapper deferred)
+## Subagent Registry (Available: spec-consistency-checker, edge-case-auditor, code-reviewer-perf, frontend-ts-implementer, code-reviewer-regression-agent, backend-python-implementer, test-benchmark-runner, test-benchmark-author)
 
----
+Task Assignment Rules:
+- Backend Python trading logic/backtesting/indicators: backend-python-implementer
+- Frontend TS components: frontend-ts-implementer
+- Testing/benchmarks: test-benchmark-author → test-benchmark-runner
+- Perf optimization/review: code-reviewer-perf
+- Code quality/regression: code-reviewer-regression-agent
+- Spec validation: spec-consistency-checker
+- Edge cases/risks: edge-case-auditor
 
-**Version**: 1.2.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-30
+For every task in tasks.md: Append "[Delegate: agent-name]" + brief rationale. Enable parallelism where possible (e.g., tests + review).
+
+--- Version 1.2.0 Ratified 2025-12-23 Last Amended 2025-12-30 TITLE TradingAlert Constitution - Governance - Project Defaults
