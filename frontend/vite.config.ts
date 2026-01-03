@@ -37,6 +37,7 @@ function copyFixturesPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/PolishedCharts/',  // 👈 ADD THIS LINE
   plugins: [
     react(),
     copyFixturesPlugin()
