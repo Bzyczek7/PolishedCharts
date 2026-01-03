@@ -29,7 +29,7 @@ app = FastAPI(
 # Note: Authorization header must be explicitly listed (wildcard * doesn't cover it in Chrome 97+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://bzyczek7.github.io"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],  # Explicitly include Authorization
@@ -43,7 +43,7 @@ async def handle_cors_preflight(request: Request, call_next):
         return Response(
             status_code=204,
             headers={
-                "Access-Control-Allow-Origin": "http://localhost:5173",
+                "Access-Control-Allow-Origin": request.headers.get("origin", "http://localhost:5173"),
                 "Access-Control-Allow-Methods": "*",
                 # Note: Chrome requires explicit Authorization header listing (wildcard * insufficient)
                 "Access-Control-Allow-Headers": "*, Authorization",
