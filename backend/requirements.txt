@@ -20,6 +20,7 @@ pandas-market-calendars==4.3.1
 beautifulsoup4==4.12.2
 alpha-vantage==2.3.1
 aiohttp==3.9.1
+tenacity==8.4.2
 email-validator==2.1.0
 httpx==0.25.2
 firebase-admin>=6.0.0
