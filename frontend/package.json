@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "deploy": "vite build && gh-pages -d dist"
+    "deploy": "VITE_API_URL=https://polishedcharts-backend.onrender.com/api/v1 vite build && gh-pages -d dist"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
