@@ -1700,27 +1700,36 @@ class IndicatorRegistry:
 
         Feature 005: Fixed display_type to use metadata.display_type instead of category.
         """
-        return [
-            {
-                "name": ind.name,
-                "description": ind.description,
-                "display_type": ind.metadata.display_type.value,  # Use metadata.display_type, not category
-                "category": ind.category,
-                "parameters": ind.parameter_definitions,
-                "metadata": ind.metadata,
-                "alert_templates": [
-                    {
-                        "condition_type": t.condition_type,
-                        "label": t.label,
-                        "description": t.description,
-                        "applicable_fields": t.applicable_fields,
-                        "requires_threshold": t.requires_threshold,
-                    }
-                    for t in ind.alert_templates
-                ],
-            }
-            for ind in self._indicators.values()
-        ]
+        results = []
+        import logging
+        logger = logging.getLogger(__name__)
+
+        for ind in self._indicators.values():
+            try:
+                results.append({
+                    "name": ind.name,
+                    "description": ind.description,
+                    "display_type": ind.metadata.display_type.value,  # Use metadata.display_type, not category
+                    "category": ind.category,
+                    "parameters": ind.parameter_definitions,
+                    "metadata": ind.metadata,
+                    "alert_templates": [
+                        {
+                            "condition_type": t.condition_type,
+                            "label": t.label,
+                            "description": t.description,
+                            "applicable_fields": t.applicable_fields,
+                            "requires_threshold": t.requires_threshold,
+                        }
+                        for t in ind.alert_templates
+                    ],
+                })
+            except Exception as e:
+                # T022: Graceful degradation - skip malformed indicators instead of crashing entire endpoint
+                logger.error(f"Error getting metadata for indicator '{ind.name}': {e}")
+                continue
+                
+        return results
 
     def calculate(self, name: str, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
         """Calculate an indicator by name."""
