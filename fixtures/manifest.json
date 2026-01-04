@@ -1,0 +1,33 @@
+{
+  "fixtures": [
+    {
+      "fixture_id": "fixture-aapl-1d-100",
+      "symbol": "AAPL",
+      "interval": "1d",
+      "candle_count": 100,
+      "description": "100 daily candles for AAPL (approx 5 months)",
+      "generated_at": "2024-12-25T00:00:00Z",
+      "status": "complete"
+    },
+    {
+      "fixture_id": "fixture-tsla-1h-200",
+      "symbol": "TSLA",
+      "interval": "1h",
+      "candle_count": 200,
+      "description": "200 hourly candles for TSLA (approx 1 month)",
+      "generated_at": "2024-12-25T00:00:00Z",
+      "status": "complete"
+    },
+    {
+      "fixture_id": "fixture-spy-5m-150",
+      "symbol": "SPY",
+      "interval": "5m",
+      "candle_count": 150,
+      "description": "150 5-minute candles for SPY (approx 2 days)",
+      "generated_at": "2024-12-25T00:00:00Z",
+      "status": "complete"
+    }
+  ],
+  "version": "1.0.0",
+  "note": "All fixtures generated using yfinance 1.0"
+}
