@@ -562,6 +562,10 @@ class PandasTAIndicator(Indicator):
                         # This filters out optional pandas-ta params like scalar, mamode, etc.
                         continue
 
+                # Sanitize numpy types (fix for 500 error on serialization)
+                if isinstance(default, (np.integer, np.floating, np.bool_)):
+                    default = default.item()
+
                 # Set bounds based on parameter name
                 min_val = None
                 max_val = None
