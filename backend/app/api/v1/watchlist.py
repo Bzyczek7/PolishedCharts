@@ -235,7 +235,14 @@ async def add_to_watchlist(
     # Add symbol
     symbols.append(request.symbol)
     watchlist.symbols = symbols
-    watchlist.sort_order = symbols  # Keep sort_order in sync
+    
+    # Preserve custom sort_order - only append new symbol to the end
+    # This fixes the bug where reordering was lost when adding new symbols
+    sort_order = watchlist.sort_order or []
+    if request.symbol not in sort_order:
+        sort_order.append(request.symbol)
+    watchlist.sort_order = sort_order
+    
     watchlist.updated_at = now
     # Flag mutable columns as modified so SQLAlchemy persists them
     flag_modified(watchlist, "symbols")
