@@ -24,4 +24,4 @@ tenacity==8.4.2
 email-validator==2.1.0
 httpx==0.25.2
 firebase-admin>=6.0.0
-pandas-ta-remake==0.3.14b0
+pandas-ta==0.3.14b0
