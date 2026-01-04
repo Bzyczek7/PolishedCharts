@@ -67,7 +67,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/health")
-def health_check():
+async def health_check():
     """Health check endpoint that verifies critical services."""
     from app.services.firebase_admin import is_firebase_initialized
 
@@ -83,6 +83,17 @@ def health_check():
     except ImportError:
         status["pandas_ta"] = "missing"
         status["status"] = "degraded"
+
+    # Check database connectivity
+    try:
+        async with AsyncSessionLocal() as db:
+            # Simple query to test connection
+            from sqlalchemy import text
+            await db.execute(text("SELECT 1"))
+            status["database"] = "ok"
+    except Exception as e:
+        status["database"] = f"error: {str(e)[:100]}"
+        status["status"] = "unhealthy"
 
     return status
 
@@ -178,14 +189,6 @@ async def shutdown_event():
 
 # Include API router AFTER CORS middleware
 app.include_router(api_router, prefix=settings.API_V1_STR)
-
-@app.get("/health")
-def health_check():
-    try:
-        import pandas_ta as ta  # works with remake
-        return {"status": "ok", "pandas_ta": "✅"}
-    except ImportError:
-        return {"status": "error", "pandas_ta": "missing"}
 
 @app.get("/")
 def root():
