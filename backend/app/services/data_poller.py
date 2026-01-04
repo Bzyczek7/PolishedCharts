@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.symbol import Symbol
-from app.models.candle import Candle
 from app.services.providers import YFinanceProvider
+from app.services.candles import CandleService
 from app.services.alert_engine import AlertEngine
 from app.services.indicator_service import IndicatorService
 from app.services.market_hours import MarketHoursService
@@ -60,6 +60,7 @@ class DataPoller:
         self.rate_limit_sleep = rate_limit_sleep
         self._stop_event = asyncio.Event()
         self.market_hours_service = market_hours_service or MarketHoursService()
+        self.candle_service = CandleService()
 
     async def start(self):
         self.is_running = True
@@ -231,50 +232,17 @@ class DataPoller:
         logger.info("Stopping DataPoller...")
 
     async def _save_candles_to_db(self, ticker: str, candles_data: List[dict]) -> int:
-        # Returns symbol_id
         async with self.db_session_factory() as session:
-            # 1. Get or Create Symbol
-            result = await session.execute(select(Symbol).filter(Symbol.ticker == ticker))
-            symbol = result.scalars().first()
-            if not symbol:
-                symbol = Symbol(ticker=ticker)
-                session.add(symbol)
+            # Get symbol_id
+            result = await session.execute(select(Symbol.id).where(Symbol.ticker == ticker))
+            symbol_id = result.scalar_one_or_none()
+
+            if symbol_id and candles_data:
+                await self.candle_service.upsert_candles(session, symbol_id, "1d", candles_data)
                 await session.commit()
-                await session.refresh(symbol)
+                logger.info(f"Saved {len(candles_data)} candles for {ticker}")
 
-            symbol_id = symbol.id
-
-            # 2. Save Candles
-            latest_candle_result = await session.execute(
-                select(Candle).filter(Candle.symbol_id == symbol.id).order_by(Candle.timestamp.desc()).limit(1)
-            )
-            latest_candle = latest_candle_result.scalars().first()
-            latest_timestamp = latest_candle.timestamp if latest_candle else None
-
-            new_candles = []
-            for c_data in candles_data:
-                # YFinanceProvider returns timestamps directly, not date strings
-                c_timestamp = c_data["timestamp"]
-
-                if latest_timestamp and c_timestamp <= latest_timestamp:
-                     continue
-
-                candle = Candle(
-                    symbol_id=symbol.id,
-                    timestamp=c_timestamp,
-                    interval="1d", # DataPoller currently only fetches daily candles
-                    open=c_data["open"],
-                    high=c_data["high"],
-                    low=c_data["low"],
-                    close=c_data["close"],
-                    volume=c_data["volume"]
-                )
-                session.add(candle)
-                new_candles.append(candle)
-
-            await session.commit()
-            logger.info(f"Saved {len(new_candles)} new candles for {ticker}")
-            return symbol_id
+            return symbol_id or 0
 
     async def _fetch_candles_db_first(self, ticker: str) -> List[dict]:
         """
