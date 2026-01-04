@@ -25,6 +25,7 @@ Usage:
 
 from typing import Dict, Any, Optional
 from uuid import UUID
+import logging
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,8 @@ from app.models.user import User
 from app.services.auth_middleware import get_current_user
 from app.services.firebase_admin import verify_firebase_token
 from app.db.session import AsyncSessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 async def get_db() -> AsyncSession:
@@ -159,8 +162,13 @@ async def check_notification_ownership(
     """
     # Handle both User object and dict (from Firebase token)
     if isinstance(current_user, dict):
-        # Firebase auth returns a dict with 'uid' field
+        # Firebase auth returns a dict with 'uid' field (as string)
         current_user_id = current_user.get('uid')
+        # Convert to int for comparison (Firebase uid is numeric string)
+        try:
+            current_user_id = int(current_user_id) if current_user_id else None
+        except (ValueError, TypeError):
+            current_user_id = None
     else:
         current_user_id = current_user.id
 
@@ -169,8 +177,14 @@ async def check_notification_ownership(
         return
 
     # Allow if the current user owns the resource
-    if resource_user_id == current_user_id:
-        return
+    # Compare as ints to handle string/int type differences
+    try:
+        resource_user_id_int = int(resource_user_id)
+        current_user_id_int = int(current_user_id) if current_user_id else None
+        if resource_user_id_int == current_user_id_int:
+            return
+    except (ValueError, TypeError):
+        pass
 
     logger.warning(
         f"Ownership check failed: resource_user_id={resource_user_id}, "
