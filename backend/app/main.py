@@ -29,7 +29,7 @@ app = FastAPI(
 # Note: Authorization header must be explicitly listed (wildcard * doesn't cover it in Chrome 97+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://bzyczek7.github.io"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://bzyczek7.github.io", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],  # Explicitly include Authorization
@@ -149,7 +149,8 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    import pandas_ta
+    return {"status": "ok", "pandas_ta": "✅"}
 
 @app.get("/")
 def root():
