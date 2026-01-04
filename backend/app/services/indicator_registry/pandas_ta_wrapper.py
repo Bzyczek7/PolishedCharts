@@ -447,10 +447,21 @@ class PandasTAIndicator(Indicator):
         # Filter params to only those supported by this version of pandas-ta
         # This allows DEFAULT_PARAMS to contain supersets of keys (e.g., both 'std' and 'lower_std')
         # while only passing valid ones to the validation logic
-        valid_params = self.parameter_definitions.keys()
-        params = {k: v for k, v in params.items() if k in valid_params}
+        try:
+            valid_params = self.parameter_definitions.keys()
+            params = {k: v for k, v in params.items() if k in valid_params}
+        except Exception as e:
+            logger.error(f"Error getting parameter definitions for {indicator_name}: {e}")
+            # If parameter_definitions fails, use original params
+            pass
 
-        super().__init__(**params)
+        try:
+            super().__init__(**params)
+        except Exception as e:
+            logger.error(f"Error initializing base Indicator for {indicator_name}: {e}")
+            # Initialize with empty params if there's an error
+            super().__init__()
+
         self._column_mapping: Dict[str, str] = COLUMN_MAPPINGS.get(indicator_name, {})
         # Store params for serialization
         self._init_params = params.copy()
@@ -524,91 +535,98 @@ class PandasTAIndicator(Indicator):
 
         Uses DEFAULT_PARAMS for known indicators when function signature has no default.
         """
-        func = self._get_func()
-        if not func:
-            return {}
-
-        param_defs = {}
-        sig = None
-
         try:
-            sig = inspect.signature(func)
-        except (ValueError, TypeError):
-            pass
+            func = self._get_func()
+            if not func:
+                return {}
 
-        # Get default params for this indicator (if any)
-        indicator_defaults = DEFAULT_PARAMS.get(self.base_name, {})
+            param_defs = {}
+            sig = None
 
-        if sig:
-            for param_name, param in sig.parameters.items():
-                # Skip 'kwargs' and '*args' style parameters
-                if param.kind in (inspect.Parameter.VAR_POSITIONAL,
-                                  inspect.Parameter.VAR_KEYWORD):
-                    continue
+            try:
+                sig = inspect.signature(func)
+            except (ValueError, TypeError):
+                pass
 
-                # Map common parameter names (keep original for validation)
-                mapped_name = param_name
+            # Get default params for this indicator (if any)
+            indicator_defaults = DEFAULT_PARAMS.get(self.base_name, {})
 
-                # Determine default value - prefer DEFAULT_PARAMS, then function default
-                # NOTE: pandas-ta functions often have default=None in their signature,
-                # so we check for both None and empty to apply our sensible defaults
-                default = param.default
-                if default is None or default is inspect.Parameter.empty:
-                    # Use default from DEFAULT_PARAMS if available, otherwise skip this param
-                    if param_name in indicator_defaults:
-                        default = indicator_defaults[param_name]
-                    else:
-                        # Skip parameters without a sensible default (None or empty)
-                        # This filters out optional pandas-ta params like scalar, mamode, etc.
+            if sig:
+                for param_name, param in sig.parameters.items():
+                    # Skip 'kwargs' and '*args' style parameters
+                    if param.kind in (inspect.Parameter.VAR_POSITIONAL,
+                                      inspect.Parameter.VAR_KEYWORD):
                         continue
 
-                # Sanitize numpy types (fix for 500 error on serialization)
-                if isinstance(default, (np.integer, np.floating, np.bool_)):
-                    default = default.item()
+                    # Map common parameter names (keep original for validation)
+                    mapped_name = param_name
 
-                # Set bounds based on parameter name
-                min_val = None
-                max_val = None
+                    # Determine default value - prefer DEFAULT_PARAMS, then function default
+                    # NOTE: pandas-ta functions often have default=None in their signature,
+                    # so we check for both None and empty to apply our sensible defaults
+                    default = param.default
+                    if default is None or default is inspect.Parameter.empty:
+                        # Use default from DEFAULT_PARAMS if available, otherwise skip this param
+                        if param_name in indicator_defaults:
+                            default = indicator_defaults[param_name]
+                        else:
+                            # Skip parameters without a sensible default (None or empty)
+                            # This filters out optional pandas-ta params like scalar, mamode, etc.
+                            continue
 
-                if "length" in param_name or "period" in param_name:
-                    min_val = 2
-                    max_val = 500
-                elif "std" in param_name or "scalar" in param_name:
-                    min_val = 0.1
-                    max_val = 5.0
-                elif "limit" in param_name:
-                    # For MAMA fastlimit/slowlimit (0-1 range)
-                    min_val = 0.0
-                    max_val = 1.0
-                elif "fast" in param_name:
-                    min_val = 2
-                    max_val = 200
-                elif "slow" in param_name:
-                    min_val = 2
-                    max_val = 300
-                elif "signal" in param_name:
-                    min_val = 2
-                    max_val = 100
+                    # Sanitize numpy types (fix for 500 error on serialization)
+                    if isinstance(default, (np.integer, np.floating, np.bool_)):
+                        default = default.item()
 
-                # Determine type based on actual default value
-                if isinstance(default, bool):
-                    param_type = "boolean"
-                elif isinstance(default, int):
-                    param_type = "integer"
-                elif isinstance(default, float):
-                    param_type = "float"
-                else:
-                    param_type = "integer"  # Default to integer for numeric params
+                    # Set bounds based on parameter name
+                    min_val = None
+                    max_val = None
 
-                param_defs[mapped_name] = ParameterDefinition(
-                    type=param_type,
-                    default=default,
-                    min=min_val,
-                    max=max_val,
-                    description=f"{param_name} parameter for {self.base_name}"
-                )
+                    if "length" in param_name or "period" in param_name:
+                        min_val = 2
+                        max_val = 500
+                    elif "std" in param_name or "scalar" in param_name:
+                        min_val = 0.1
+                        max_val = 5.0
+                    elif "limit" in param_name:
+                        # For MAMA fastlimit/slowlimit (0-1 range)
+                        min_val = 0.0
+                        max_val = 1.0
+                    elif "fast" in param_name:
+                        min_val = 2
+                        max_val = 200
+                    elif "slow" in param_name:
+                        min_val = 2
+                        max_val = 300
+                    elif "signal" in param_name:
+                        min_val = 2
+                        max_val = 100
 
-        return param_defs
+                    # Determine type based on actual default value
+                    if isinstance(default, bool):
+                        param_type = "boolean"
+                    elif isinstance(default, int):
+                        param_type = "integer"
+                    elif isinstance(default, float):
+                        param_type = "float"
+                    else:
+                        param_type = "integer"  # Default to integer for numeric params
+
+                    param_defs[mapped_name] = ParameterDefinition(
+                        type=param_type,
+                        default=default,
+                        min=min_val,
+                        max=max_val,
+                        description=f"{param_name} parameter for {self.base_name}"
+                    )
+
+            return param_defs
+        except Exception as e:
+            logger.error(f"Error getting parameter definitions for {self.base_name}: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            # Return empty dict as fallback
+            return {}
 
     def _get_func(self) -> Optional[Callable]:
         """Get the pandas-ta function, with caching."""
