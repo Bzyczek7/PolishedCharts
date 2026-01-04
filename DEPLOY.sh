@@ -3,7 +3,7 @@ cd /home/marek/DQN/TradingAlert
 
 echo "Building frontend..."
 cd frontend
-npm run build > /dev/null 2>&1 || npx vite build
+npm run deploy > /dev/null 2>&1 || VITE_API_URL=https://polishedcharts-backend.onrender.com/api/v1 npx vite build
 cd ..
 
 echo "Deploying to gh-pages..."

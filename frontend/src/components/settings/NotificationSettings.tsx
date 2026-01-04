@@ -150,6 +150,25 @@ export function NotificationSettings({ onClose }: NotificationSettingsProps) {
     }
   };
 
+  const handleTelegramToggle = (enabled: boolean) => {
+    if (enabled && !hasTelegramConfigured) {
+      // User trying to enable Telegram without credentials configured
+      const confirmed = confirm(
+        "To enable Telegram notifications, you must first configure your Bot Token and Chat ID. " +
+        "Would you like to configure them now?"
+      );
+      if (confirmed) {
+        // User confirmed - enable toggle so they can fill in credentials
+        setTelegramEnabled(true);
+      } else {
+        // User cancelled - keep toggle off (do nothing)
+      }
+    } else {
+      // Either disabling, or enabling with existing credentials
+      setTelegramEnabled(enabled);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -252,7 +271,7 @@ export function NotificationSettings({ onClose }: NotificationSettingsProps) {
           <Switch
             id="telegram-enabled"
             checked={telegramEnabled}
-            onCheckedChange={setTelegramEnabled}
+            onCheckedChange={handleTelegramToggle}
           />
         </div>
 

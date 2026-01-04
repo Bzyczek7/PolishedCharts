@@ -5,6 +5,7 @@ from sqlalchemy.future import select
 from datetime import datetime, timezone, timedelta
 from app.models.alert import Alert
 from app.models.alert_trigger import AlertTrigger
+from app.models.notification_delivery import NotificationDelivery, NotificationType, DeliveryStatus
 from app.core.enums import AlertCondition, AlertTriggerMode
 
 logger = logging.getLogger(__name__)
@@ -287,6 +288,24 @@ class AlertEngine:
 
                         trigger = AlertTrigger(**trigger_data)
                         session.add(trigger)
+                        await session.flush()  # Generate trigger.id for delivery records
+
+                        # Log Telegram notification delivery as PENDING
+                        # (Frontend will trigger actual Telegram send via /notifications/send)
+                        alert_desc = f"{alert.condition} {alert.threshold}"
+                        if alert.indicator_name:
+                            alert_desc = f"{alert.indicator_name.upper()} {alert.condition}"
+
+                        telegram_delivery = NotificationDelivery(
+                            alert_trigger_id=trigger.id,
+                            alert_id=alert.id,
+                            user_id=alert.user_id,
+                            notification_type=NotificationType.TELEGRAM,
+                            status=DeliveryStatus.PENDING,
+                            triggered_at=now,
+                            message=f"Alert triggered: {alert_desc}"
+                        )
+                        session.add(telegram_delivery)
 
             if triggered_alerts:
                 await session.commit()
@@ -423,6 +442,23 @@ class AlertEngine:
 
                 trigger = AlertTrigger(**trigger_data)
                 session.add(trigger)
+                await session.flush()  # Generate trigger.id for delivery records
+
+                # Log Telegram notification delivery as PENDING
+                alert_desc = f"{alert.condition} {alert.threshold}"
+                if alert.indicator_name:
+                    alert_desc = f"{alert.indicator_name.upper()} {alert.condition}"
+
+                telegram_delivery = NotificationDelivery(
+                    alert_trigger_id=trigger.id,
+                    alert_id=alert.id,
+                    user_id=alert.user_id,
+                    notification_type=NotificationType.TELEGRAM,
+                    status=DeliveryStatus.PENDING,
+                    triggered_at=now,
+                    message=f"Alert triggered: {alert_desc}"
+                )
+                session.add(telegram_delivery)
 
         return triggered_alerts
 

@@ -34,6 +34,8 @@ Auto-generated from all feature plans. Last updated: 2025-12-30
 - TypeScript 5.9+ (frontend), React 19 (016-donation-reminder)
 - localStorage for session state (no backend changes per spec assumptions) (016-donation-reminder)
 - Python 3.11+ (backend), TypeScript 5.9+ (frontend) + FastAPI 0.104+, SQLAlchemy 2.0+, Firebase Admin SDK (backend), React 19, axios (frontend) (001-indicator-storage)
+- TypeScript 5.9, React 19.2 (017-drawing-toolbar)
+- Browser localStorage (key: `drawings-{SYMBOL}`), drawings persist per symbol per browser only (017-drawing-toolbar)
 
 - Python 3.11+ (backend), TypeScript 5.9+ (frontend) (001-initial-setup)
 
@@ -53,9 +55,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+ (backend), TypeScript 5.9+ (frontend): Follow standard conventions
 
 ## Recent Changes
+- 017-drawing-toolbar: Added TypeScript 5.9, React 19.2
 - 001-indicator-storage: Added Python 3.11+ (backend), TypeScript 5.9+ (frontend) + FastAPI 0.104+, SQLAlchemy 2.0+, Firebase Admin SDK (backend), React 19, axios (frontend)
 - 016-donation-reminder: Added TypeScript 5.9+ (frontend), React 19
-- 015-symbol-load-performance: Added TypeScript 5.9 (frontend), React 19 + React hooks (useEffect, useCallback, useMemo), lightweight-charts 5.1.0, React 19
 
 
 <!-- MANUAL ADDITIONS START -->

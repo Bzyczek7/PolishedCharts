@@ -19,7 +19,7 @@ import { DEFAULT_INDICATOR_STYLE, INDICATOR_DEFAULT_COLORS } from '../components
 import { useAuth } from '../hooks/useAuthContext';
 
 // API base URL (note: VITE_API_URL should NOT include /api/v1 path)
-const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || (import.meta.env.DEV ? 'http://localhost:8000' : 'https://polishedcharts-backend.onrender.com')
 
 // Retry configuration (SC-003: <1 second sync for typical configs, 30-second timeout)
 const MAX_RETRY_ATTEMPTS = 5;

@@ -90,7 +90,7 @@ async function uploadIndicatorToCloud(
   indicator: LocalStorageIndicatorInstance,
   authToken: string
 ): Promise<{ success: boolean; error?: string }> {
-  const apiUrl = (window as any).__API_URL__ || 'https://polishedcharts-backend.onrender.com/api/v1';
+  const apiUrl = (window as any).__API_URL__ || (import.meta.env.DEV ? 'http://localhost:8000/api/v1' : 'https://polishedcharts-backend.onrender.com/api/v1');
   
   const payload = {
     indicator_name: indicator.indicatorType.name.toLowerCase(),
@@ -266,7 +266,7 @@ async function verifyMigration(): Promise<{ localStorage: number; cloud: number 
   
   // Count in cloud
   const auth = (window as any).__firebase_auth__;
-  const apiUrl = (window as any).__API_URL__ || 'https://polishedcharts-backend.onrender.com/api/v1';
+  const apiUrl = (window as any).__API_URL__ || (import.meta.env.DEV ? 'http://localhost:8000/api/v1' : 'https://polishedcharts-backend.onrender.com/api/v1');
   
   let cloudCount = 0;
   if (auth && auth.currentUser) {

@@ -382,9 +382,23 @@ export const updateAlertNotificationSettings = async (
 /**
  * Get notification settings for an alert
  * GET /api/v1/notifications/alert-settings/{alert_id}
+ *
+ * Returns null values for any setting that uses the global default.
+ * If no custom settings exist, returns null (caller should use global defaults).
  */
-export const getAlertNotificationSettings = async (alertId: string): Promise<AlertNotificationSettingsUpdate> => {
+export const getAlertNotificationSettings = async (alertId: string): Promise<AlertNotificationSettingsUpdate | null> => {
   const authClient = await createAuthenticatedAxios()
   const response = await authClient.get(`/notifications/alert-settings/${alertId}`)
-  return response.data
+
+  // The backend returns AlertNotificationSettingsResponse with extra fields
+  // Extract just the notification settings fields
+  const data = response.data
+  if (!data) return null
+
+  return {
+    toastEnabled: data.toastEnabled ?? null,
+    soundEnabled: data.soundEnabled ?? null,
+    soundType: data.soundType ?? null,
+    telegramEnabled: data.telegramEnabled ?? null,
+  }
 }

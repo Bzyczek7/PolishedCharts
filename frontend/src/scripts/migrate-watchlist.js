@@ -16,7 +16,7 @@
 
 (async function migrateGuestData() {
   const LOCAL_STORAGE_KEY = 'polishedcharts_data';
-  const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'https://polishedcharts-backend.onrender.com');
 
   console.log('🚀 Starting guest data migration...');
 

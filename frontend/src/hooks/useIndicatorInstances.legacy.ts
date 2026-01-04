@@ -18,7 +18,7 @@ import type { IndicatorInstance, IndicatorListIndex, IndicatorStyle } from '../c
 import { DEFAULT_INDICATOR_STYLE, INDICATOR_DEFAULT_COLORS } from '../components/types/indicators';
 
 // API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : 'https://polishedcharts-backend.onrender.com');
 
 // Retry configuration (SC-003: <1 second sync for typical configs, 30-second timeout)
 const MAX_RETRY_ATTEMPTS = 5;

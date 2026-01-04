@@ -3,7 +3,7 @@ cd /home/marek/DQN/TradingAlert/frontend
 
 # Build
 echo "Building..."
-npx vite build > /dev/null 2>&1
+VITE_API_URL=https://polishedcharts-backend.onrender.com/api/v1 npx vite build > /dev/null 2>&1
 
 # Create temp dir for gh-pages
 TMPDIR=$(mktemp -d)

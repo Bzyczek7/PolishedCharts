@@ -17,13 +17,30 @@ Usage:
     showNotification({ alertName, symbol, message, type: 'toast' });
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import toast from "react-hot-toast";
-import type { ToastNotificationData, NotificationType, SoundType } from "@/types/notification";
+import type { ToastNotificationData, NotificationType, SoundType, AlertNotificationSettingsUpdate } from "@/types/notification";
 import { toastManager, setupToastKeyboardHandler } from "@/lib/toastManager";
 import { soundManager } from "@/lib/soundManager";
 import { useSystemNotificationAvailability } from "@/hooks/useNotificationPermission";
 import { useAuth } from "@/hooks/useAuthContext";
+import { sendNotification } from "@/api/notifications";
+
+/**
+ * Merge global preferences with per-alert settings.
+ * Per-alert settings override global where not null.
+ */
+function resolveEffectivePreferences(
+  globalPrefs: NotificationPreferences,
+  alertSettings: AlertNotificationSettingsUpdate | null
+): NotificationPreferences {
+  return {
+    toastEnabled: alertSettings?.toastEnabled ?? globalPrefs.toastEnabled,
+    soundEnabled: alertSettings?.soundEnabled ?? globalPrefs.soundEnabled,
+    soundType: alertSettings?.soundType ?? globalPrefs.soundType,
+    telegramEnabled: alertSettings?.telegramEnabled ?? globalPrefs.telegramEnabled,
+  };
+}
 
 // Default preferences for guests
 const DEFAULT_GUEST_PREFERENCES = {
@@ -54,6 +71,9 @@ interface UseNotificationsReturn {
   updatePreferences: (updates: Partial<NotificationPreferences>) => void;
   loadPreferences: () => void;
 
+  // Per-alert settings
+  setAlertSettings: (alertId: string, settings: AlertNotificationSettingsUpdate | null) => void;
+
   // Permission status
   canShowSystemNotifications: boolean;
   soundEnabled: boolean;
@@ -63,6 +83,8 @@ export function useNotifications(): UseNotificationsReturn {
   const { isAuthenticated, user } = useAuth();
   const { canShowSystemNotifications } = useSystemNotificationAvailability();
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_GUEST_PREFERENCES);
+  // Per-alert settings cache: alertId -> settings (null = use global)
+  const alertSettingsRef = useRef<Map<string, AlertNotificationSettingsUpdate | null>>(new Map());
 
   // Load preferences on mount and auth change
   useEffect(() => {
@@ -188,36 +210,55 @@ export function useNotifications(): UseNotificationsReturn {
       return false;
     }
 
-    try {
-      // This would call the backend API
-      // const response = await notificationsApi.sendTelegram({
-      //   alertTriggerId: data.alertTriggerId,
-      //   message: data.message,
-      // });
+    if (!data.alertTriggerId) {
+      console.warn("[useNotifications] No alertTriggerId, skipping Telegram");
+      return false;
+    }
 
-      console.debug("[useNotifications] Telegram sent:", data);
-      return true;
+    try {
+      const result = await sendNotification(data.alertTriggerId, 'telegram', data.message);
+      console.debug("[useNotifications] Telegram notification sent:", result);
+      return result.success;
     } catch (error) {
-      console.error("[useNotifications] Failed to send Telegram:", error);
+      console.error("[useNotifications] Failed to send Telegram notification:", error);
       return false;
     }
   }, [preferences.telegramEnabled, isAuthenticated]);
 
   /**
    * Show a notification (orchestrates all channels)
+   * Uses per-alert settings if available, falls back to global preferences
    */
   const showNotification = useCallback((data: ToastNotificationData) => {
-    // Show toast
-    showToast(data);
+    // Get per-alert settings if alertId is provided
+    const alertSettings = data.alertId ? alertSettingsRef.current.get(data.alertId) : null;
+    const effectivePrefs = resolveEffectivePreferences(preferences, alertSettings);
 
-    // Play sound
-    playSound();
+    // Show toast if enabled
+    if (effectivePrefs.toastEnabled) {
+      showToast(data);
+    }
 
-    // Send to Telegram (async, don't wait)
-    sendTelegram(data).catch((err) => {
-      console.debug("[useNotifications] Telegram notification skipped:", err);
-    });
-  }, [showToast, playSound, sendTelegram]);
+    // Play sound if enabled (use per-alert soundType if specified)
+    if (effectivePrefs.soundEnabled) {
+      playSound(effectivePrefs.soundType);
+    }
+
+    // Send to Telegram if enabled (async, don't wait)
+    if (effectivePrefs.telegramEnabled) {
+      sendTelegram(data).catch((err) => {
+        console.debug("[useNotifications] Telegram notification skipped:", err);
+      });
+    }
+  }, [preferences, showToast, playSound, sendTelegram]);
+
+  /**
+   * Set per-alert notification settings
+   * Called by components that manage per-alert settings
+   */
+  const setAlertSettings = useCallback((alertId: string, settings: AlertNotificationSettingsUpdate | null) => {
+    alertSettingsRef.current.set(alertId, settings);
+  }, []);
 
   return {
     showNotification,
@@ -229,6 +270,7 @@ export function useNotifications(): UseNotificationsReturn {
     loadPreferences,
     canShowSystemNotifications,
     soundEnabled: preferences.soundEnabled,
+    setAlertSettings,
   };
 }
 

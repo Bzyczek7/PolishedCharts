@@ -228,6 +228,10 @@ export interface ToastNotificationData {
   triggeredAt: string;
   /** Notification type for logging */
   type: NotificationType;
+  /** Alert ID for per-alert settings lookup */
+  alertId: string;
+  /** Alert trigger ID for Telegram delivery */
+  alertTriggerId?: number;
 }
 
 /**
