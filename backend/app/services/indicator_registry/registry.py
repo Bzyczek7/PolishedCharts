@@ -1723,7 +1723,8 @@ class IndicatorRegistry:
                     for t in ind.alert_templates
                 ]
 
-                results.append({
+                # Create the result dict
+                result_item = {
                     "name": name,
                     "description": description,
                     "display_type": metadata.display_type.value,  # Use metadata.display_type, not category
@@ -1731,7 +1732,17 @@ class IndicatorRegistry:
                     "parameters": parameters,
                     "metadata": metadata,
                     "alert_templates": alert_templates,
-                })
+                }
+
+                # Try to serialize the result to catch serialization issues early
+                import json
+                try:
+                    json.dumps(result_item, default=str)  # Use default=str to handle unserializable objects
+                except TypeError as e:
+                    logger.error(f"Serialization error for indicator '{name}': {e}")
+                    continue
+
+                results.append(result_item)
             except Exception as e:
                 # T022: Graceful degradation - skip malformed indicators instead of crashing entire endpoint
                 logger.error(f"Error getting metadata for indicator '{ind.name if hasattr(ind, 'name') else 'unknown'}': {e}")
