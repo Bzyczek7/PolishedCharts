@@ -1706,29 +1706,39 @@ class IndicatorRegistry:
 
         for ind in self._indicators.values():
             try:
+                # Try to access each property individually to isolate failures
+                name = ind.name
+                description = ind.description
+                category = ind.category
+                parameters = ind.parameter_definitions
+                metadata = ind.metadata
+                alert_templates = [
+                    {
+                        "condition_type": t.condition_type,
+                        "label": t.label,
+                        "description": t.description,
+                        "applicable_fields": t.applicable_fields,
+                        "requires_threshold": t.requires_threshold,
+                    }
+                    for t in ind.alert_templates
+                ]
+
                 results.append({
-                    "name": ind.name,
-                    "description": ind.description,
-                    "display_type": ind.metadata.display_type.value,  # Use metadata.display_type, not category
-                    "category": ind.category,
-                    "parameters": ind.parameter_definitions,
-                    "metadata": ind.metadata,
-                    "alert_templates": [
-                        {
-                            "condition_type": t.condition_type,
-                            "label": t.label,
-                            "description": t.description,
-                            "applicable_fields": t.applicable_fields,
-                            "requires_threshold": t.requires_threshold,
-                        }
-                        for t in ind.alert_templates
-                    ],
+                    "name": name,
+                    "description": description,
+                    "display_type": metadata.display_type.value,  # Use metadata.display_type, not category
+                    "category": category,
+                    "parameters": parameters,
+                    "metadata": metadata,
+                    "alert_templates": alert_templates,
                 })
             except Exception as e:
                 # T022: Graceful degradation - skip malformed indicators instead of crashing entire endpoint
-                logger.error(f"Error getting metadata for indicator '{ind.name}': {e}")
+                logger.error(f"Error getting metadata for indicator '{ind.name if hasattr(ind, 'name') else 'unknown'}': {e}")
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 continue
-                
+
         return results
 
     def calculate(self, name: str, df: pd.DataFrame, **kwargs) -> pd.DataFrame:

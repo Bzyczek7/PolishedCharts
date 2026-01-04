@@ -750,47 +750,88 @@ class PandasTAIndicator(Indicator):
     @property
     def metadata(self) -> IndicatorMetadata:
         """Generate metadata for the indicator."""
-        name = self.base_name
-        config = PANDAS_TA_CONFIG.get(name, {})
+        try:
+            name = self.base_name
+            config = PANDAS_TA_CONFIG.get(name, {})
 
-        # Determine display type
-        if "display_type" in config:
-            display_type = config["display_type"]
-        else:
-            display_type = self._infer_display_type()
+            # Determine display type
+            if "display_type" in config:
+                display_type = config["display_type"]
+            else:
+                display_type = self._infer_display_type()
 
-        # Determine color mode
-        if "color_mode" in config:
-            color_mode = config["color_mode"]
-        else:
-            color_mode = ColorMode.SINGLE
+            # Determine color mode
+            if "color_mode" in config:
+                color_mode = config["color_mode"]
+            else:
+                color_mode = ColorMode.SINGLE
 
-        # Get color schemes
-        color_schemes = config.get("color_schemes", {
-            "bullish": "#00FF00",
-            "bearish": "#FF0000",
-            "neutral": "#808080",
-        })
+            # Get color schemes
+            color_schemes = config.get("color_schemes", {
+                "bullish": "#00FF00",
+                "bearish": "#FF0000",
+                "neutral": "#808080",
+            })
 
-        # Get scale ranges (use config if available, otherwise auto-generate)
-        if "scale_ranges" in config:
-            scale_ranges = config["scale_ranges"]
-        else:
-            scale_ranges = self._generate_scale_ranges()
+            # Get scale ranges (use config if available, otherwise auto-generate)
+            if "scale_ranges" in config:
+                scale_ranges = config["scale_ranges"]
+            else:
+                scale_ranges = self._generate_scale_ranges()
 
-        # Generate series metadata
-        series_metadata = self._generate_series_metadata(config)
+            # Generate series metadata
+            series_metadata = self._generate_series_metadata(config)
 
-        # Get reference levels
-        reference_levels = config.get("reference_levels", [])
+            # Get reference levels
+            reference_levels = config.get("reference_levels", [])
+
+            return IndicatorMetadata(
+                display_type=display_type,
+                color_mode=color_mode,
+                color_schemes=color_schemes,
+                scale_ranges=scale_ranges,
+                series_metadata=series_metadata,
+                reference_levels=reference_levels,
+            )
+        except Exception as e:
+            logger.error(f"Error generating metadata for pandas-ta indicator '{self.base_name}': {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+
+            # Return a minimal metadata object as fallback
+            # Import at the beginning of the file, not inside the exception handler
+            return self._create_fallback_metadata()
+
+    def _create_fallback_metadata(self):
+        """Create a fallback metadata object when pandas-ta schema imports fail."""
+        # Import here to avoid circular imports
+        from app.schemas.indicator import (
+            IndicatorMetadata, IndicatorDisplayType, ColorMode,
+            SeriesMetadata, SeriesRole, LineStyle, DisplayType,
+            ScaleRangesConfig
+        )
 
         return IndicatorMetadata(
-            display_type=display_type,
-            color_mode=color_mode,
-            color_schemes=color_schemes,
-            scale_ranges=scale_ranges,
-            series_metadata=series_metadata,
-            reference_levels=reference_levels,
+            display_type=IndicatorDisplayType.PANE,
+            color_mode=ColorMode.SINGLE,
+            color_schemes={
+                "bullish": "#808080",
+                "bearish": "#808080",
+                "neutral": "#808080",
+            },
+            scale_ranges=ScaleRangesConfig(min=0.0, max=1.0, auto=True),
+            series_metadata=[
+                SeriesMetadata(
+                    field=self.base_name,
+                    role=SeriesRole.MAIN,
+                    label=self.base_name.upper(),
+                    line_color="#808080",
+                    line_style=LineStyle.SOLID,
+                    line_width=2,
+                    display_type=DisplayType.LINE,
+                )
+            ],
+            reference_levels=[],
         )
 
     def _infer_display_type(self) -> IndicatorDisplayType:
