@@ -525,7 +525,7 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     if (dataMode === 'websocket' && symbol && chartInterval) {
         const wsUrl = import.meta.env.DEV
           ? `ws://localhost:8000/api/v1/candles/ws/${symbol}?interval=${chartInterval}`
-          : `${window.location.protocol === 'https:' ? 'wss://' : 'ws://'}${window.location.host}/api/v1/candles/ws/${symbol}?interval=${chartInterval}`;
+          : `${window.location.protocol === 'https:' ? 'wss://' : 'ws://'}${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'https://polishedcharts-backend.onrender.com'}/api/v1/candles/ws/${symbol}?interval=${chartInterval}`;
         connect(wsUrl);
     } else {
         disconnect();
