@@ -179,10 +179,10 @@ This is a **web application** with separate backend and frontend:
 - [X] T075 [P] Create backend test file structure: `backend/tests/test_merge_util.py` with pytest fixtures and imports
 - [X] T076 [P] Create frontend test file structure: `frontend/src/hooks/useIndicatorInstances.test.ts` with vitest setup and mocks
 - [X] T077 [P] Create frontend test file structure: `frontend/src/migrations/migrateIndicatorsToCloud.test.ts` for migration script validation
-- [ ] T078 [P] Configure pytest in `backend/pyproject.toml` or `backend/pytest.ini` with async test support and coverage settings
-- [ ] T079 [P] Configure vitest in `frontend/vitest.config.ts` with test environment variables and coverage settings
-- [ ] T080 [P] Add GitHub Actions workflow for backend tests in `.github/workflows/backend-tests.yml` (pytest, coverage, typecheck)
-- [ ] T081 [P] Add GitHub Actions workflow for frontend tests in `.github/workflows/frontend-tests.yml` (vitest, coverage, typecheck)
+- [X] T078 [P] Configure pytest in `backend/pyproject.toml` or `backend/pytest.ini` with async test support and coverage settings
+- [X] T079 [P] Configure vitest in `frontend/vitest.config.ts` with test environment variables and coverage settings
+- [X] T080 [P] Add GitHub Actions workflow for backend tests in `.github/workflows/backend-tests.yml` (pytest, coverage, typecheck) - EXISTING ci.yml already covers backend
+- [X] T081 [P] Add GitHub Actions workflow for frontend tests in `.github/workflows/frontend-tests.yml` (vitest, coverage, typecheck) - EXISTING ci.yml already covers frontend
 
 ### OpenAPI Specification
 
@@ -193,7 +193,7 @@ This is a **web application** with separate backend and frontend:
 
 - [X] T084 [P] Create one-time migration script `frontend/src/migrations/migrateIndicatorsToCloud.ts` to move localStorage indicators to cloud
 - [X] T085 [P] Add migration instructions to quickstart.md (how to run migration script in browser console, expected output, rollback procedure)
-- [ ] T086 [P] Update CLAUDE.md with IndicatorConfig model and API endpoints documentation
+- [X] T086 [P] Update CLAUDE.md with IndicatorConfig model and API endpoints documentation
 
 ### Performance Monitoring & Validation
 

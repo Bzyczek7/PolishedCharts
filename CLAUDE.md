@@ -62,6 +62,106 @@ Python 3.11+ (backend), TypeScript 5.9+ (frontend): Follow standard conventions
   library/API documentation. This means you should automatically use the Context7 MCP
   tools to resolve library id and get library docs without me having to explicitly ask.
 
+## Indicator Database Storage (Feature 001-indicator-storage)
+
+### Overview
+Indicator configurations are now stored in PostgreSQL instead of browser localStorage, enabling:
+- Multi-device sync: Access indicators on any device
+- Persistence: Indicators survive browser cache clearing
+- Guest transitions: Merge guest indicators into authenticated account
+
+### Database Model: IndicatorConfig
+
+**Location**: `backend/app/models/indicator_config.py`
+
+**Schema**:
+```sql
+CREATE TABLE indicator_configs (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    uuid UUID NOT NULL,
+    indicator_name VARCHAR(50) NOT NULL,      -- 'sma', 'ema', 'tdfi', etc.
+    indicator_category VARCHAR(20) NOT NULL,  -- 'overlay' or 'oscillator'
+    indicator_params JSON NOT NULL,           -- {'length': 20}
+    display_name VARCHAR(255) NOT NULL,       -- "SMA (20)"
+    style JSON NOT NULL,                      -- {color, lineWidth, ...}
+    is_visible BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uq_indicator_config_user_uuid UNIQUE (user_id, uuid)
+);
+```
+
+**Key Points**:
+- Composite unique constraint `(user_id, uuid)` ensures UUID is unique per user
+- `user_id` can be NULL for guest/unassigned indicators
+- `updated_at` used for merge conflict resolution (2-minute buffer)
+
+### API Endpoints
+
+**Base URL**: `/api/v1/indicator-configs`
+
+**Endpoints**:
+- `GET /indicator-configs` - Retrieve all indicators for authenticated user
+- `POST /indicator-configs` - Create new indicator configuration
+- `PUT /indicator-configs/{uuid}` - Update existing indicator
+- `DELETE /indicator-configs/{uuid}` - Delete indicator
+
+**Authentication**: All endpoints require Firebase ID token in `Authorization: Bearer <token>` header
+
+### Frontend Hook
+
+**Location**: `frontend/src/hooks/useIndicatorInstances.ts`
+
+**Features**:
+- API-first with localStorage fallback (offline support)
+- Optimistic updates with error rollback
+- Automatic retry with exponential backoff (30-second timeout)
+- Guest mode: localStorage only
+
+**Usage**:
+```typescript
+const {
+  indicators,      // Array of IndicatorInstance
+  loading,         // Boolean
+  error,           // Error | null
+  addIndicator,    // (indicator) => Promise<void>
+  removeIndicator, // (id) => Promise<void>
+  updateStyle,     // (id, style) => Promise<void>
+  updateParams,    // (id, params) => Promise<void>
+  toggleVisibility,// (id) => Promise<void>
+} = useIndicatorInstances();
+```
+
+### Merge Semantics (Guest → Authenticated)
+
+**Operation**: Upsert by `uuid` within `user_id` scope
+
+**Algorithm**:
+1. If `uuid` doesn't exist for user: INSERT
+2. If `uuid` exists and `guest.updated_at > existing.updated_at + 2 minutes`: UPDATE
+3. If timestamps within ±2 minutes: Keep existing (prefer cloud, deterministic)
+
+**Merge Endpoint**: `POST /api/v1/merge/sync`
+- Includes guest indicators in request payload
+- Returns merged indicator list
+
+### Performance Targets
+- Indicator retrieval: <2 seconds (SC-001)
+- Indicator sync: <1 second for typical configs (SC-003)
+- 100% merge success rate (SC-004)
+
+### Migration Script
+
+**Location**: `frontend/src/migrations/migrateIndicatorsToCloud.ts`
+
+**Purpose**: One-time migration of existing localStorage indicators to cloud
+
+**Usage** (in browser console):
+```javascript
+await window.migrateIndicatorsToCloud()
+```
+
 ## Cache Configuration (Feature 014)
 
 ### Indicator Caching

@@ -54,6 +54,8 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await session.execute(text("TRUNCATE TABLE layouts CASCADE"))
         await session.execute(text("TRUNCATE TABLE user_watchlists CASCADE"))
         await session.execute(text("TRUNCATE TABLE users CASCADE"))
+        # Truncate indicator_configs table (001-indicator-storage)
+        await session.execute(text("TRUNCATE TABLE indicator_configs CASCADE"))
         await session.commit()
 
         # Begin a transaction that will be rolled back
