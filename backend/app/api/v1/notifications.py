@@ -148,7 +148,7 @@ async def get_alert_notification_settings(
             detail=f"Alert {alert_id} not found"
         )
 
-    await check_notification_ownership(alert.user_id, user)
+    await check_notification_ownership(alert.user_id, user, db)
 
     settings = await get_alert_notification_settings_svc(db, alert_id)
 
@@ -197,7 +197,7 @@ async def create_alert_notification_settings(
             detail=f"Alert {settings_in.alert_id} not found"
         )
 
-    await check_notification_ownership(alert.user_id, user)
+    await check_notification_ownership(alert.user_id, user, db)
 
     settings = await create_or_update_alert_settings(
         db,
@@ -232,7 +232,7 @@ async def update_alert_notification_settings(
             detail=f"Alert {alert_id} not found"
         )
 
-    await check_notification_ownership(alert.user_id, user)
+    await check_notification_ownership(alert.user_id, user, db)
 
     settings = await create_or_update_alert_settings(
         db,
