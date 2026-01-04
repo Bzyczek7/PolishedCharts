@@ -17,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuthContext';
 import { Loader2 } from 'lucide-react';
 import { ProviderLinkingPrompt } from './ProviderLinkingPrompt';
 

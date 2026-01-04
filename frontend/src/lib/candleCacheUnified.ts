@@ -71,11 +71,18 @@ export async function mergeAndPersistCandles(
   existingCandles: Candle[],
   newCandles: Candle[]
 ): Promise<Candle[]> {
-  // Merge: deduplicate by timestamp, sort
-  const existingTimestamps = new Set(existingCandles.map(c => c.timestamp))
-  const uniqueNewCandles = newCandles.filter(c => !existingTimestamps.has(c.timestamp))
+  // First, deduplicate the new candles by timestamp
+  const uniqueNewCandlesMap = new Map<string, Candle>();
+  newCandles.forEach(candle => {
+    uniqueNewCandlesMap.set(candle.timestamp, candle);
+  });
+  const uniqueNewCandles = Array.from(uniqueNewCandlesMap.values());
 
-  const mergedCandles = [...existingCandles, ...uniqueNewCandles].sort((a, b) =>
+  // Then merge with existing candles, avoiding duplicates
+  const existingTimestamps = new Set(existingCandles.map(c => c.timestamp));
+  const filteredNewCandles = uniqueNewCandles.filter(c => !existingTimestamps.has(c.timestamp));
+
+  const mergedCandles = [...existingCandles, ...filteredNewCandles].sort((a, b) =>
     new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
   )
 

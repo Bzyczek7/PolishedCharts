@@ -15,6 +15,7 @@ import type {
   GuestAlert,
   GuestWatchlist,
   GuestLayout,
+  GuestIndicator,
   StorageMigration,
   UseLocalStorageReturn,
 } from '../types/auth';
@@ -109,6 +110,7 @@ const migrations: StorageMigration[] = [
         alerts,
         watchlist,
         layouts,
+        indicators: data.indicators || [],
       };
     },
   },
@@ -165,6 +167,7 @@ export function useLocalStorage(): UseLocalStorageReturn {
           alerts: [],
           watchlist: addWatchlistMetadata({}),
           layouts: [],
+          indicators: [],
         };
       } else {
         parsedData = JSON.parse(raw);
@@ -188,6 +191,7 @@ export function useLocalStorage(): UseLocalStorageReturn {
         alerts: [],
         watchlist: addWatchlistMetadata({}),
         layouts: [],
+        indicators: [],
       };
       setData(emptyData);
       setIsLoaded(true);
@@ -222,6 +226,7 @@ export function useLocalStorage(): UseLocalStorageReturn {
         alerts: [],
         watchlist: addWatchlistMetadata({}),
         layouts: [],
+        indicators: [],
       };
       setData(emptyData);
     } catch (error) {

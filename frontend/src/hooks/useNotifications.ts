@@ -23,7 +23,7 @@ import type { ToastNotificationData, NotificationType, SoundType } from "@/types
 import { toastManager, setupToastKeyboardHandler } from "@/lib/toastManager";
 import { soundManager } from "@/lib/soundManager";
 import { useSystemNotificationAvailability } from "@/hooks/useNotificationPermission";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuthContext";
 
 // Default preferences for guests
 const DEFAULT_GUEST_PREFERENCES = {

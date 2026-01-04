@@ -1,32 +1,58 @@
 /**
- * useIndicatorInstances hook - Manages overlay indicator instances with localStorage persistence
- * Feature: 008-overlay-indicator-rendering
- * Phase 2: Foundational (T005, T008)
+ * useIndicatorInstances hook - Manages overlay indicator instances with API-first storage
+ * Feature: 001-indicator-storage
+ * Phase 3: User Story 1 - Multi-Device Indicator Sync
  *
  * Provides CRUD operations for indicator instances with:
- * - Per-instance localStorage (indicator_instance:${id})
- * - Symbol-level list index (indicator_list:${symbol})
- * - Debounced writes (100ms) to prevent jank
- * - localStorage quota error handling with graceful degradation
+ * - API-first storage (PostgreSQL) for authenticated users
+ * - localStorage fallback for offline scenarios (FR-008)
+ * - Retry logic with exponential backoff (30-second timeout)
+ * - Optimistic updates with rollback on error
+ *
+ * This is a NEW implementation that replaces the localStorage-only version.
+ * The old version is preserved in useIndicatorInstancesLegacy.ts for reference.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { IndicatorInstance, IndicatorListIndex, IndicatorStyle } from '../components/types/indicators';
 import { DEFAULT_INDICATOR_STYLE, INDICATOR_DEFAULT_COLORS } from '../components/types/indicators';
+import { useAuth } from '../hooks/useAuthContext';
 
-// localStorage key templates per data-model.md
+// API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+// Retry configuration (SC-003: <1 second sync for typical configs, 30-second timeout)
+const MAX_RETRY_ATTEMPTS = 5;
+const INITIAL_RETRY_DELAY_MS = 1000; // 1 second
+const MAX_RETRY_DELAY_MS = 10000; // 10 seconds
+
+// localStorage key templates (for fallback)
 const INSTANCE_KEY_PREFIX = 'indicatorinstance';
-const LIST_KEY = 'indicatorlistglobal';  // Changed from per-symbol to global
+const LIST_KEY = 'indicatorlistglobal';
 
-// Debounce delay for localStorage writes (ms)
+// Debounce delay for localStorage writes (ms) - only used for fallback
 const WRITE_DEBOUNCE_MS = 100;
 
 /**
+ * Sleep helper for retry delay
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Calculate exponential backoff delay with jitter
+ */
+function calculateRetryDelay(attempt: number): number {
+  const exponentialDelay = Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt), MAX_RETRY_DELAY_MS);
+  const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+  return exponentialDelay + jitter;
+}
+
+/**
  * Generate a UUID v4 identifier for indicator instances
- * Feature 008 - Data Model: UUID v4 format required
  */
 function generateUUID(): string {
-  // Use crypto.randomUUID() if available (modern browsers)
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
@@ -61,7 +87,6 @@ function createIndicatorInstance(
 
   return {
     id,
-    // symbol field removed - indicators are now global
     indicatorType: {
       category: 'overlay',
       name: indicatorName,
@@ -78,21 +103,55 @@ function createIndicatorInstance(
 }
 
 /**
- * localStorage wrapper with error handling
- * T008: Graceful degradation when localStorage is full or unavailable
+ * Convert IndicatorInstance to API format
+ */
+function instanceToAPI(instance: IndicatorInstance) {
+  return {
+    uuid: instance.id,
+    indicator_name: instance.indicatorType.name.toLowerCase(),
+    indicator_category: instance.indicatorType.category,
+    indicator_params: instance.indicatorType.params,
+    display_name: instance.displayName,
+    style: instance.style,
+    is_visible: instance.isVisible,
+  };
+}
+
+/**
+ * Convert API response to IndicatorInstance
+ */
+function apiToInstance(apiResponse: any): IndicatorInstance {
+  return {
+    id: apiResponse.uuid,
+    indicatorType: {
+      category: apiResponse.indicator_category,
+      name: apiResponse.indicator_name,
+      params: apiResponse.indicator_params,
+    },
+    displayName: apiResponse.display_name,
+    style: apiResponse.style,
+    isVisible: apiResponse.is_visible,
+    createdAt: apiResponse.created_at,
+  };
+}
+
+// =============================================================================
+// localStorage Fallback Functions (FR-008)
+// =============================================================================
+
+/**
+ * Safe localStorage setItem with error handling
  */
 function safeSetItem(key: string, value: string): boolean {
   try {
     localStorage.setItem(key, value);
     return true;
   } catch (error) {
-    // Handle QuotaExceededError or other localStorage errors
     if (error instanceof DOMException && (
       error.name === 'QuotaExceededError' ||
-      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' // Firefox
+      error.name === 'NS_ERROR_DOM_QUOTA_REACHED'
     )) {
-      console.warn('[useIndicatorInstances] localStorage quota exceeded, changes not persisted:', key);
-      // Could emit an event or set a state to notify the user
+      console.warn('[useIndicatorInstances] localStorage quota exceeded:', key);
       return false;
     }
     console.error('[useIndicatorInstances] localStorage error:', error);
@@ -120,31 +179,7 @@ function safeRemoveItem(key: string): boolean {
 }
 
 /**
- * Migration: Convert old indicator names (e.g., 'cci_20') to clean names ('cci')
- * Old format appended parameter suffixes to indicator names, new format uses clean names
- */
-function migrateIndicatorName(name: string): string {
-  // Pattern: indicator_name_number (e.g., 'cci_20', 'rsi_14', 'sma_50')
-  const match = name.match(/^([a-zA-Z_]+)_(\d+(\.\d+)?)$/);
-  if (match) {
-    const baseName = match[1];
-    // Check if it's a known indicator pattern (not something like 'adxvma_period')
-    const knownIndicators = [
-      'sma', 'ema', 'dema', 'tema', 'wma', 'hma', 'vwma', 'kama', 'mama',
-      'rsi', 'cci', 'adx', 'aroon', 'mfi', 'willr', 'cmo', 'mom', 'roc',
-      'atr', 'stoch', 'stochrsi', 'macd', 'bbands', 'kc', 'donchian',
-      'uo', 'tsi', 'pgo', 'apo', 'ppo', 'ao', 'obv', 'fi', 'eri',
-    ];
-    if (knownIndicators.includes(baseName)) {
-      console.log(`[useIndicatorInstances] Migrating indicator name: '${name}' -> '${baseName}'`);
-      return baseName;
-    }
-  }
-  return name;
-}
-
-/**
- * Load global indicator list index
+ * Load global indicator list from localStorage
  */
 function loadIndicatorList(): IndicatorListIndex | null {
   const data = safeGetItem(LIST_KEY);
@@ -159,15 +194,14 @@ function loadIndicatorList(): IndicatorListIndex | null {
 }
 
 /**
- * Save global indicator list index
+ * Save global indicator list to localStorage
  */
 function saveIndicatorList(listIndex: IndicatorListIndex): boolean {
   return safeSetItem(LIST_KEY, JSON.stringify(listIndex));
 }
 
 /**
- * Load a single indicator instance
- * Applies migration for old indicator names (e.g., 'cci_20' -> 'cci')
+ * Load a single indicator instance from localStorage
  */
 function loadIndicatorInstance(id: string): IndicatorInstance | null {
   const key = `${INSTANCE_KEY_PREFIX}${id}`;
@@ -175,17 +209,7 @@ function loadIndicatorInstance(id: string): IndicatorInstance | null {
   if (!data) return null;
 
   try {
-    const instance = JSON.parse(data) as IndicatorInstance;
-    // Apply migration for old indicator names
-    if (instance.indicatorType && instance.indicatorType.name) {
-      const migratedName = migrateIndicatorName(instance.indicatorType.name);
-      if (migratedName !== instance.indicatorType.name) {
-        instance.indicatorType.name = migratedName;
-        // Save the migrated instance back to localStorage
-        safeSetItem(key, JSON.stringify(instance));
-      }
-    }
-    return instance;
+    return JSON.parse(data) as IndicatorInstance;
   } catch (error) {
     console.error('[useIndicatorInstances] Failed to parse indicator instance:', error);
     return null;
@@ -193,7 +217,7 @@ function loadIndicatorInstance(id: string): IndicatorInstance | null {
 }
 
 /**
- * Save a single indicator instance
+ * Save a single indicator instance to localStorage
  */
 function saveIndicatorInstance(instance: IndicatorInstance): boolean {
   const key = `${INSTANCE_KEY_PREFIX}${instance.id}`;
@@ -201,7 +225,7 @@ function saveIndicatorInstance(instance: IndicatorInstance): boolean {
 }
 
 /**
- * Remove a single indicator instance
+ * Remove a single indicator instance from localStorage
  */
 function removeIndicatorInstance(id: string): boolean {
   const key = `${INSTANCE_KEY_PREFIX}${id}`;
@@ -209,192 +233,317 @@ function removeIndicatorInstance(id: string): boolean {
 }
 
 /**
- * Result of adding an indicator
+ * Clear all indicators from localStorage
  */
+function clearLocalStorageIndicators(): void {
+  const listIndex = loadIndicatorList();
+  if (listIndex) {
+    for (const id of listIndex.instances) {
+      removeIndicatorInstance(id);
+    }
+  }
+  safeRemoveItem(LIST_KEY);
+}
+
+// =============================================================================
+// Result Types
+// =============================================================================
+
 export interface AddIndicatorResult {
   success: boolean;
   instanceId?: string;
   error?: string;
 }
 
-/**
- * useIndicatorInstances hook - Manages overlay indicator instances with GLOBAL localStorage persistence
- * Feature: Global Layout Persistence (TradingView-like behavior)
- *
- * Manages overlay indicator instances with:
- * - Per-instance localStorage keys (indicatorinstance${id})
- * - GLOBAL list index (indicatorlistglobal) - no longer per-symbol
- * - Debounced writes (100ms)
- * - Graceful degradation on localStorage errors
- */
+// =============================================================================
+// Main Hook
+// =============================================================================
+
 export function useIndicatorInstances() {
+  const { user, isAuthenticated } = useAuth();
   const [instances, setInstances] = useState<IndicatorInstance[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isOffline, setIsOffline] = useState(false); // Track localStorage availability
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isOffline, setIsOffline] = useState(false);
 
-  // Refs for debouncing and tracking
+  // Refs for tracking pending operations
   const pendingWritesRef = useRef<Map<string, IndicatorInstance>>(new Map());
   const writeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLoadingRef = useRef(false);
 
-  // Load global instances on mount (no longer per-symbol)
-  useEffect(() => {
-    const listIndex = loadIndicatorList();
-    if (!listIndex) {
-      setInstances([]);
-      setIsLoaded(true);
-      return;
-    }
+  /**
+   * Fetch indicators from API with retry logic
+   */
+  const fetchIndicatorsFromAPI = useCallback(async (token: string): Promise<IndicatorInstance[]> => {
+    const axios = (await import('axios')).default;
+    
+    const response = await axios.get(`${API_BASE_URL}/api/v1/indicator-configs`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      timeout: 10000, // 10 second timeout
+    });
 
-    // Load each instance from its individual key
-    const loadedInstances: IndicatorInstance[] = [];
-    for (const id of listIndex.instances) {
-      const instance = loadIndicatorInstance(id);
-      if (instance) {
-        loadedInstances.push(instance);
-      }
-    }
-
-    setInstances(loadedInstances);
-    setIsLoaded(true);
+    return response.data.map(apiToInstance);
   }, []);
 
   /**
-   * Flush pending writes to localStorage
-   * Called after debounce delay or when unmounting
+   * Load indicators - try API first, fallback to localStorage (FR-008)
    */
-  const flushPendingWrites = useCallback(() => {
-    if (pendingWritesRef.current.size === 0) {
-      return;
-    }
+  const loadIndicators = useCallback(async () => {
+    if (isLoadingRef.current) return;
+    isLoadingRef.current = true;
+    setIsLoading(true);
+    setError(null);
 
-    // Write all pending instances
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const [id, instance] of pendingWritesRef.current) {
-      if (saveIndicatorInstance(instance)) {
-        successCount++;
+    try {
+      if (isAuthenticated && user) {
+        // Authenticated user - try API first
+        try {
+          const token = await user.getIdToken();
+          const apiInstances = await fetchIndicatorsFromAPI(token);
+          setInstances(apiInstances);
+          setIsOffline(false);
+        } catch (apiError) {
+          console.warn('[useIndicatorInstances] API fetch failed, using localStorage fallback:', apiError);
+          // Fallback to localStorage (FR-008)
+          const listIndex = loadIndicatorList();
+          if (listIndex) {
+            const loadedInstances: IndicatorInstance[] = [];
+            for (const id of listIndex.instances) {
+              const instance = loadIndicatorInstance(id);
+              if (instance) loadedInstances.push(instance);
+            }
+            setInstances(loadedInstances);
+            setIsOffline(true); // Show offline indicator
+          } else {
+            setInstances([]);
+          }
+          setError(apiError instanceof Error ? apiError : new Error('API fetch failed'));
+        }
       } else {
-        failCount++;
+        // Guest user - use localStorage only
+        const listIndex = loadIndicatorList();
+        if (listIndex) {
+          const loadedInstances: IndicatorInstance[] = [];
+          for (const id of listIndex.instances) {
+            const instance = loadIndicatorInstance(id);
+            if (instance) loadedInstances.push(instance);
+          }
+          setInstances(loadedInstances);
+        } else {
+          setInstances([]);
+        }
+        setIsOffline(false);
+      }
+    } catch (err) {
+      console.error('[useIndicatorInstances] Failed to load indicators:', err);
+      setError(err instanceof Error ? err : new Error('Failed to load indicators'));
+    } finally {
+      setIsLoading(false);
+      setIsLoaded(true);
+      isLoadingRef.current = false;
+    }
+  }, [isAuthenticated, user, fetchIndicatorsFromAPI]);
+
+  // Load indicators on mount and when auth state changes
+  useEffect(() => {
+    loadIndicators();
+  }, [isAuthenticated, user]);
+
+  /**
+   * Create indicator via API with retry logic
+   */
+  const createIndicatorAPI = useCallback(async (instance: IndicatorInstance, token: string): Promise<void> => {
+    const axios = (await import('axios')).default;
+    
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        await axios.post(
+          `${API_BASE_URL}/api/v1/indicator-configs`,
+          instanceToAPI(instance),
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            timeout: 10000,
+          }
+        );
+        return; // Success
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('Failed to create indicator');
+        if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+          const delay = calculateRetryDelay(attempt);
+          await sleep(delay);
+        }
       }
     }
-
-    // Notify user if writes failed (T008: graceful degradation)
-    if (failCount > 0) {
-      setIsOffline(true);
-      console.warn(`[useIndicatorInstances] ${failCount} localStorage write(s) failed - changes applied for current session only`);
-    } else {
-      setIsOffline(false);
-    }
-
-    pendingWritesRef.current.clear();
-
-    if (writeTimeoutRef.current) {
-      clearTimeout(writeTimeoutRef.current);
-      writeTimeoutRef.current = null;
-    }
+    throw lastError;
   }, []);
 
-  // Flush pending writes on unmount
-  useEffect(() => {
-    return () => {
-      flushPendingWrites();
-    };
-  }, [flushPendingWrites]);
+  /**
+   * Delete indicator via API with retry logic
+   */
+  const deleteIndicatorAPI = useCallback(async (instanceId: string, token: string): Promise<void> => {
+    const axios = (await import('axios')).default;
+    
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        await axios.delete(
+          `${API_BASE_URL}/api/v1/indicator-configs/${instanceId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            timeout: 10000,
+          }
+        );
+        return; // Success
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('Failed to delete indicator');
+        if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+          const delay = calculateRetryDelay(attempt);
+          await sleep(delay);
+        }
+      }
+    }
+    throw lastError;
+  }, []);
 
   /**
-   * Schedule a debounced write for an instance
+   * Update indicator via API with retry logic
    */
-  const scheduleInstanceWrite = useCallback((instance: IndicatorInstance) => {
-    pendingWritesRef.current.set(instance.id, instance);
-
-    // Schedule flush after debounce delay
-    if (writeTimeoutRef.current) {
-      clearTimeout(writeTimeoutRef.current);
+  const updateIndicatorAPI = useCallback(async (instance: IndicatorInstance, token: string): Promise<void> => {
+    const axios = (await import('axios')).default;
+    
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        await axios.put(
+          `${API_BASE_URL}/api/v1/indicator-configs/${instance.id}`,
+          {
+            indicator_params: instance.indicatorType.params,
+            display_name: instance.displayName,
+            style: instance.style,
+            is_visible: instance.isVisible,
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            timeout: 10000,
+          }
+        );
+        return; // Success
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('Failed to update indicator');
+        if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+          const delay = calculateRetryDelay(attempt);
+          await sleep(delay);
+        }
+      }
     }
-
-    writeTimeoutRef.current = setTimeout(() => {
-      flushPendingWrites();
-    }, WRITE_DEBOUNCE_MS);
-  }, [flushPendingWrites]);
-
-  /**
-   * Schedule a debounced write for the list index
-   * Flushes pending instance writes first to ensure data consistency
-   */
-  const scheduleListWrite = useCallback((listIndex: IndicatorListIndex) => {
-    if (writeTimeoutRef.current) {
-      clearTimeout(writeTimeoutRef.current);
-    }
-
-    writeTimeoutRef.current = setTimeout(() => {
-      // Flush any pending instance writes BEFORE updating the list
-      // This ensures instances are saved before their IDs are added to the list
-      flushPendingWrites();
-      // Then save the updated list
-      saveIndicatorList(listIndex);
-    }, WRITE_DEBOUNCE_MS);
-  }, [flushPendingWrites]);
+    throw lastError;
+  }, []);
 
   /**
    * Add a new indicator instance
    */
-  const addIndicator = useCallback((
+  const addIndicator = useCallback(async (
     indicatorName: string,
     params: Record<string, number | string>
-  ): AddIndicatorResult => {
+  ): Promise<AddIndicatorResult> => {
     const newInstance = createIndicatorInstance(indicatorName, params);
 
-    // Update state immediately (optimistic update)
+    // Optimistic update - add to state immediately
     const newInstances = [...instances, newInstance];
     setInstances(newInstances);
 
-    // Update list index
-    const listIndex: IndicatorListIndex = {
-      instances: newInstances.map(inst => inst.id),
-      updatedAt: new Date().toISOString(),
-    };
-
-    // Schedule debounced localStorage writes
-    scheduleInstanceWrite(newInstance);
-    scheduleListWrite(listIndex);
-
-    return { success: true, instanceId: newInstance.id };
-  }, [instances, scheduleInstanceWrite, scheduleListWrite]);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await createIndicatorAPI(newInstance, token);
+        return { success: true, instanceId: newInstance.id };
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to create indicator in API, rolling back:', err);
+        setInstances(instances); // Rollback state
+        
+        // Fallback to localStorage
+        saveIndicatorInstance(newInstance);
+        const listIndex: IndicatorListIndex = {
+          instances: newInstances.map(inst => inst.id),
+          updatedAt: new Date().toISOString(),
+        };
+        saveIndicatorList(listIndex);
+        setIsOffline(true);
+        
+        return { 
+          success: true, 
+          instanceId: newInstance.id,
+          error: 'Saved locally only - API unavailable'
+        };
+      }
+    } else {
+      // Guest mode - save to localStorage
+      saveIndicatorInstance(newInstance);
+      const listIndex: IndicatorListIndex = {
+        instances: newInstances.map(inst => inst.id),
+        updatedAt: new Date().toISOString(),
+      };
+      saveIndicatorList(listIndex);
+      return { success: true, instanceId: newInstance.id };
+    }
+  }, [instances, isAuthenticated, user, createIndicatorAPI]);
 
   /**
    * Remove an indicator instance
    */
-  const removeIndicator = useCallback((instanceId: string): boolean => {
+  const removeIndicator = useCallback(async (instanceId: string): Promise<boolean> => {
+    const previousInstances = instances;
+    
+    // Optimistic update - remove from state immediately
     const newInstances = instances.filter(inst => inst.id !== instanceId);
     setInstances(newInstances);
 
-    // Remove from localStorage immediately (no debounce for removal)
-    removeIndicatorInstance(instanceId);
-
-    // Update list index
-    const listIndex: IndicatorListIndex = {
-      instances: newInstances.map(inst => inst.id),
-      updatedAt: new Date().toISOString(),
-    };
-
-    scheduleListWrite(listIndex);
-
-    return true;
-  }, [instances, scheduleListWrite]);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await deleteIndicatorAPI(instanceId, token);
+        return true;
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to delete indicator from API, rolling back:', err);
+        setInstances(previousInstances); // Rollback state
+        return false;
+      }
+    } else {
+      // Guest mode - remove from localStorage
+      removeIndicatorInstance(instanceId);
+      const listIndex: IndicatorListIndex = {
+        instances: newInstances.map(inst => inst.id),
+        updatedAt: new Date().toISOString(),
+      };
+      saveIndicatorList(listIndex);
+      return true;
+    }
+  }, [instances, isAuthenticated, user, deleteIndicatorAPI]);
 
   /**
    * Update instance style
-   * T022: Debounced style change handler (immediate chart update, debounced localStorage)
    */
-  const updateStyle = useCallback((
+  const updateStyle = useCallback(async (
     instanceId: string,
     style: Partial<IndicatorStyle>
-  ): boolean => {
+  ): Promise<boolean> => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
-    // Merge style with existing
     const updatedStyle: IndicatorStyle = {
       ...instance.style,
       ...style,
@@ -405,30 +554,41 @@ export function useIndicatorInstances() {
       style: updatedStyle,
     };
 
-    // Update state immediately for chart
+    // Optimistic update
     const newInstances = instances.map(inst =>
       inst.id === instanceId ? updatedInstance : inst
     );
     setInstances(newInstances);
 
-    // Schedule debounced localStorage write
-    scheduleInstanceWrite(updatedInstance);
-
-    return true;
-  }, [instances, scheduleInstanceWrite]);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await updateIndicatorAPI(updatedInstance, token);
+        return true;
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to update style in API, rolling back:', err);
+        setInstances(instances);
+        return false;
+      }
+    } else {
+      // Guest mode - save to localStorage
+      saveIndicatorInstance(updatedInstance);
+      return true;
+    }
+  }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
    * Update instance parameters
-   * T029: Debounced parameter change handler with refetch trigger
    */
-  const updateParams = useCallback((
+  const updateParams = useCallback(async (
     instanceId: string,
     params: Record<string, number | string>
-  ): boolean => {
+  ): Promise<boolean> => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
-    // Update params and regenerate display name
     const updatedParams = { ...instance.indicatorType.params, ...params };
     const paramValues = Object.values(updatedParams).join(', ');
     const displayName = `${instance.indicatorType.name.toUpperCase()}(${paramValues})`;
@@ -442,23 +602,35 @@ export function useIndicatorInstances() {
       displayName,
     };
 
-    // Update state immediately
+    // Optimistic update
     const newInstances = instances.map(inst =>
       inst.id === instanceId ? updatedInstance : inst
     );
     setInstances(newInstances);
 
-    // Schedule debounced localStorage write
-    scheduleInstanceWrite(updatedInstance);
-
-    return true;
-  }, [instances, scheduleInstanceWrite]);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await updateIndicatorAPI(updatedInstance, token);
+        return true;
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to update params in API, rolling back:', err);
+        setInstances(instances);
+        return false;
+      }
+    } else {
+      // Guest mode - save to localStorage
+      saveIndicatorInstance(updatedInstance);
+      return true;
+    }
+  }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
    * Toggle instance visibility
-   * T033: Visibility toggle with localStorage persistence
    */
-  const toggleVisibility = useCallback((instanceId: string): boolean => {
+  const toggleVisibility = useCallback(async (instanceId: string): Promise<boolean> => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -467,26 +639,38 @@ export function useIndicatorInstances() {
       isVisible: !instance.isVisible,
     };
 
-    // Update state immediately
+    // Optimistic update
     const newInstances = instances.map(inst =>
       inst.id === instanceId ? updatedInstance : inst
     );
     setInstances(newInstances);
 
-    // Schedule debounced localStorage write
-    scheduleInstanceWrite(updatedInstance);
-
-    return true;
-  }, [instances, scheduleInstanceWrite]);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await updateIndicatorAPI(updatedInstance, token);
+        return true;
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to toggle visibility in API, rolling back:', err);
+        setInstances(instances);
+        return false;
+      }
+    } else {
+      // Guest mode - save to localStorage
+      saveIndicatorInstance(updatedInstance);
+      return true;
+    }
+  }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
-   * Update instance (generic method for partial updates)
-   * T047: Support for settings dialog updates
+   * Update instance (generic method)
    */
-  const updateInstance = useCallback((
+  const updateInstance = useCallback(async (
     instanceId: string,
     updates: Partial<IndicatorInstance>
-  ): boolean => {
+  ): Promise<boolean> => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -495,28 +679,50 @@ export function useIndicatorInstances() {
       ...updates,
     };
 
-    // Update state immediately
+    // Optimistic update
     const newInstances = instances.map(inst =>
       inst.id === instanceId ? updatedInstance : inst
     );
     setInstances(newInstances);
 
-    // Schedule debounced localStorage write
-    scheduleInstanceWrite(updatedInstance);
+    // Try to sync with API if authenticated
+    if (isAuthenticated && user) {
+      try {
+        const token = await user.getIdToken();
+        await updateIndicatorAPI(updatedInstance, token);
+        return true;
+      } catch (err) {
+        // Rollback on error
+        console.error('[useIndicatorInstances] Failed to update instance in API, rolling back:', err);
+        setInstances(instances);
+        return false;
+      }
+    } else {
+      // Guest mode - save to localStorage
+      saveIndicatorInstance(updatedInstance);
+      return true;
+    }
+  }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
-    return true;
-  }, [instances, scheduleInstanceWrite]);
+  /**
+   * Clear localStorage (for guest -> auth transition)
+   */
+  const clearLocalStorage = useCallback(() => {
+    clearLocalStorageIndicators();
+  }, []);
 
   return {
     instances,
     isLoaded,
-    isOffline, // T008: Expose offline state for UI notification
+    isLoading,
+    error,
+    isOffline,
     addIndicator,
     removeIndicator,
     updateStyle,
     updateParams,
     toggleVisibility,
     updateInstance,
-    flushPendingWrites,
+    clearLocalStorage,
   };
 }

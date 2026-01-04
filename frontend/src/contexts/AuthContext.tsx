@@ -70,7 +70,7 @@ interface AuthContextType {
   clearProviderLinkingError: () => void;
 }
 
-const AuthContextValue = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // =============================================================================
 // Props
@@ -95,7 +95,7 @@ interface AuthProviderProps {
  * - Automatic token refresh
  * - Email verification enforcement
  */
-export function AuthProvider({ children }: AuthProviderProps) {
+const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -547,6 +547,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         alerts: guestData.alerts,
         watchlist: guestData.watchlist,
         layouts: guestData.layouts,
+        indicators: guestData.indicators || [],
       };
 
       const response: MergeResponse = await apiMergeGuestData(mergeRequest);
@@ -554,7 +555,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clear localStorage after successful merge
       if (response.stats.alerts.added > 0 || response.stats.alerts.updated > 0 ||
           response.stats.watchlist.added > 0 || response.stats.watchlist.updated > 0 ||
-          response.stats.layouts.added > 0 || response.stats.layouts.updated > 0) {
+          response.stats.layouts.added > 0 || response.stats.layouts.updated > 0 ||
+          response.stats.indicators.added > 0 || response.stats.indicators.updated > 0) {
         await clear();
       }
 
@@ -595,36 +597,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   return (
-    <AuthContextValue.Provider value={value}>
+    <AuthContext.Provider value={value}>
       {children}
-    </AuthContextValue.Provider>
+    </AuthContext.Provider>
   );
 }
 
-// =============================================================================
-// Hook
-// =============================================================================
-
-/**
- * Hook to access the auth context.
- *
- * @throws Error if used outside of AuthProvider
- * @returns AuthContextType
- */
-export function useAuthContext(): AuthContextType {
-  const context = useContext(AuthContextValue);
-  if (!context) {
-    throw new Error('useAuthContext must be used within an AuthProvider');
-  }
-  return context;
-}
-
-// =============================================================================
-// Convenience Hook Alias
-// =============================================================================
-
-/**
- * Alias for useAuthContext for backward compatibility.
- * Preferred hook name is useAuthContext.
- */
-export const useAuth = useAuthContext;
+export default AuthProvider;

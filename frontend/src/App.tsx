@@ -31,7 +31,7 @@ import type { WatchlistItem } from './api/watchlist'
 // Feature 011: Firebase Authentication
 import { AuthDialog } from './components/AuthDialog'
 import { UserMenu } from './components/UserMenu'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from './hooks/useAuthContext'
 // Feature 009: Import watchlist API and search components
 import { WatchlistSearch, type SymbolAddResult } from './components/WatchlistSearch'
 import { useWatchlist } from './hooks/useWatchlist'

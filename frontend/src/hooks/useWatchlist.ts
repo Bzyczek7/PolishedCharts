@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../hooks/useAuthContext'
 import {
   getWatchlist as apiGetWatchlist,
   addToWatchlist as apiAddToWatchlist,

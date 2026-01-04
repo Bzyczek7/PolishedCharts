@@ -90,6 +90,7 @@ export interface LocalStorageData {
   alerts: GuestAlert[];
   watchlist: GuestWatchlist;
   layouts: GuestLayout[];
+  indicators: GuestIndicator[];
 }
 
 /**
@@ -130,6 +131,25 @@ export interface GuestLayout {
   config: LayoutConfig;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Guest indicator stored in localStorage
+ */
+export interface GuestIndicator {
+  uuid: string;
+  indicatorType: string;  // 'sma', 'ema', 'tdfi', etc.
+  displayName: string;
+  params: Record<string, number>;
+  style: {
+    color: string;
+    lineWidth: number;
+    showLastValue?: boolean;
+    seriesColors?: Record<string, string>;
+  };
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -217,6 +237,7 @@ export interface MergeRequest {
   alerts: GuestAlert[];
   watchlist: GuestWatchlist;
   layouts: GuestLayout[];
+  indicators: GuestIndicator[];
 }
 
 /**
@@ -228,6 +249,7 @@ export interface MergeResponse {
     alerts: MergeEntityStats;
     watchlist: MergeEntityStats;
     layouts: MergeEntityStats;
+    indicators: MergeEntityStats;
   };
 }
 
@@ -247,6 +269,7 @@ export interface MergeStatus {
   alerts: number;
   watchlists: number;
   layouts: number;
+  indicators: number;
 }
 
 /**

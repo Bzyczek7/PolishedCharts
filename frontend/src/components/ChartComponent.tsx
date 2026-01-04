@@ -376,9 +376,13 @@ const ChartComponent = ({
           console.warn('ChartComponent: Found', duplicates.length, 'duplicate candles in input data');
         }
 
-        const uniqueData = sortedData.filter((item, index, arr) =>
-          index === 0 || item.time !== arr[index - 1].time
-        );
+        // Create a map to store unique candles by time, keeping the last one for each time
+        const uniqueMap = new Map();
+        sortedData.forEach(item => {
+          uniqueMap.set(item.time, item);
+        });
+
+        const uniqueData = Array.from(uniqueMap.values());
 
         // Track actual data length after deduplication for offset calculations
         actualDataLengthRef.current = uniqueData.length

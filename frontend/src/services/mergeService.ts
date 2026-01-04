@@ -30,6 +30,7 @@ export async function mergeGuestData(guestData: LocalStorageData): Promise<Merge
     alerts: guestData.alerts,
     watchlist: guestData.watchlist,
     layouts: guestData.layouts,
+    indicators: guestData.indicators || [],
   };
 
   const response = await apiMergeGuestData(mergeRequest);

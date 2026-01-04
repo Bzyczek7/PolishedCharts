@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { Button } from './ui/button';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuthContext';
 import { LogOut, User, Mail } from 'lucide-react';
 
 // =============================================================================

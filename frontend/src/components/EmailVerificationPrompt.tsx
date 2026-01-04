@@ -12,7 +12,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuthContext';
 import { Button } from './ui/button';
 import { Loader2, Mail, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';

@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from './ui/dialog';
 import { Button } from './ui/button';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuthContext';
 import { Loader2 } from 'lucide-react';
 
 // =============================================================================
