@@ -102,17 +102,20 @@ async def health_check():
 async def startup_event():
     print("Starting up and initializing poller...")
 
-    # Auto-migrate database schema
+    # Auto-migrate database schema (synchronous - wait for completion)
     from alembic.config import Config
     from alembic import command
     import asyncio
 
     try:
         alembic_cfg = Config("alembic.ini")
-        asyncio.create_task(asyncio.to_thread(command.upgrade, alembic_cfg, "head"))
-        print("Database migration scheduled")
+        print("Running database migrations...")
+        await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+        print("✅ Database migrations completed")
     except Exception as e:
-        print(f"WARNING: Database migration failed: {e}")
+        print(f"❌ WARNING: Database migration failed: {e}")
+        import traceback
+        traceback.print_exc()
 
     # Initialize Firebase Admin SDK (T020) - CRITICAL for auth
     from app.services.firebase_admin import initialize_firebase, is_firebase_initialized
