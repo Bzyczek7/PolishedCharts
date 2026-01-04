@@ -18,8 +18,8 @@ import type { IndicatorInstance, IndicatorListIndex, IndicatorStyle } from '../c
 import { DEFAULT_INDICATOR_STYLE, INDICATOR_DEFAULT_COLORS } from '../components/types/indicators';
 import { useAuth } from '../hooks/useAuthContext';
 
-// API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// API base URL (note: VITE_API_URL should NOT include /api/v1 path)
+const API_BASE_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
 
 // Retry configuration (SC-003: <1 second sync for typical configs, 30-second timeout)
 const MAX_RETRY_ATTEMPTS = 5;
