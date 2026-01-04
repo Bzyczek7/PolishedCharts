@@ -68,37 +68,15 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /indicator-configs/{uuid}:
+  /indicator-configs/{config_uuid}:
     parameters:
-      - name: uuid
+      - name: config_uuid
         in: path
         required: true
         schema:
           type: string
           format: uuid
         description: Unique identifier of the indicator configuration
-
-    get:
-      tags:
-        - indicator-configs
-      summary: Get indicator configuration by UUID
-      description: Retrieve a single indicator configuration by its UUID
-      operationId: getIndicatorConfig
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Successful response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/IndicatorConfigResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
 
     put:
       tags:
@@ -246,11 +224,6 @@ components:
       type: object
       description: Request schema for creating a new indicator configuration
       properties:
-        uuid:
-          type: string
-          format: uuid
-          description: Optional UUID (generates new UUID if not provided)
-          example: "550e8400-e29b-41d4-a716-446655440000"
         indicator_name:
           type: string
           description: Indicator type name

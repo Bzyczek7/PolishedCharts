@@ -33,6 +33,7 @@ Auto-generated from all feature plans. Last updated: 2025-12-30
 - N/A (frontend-only optimization) (015-symbol-load-performance)
 - TypeScript 5.9+ (frontend), React 19 (016-donation-reminder)
 - localStorage for session state (no backend changes per spec assumptions) (016-donation-reminder)
+- Python 3.11+ (backend), TypeScript 5.9+ (frontend) + FastAPI 0.104+, SQLAlchemy 2.0+, Firebase Admin SDK (backend), React 19, axios (frontend) (001-indicator-storage)
 
 - Python 3.11+ (backend), TypeScript 5.9+ (frontend) (001-initial-setup)
 
@@ -52,9 +53,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 Python 3.11+ (backend), TypeScript 5.9+ (frontend): Follow standard conventions
 
 ## Recent Changes
+- 001-indicator-storage: Added Python 3.11+ (backend), TypeScript 5.9+ (frontend) + FastAPI 0.104+, SQLAlchemy 2.0+, Firebase Admin SDK (backend), React 19, axios (frontend)
 - 016-donation-reminder: Added TypeScript 5.9+ (frontend), React 19
 - 015-symbol-load-performance: Added TypeScript 5.9 (frontend), React 19 + React hooks (useEffect, useCallback, useMemo), lightweight-charts 5.1.0, React 19
-- 014-indicator-cache-optimization: Added Python 3.11+ (backend), TypeScript 5.9+ (frontend) + FastAPI 0.104+, SQLAlchemy 2.0+, asyncpg 0.29+, pandas 2.1+, numpy 1.26+, redis 5.0+, pandas-ta 0.3.14b0
 
 
 <!-- MANUAL ADDITIONS START -->

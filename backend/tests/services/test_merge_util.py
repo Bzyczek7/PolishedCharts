@@ -189,3 +189,406 @@ class TestMergeIdempotency:
         timestamp = datetime.now(timezone.utc)
         results = [should_update(timestamp, timestamp) for _ in range(10)]
         assert all(r is False for r in results), "Tiebreaker must be deterministic"
+
+
+# =============================================================================
+# T055-T061: Tests for upsert_indicator_configs (Feature 001-indicator-storage)
+# =============================================================================
+
+class TestUpsertIndicatorConfigs:
+    """Test suite for upsert_indicator_configs function (T055-T061)."""
+
+    @pytest.fixture
+    async def test_user_with_indicators(self, db_session: AsyncSession):
+        """Create a test user with existing indicators."""
+        from app.models.user import User
+        from app.models.indicator_config import IndicatorConfig
+        import uuid
+
+        user = User(
+            firebase_uid="test_merge_user",
+            email="merge@example.com",
+            display_name="Merge Test User"
+        )
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        # Create existing indicators
+        base_time = datetime.now(timezone.utc) - timedelta(hours=2)
+        existing_indicators = [
+            IndicatorConfig(
+                user_id=user.id,
+                uuid=uuid.UUID('00000000-0000-0000-0000-000000000001'),
+                indicator_name="sma",
+                indicator_category="overlay",
+                indicator_params={"length": 20},
+                display_name="Existing SMA (20)",
+                style={"color": "#FF5733", "lineWidth": 2},
+                is_visible=True,
+                created_at=base_time,
+                updated_at=base_time,
+            ),
+            IndicatorConfig(
+                user_id=user.id,
+                uuid=uuid.UUID('00000000-0000-0000-0000-000000000002'),
+                indicator_name="ema",
+                indicator_category="overlay",
+                indicator_params={"length": 50},
+                display_name="Existing EMA (50)",
+                style={"color": "#4CAF50", "lineWidth": 2},
+                is_visible=True,
+                created_at=base_time,
+                updated_at=base_time,
+            ),
+        ]
+        for ind in existing_indicators:
+            db_session.add(ind)
+        await db_session.commit()
+
+        return user
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_new_user_no_existing_indicators(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T055 [P] [US3]: Unit test for upsert_indicator_configs() with new user (no existing indicators).
+        
+        Verifies:
+        - All guest indicators are inserted as new
+        - Added count matches guest indicator count
+        - No updates or skips
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from sqlalchemy import select
+        from app.models.indicator_config import IndicatorConfig
+        import uuid
+
+        # Create a new user (no existing indicators)
+        from app.models.user import User
+        new_user = User(
+            firebase_uid="new_merge_user",
+            email="newmerge@example.com",
+            display_name="New Merge User"
+        )
+        db_session.add(new_user)
+        await db_session.commit()
+        await db_session.refresh(new_user)
+
+        # Guest indicators
+        now = datetime.now(timezone.utc)
+        guest_indicators = [
+            {
+                'uuid': str(uuid.uuid4()),
+                'indicatorType': 'sma',
+                'params': {'length': 20},
+                'displayName': 'SMA (20)',
+                'style': {'color': '#FF5733', 'lineWidth': 2},
+                'isVisible': True,
+                'createdAt': now.isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',
+            },
+            {
+                'uuid': str(uuid.uuid4()),
+                'indicatorType': 'ema',
+                'params': {'length': 50},
+                'displayName': 'EMA (50)',
+                'style': {'color': '#4CAF50', 'lineWidth': 2},
+                'isVisible': True,
+                'createdAt': now.isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, new_user.id, guest_indicators)
+
+        # Verify stats
+        assert result['added'] == 2
+        assert result['updated'] == 0
+        assert result['skipped'] == 0
+
+        # Verify indicators were created
+        db_indicators = await db_session.execute(
+            select(IndicatorConfig).where(IndicatorConfig.user_id == new_user.id)
+        )
+        indicators = db_indicators.scalars().all()
+        assert len(indicators) == 2
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_existing_indicators_uuid_match(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T056 [P] [US3]: Unit test for upsert_indicator_configs() with existing indicators (UUID match).
+        
+        Verifies:
+        - Existing indicators are updated when guest is newer
+        - UUID matching works correctly
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from app.models.indicator_config import IndicatorConfig
+
+        user = test_user_with_indicators
+
+        # Guest indicators with newer timestamps (> 2 min newer)
+        now = datetime.now(timezone.utc)
+        guest_indicators = [
+            {
+                'uuid': '00000000-0000-0000-0000-000000000001',  # Matches existing
+                'indicatorType': 'sma',
+                'params': {'length': 30},  # Changed from 20
+                'displayName': 'Updated SMA (30)',
+                'style': {'color': '#2196F3', 'lineWidth': 3},  # Changed
+                'isVisible': False,  # Changed
+                'createdAt': (now - timedelta(hours=3)).isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',  # Recent (> 2 min newer than cloud)
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, user.id, guest_indicators)
+
+        # Verify stats
+        assert result['added'] == 0
+        assert result['updated'] == 1
+        assert result['skipped'] == 0
+
+        # Verify indicator was updated
+        db_indicators = await db_session.execute(
+            select(IndicatorConfig).where(IndicatorConfig.user_id == user.id)
+        )
+        indicators = db_indicators.scalars().all()
+        assert len(indicators) == 2  # 2 existing + 0 new
+
+        # Check the updated indicator
+        updated_indicator = [i for i in indicators if str(i.uuid) == '00000000-0000-0000-0000-000000000001'][0]
+        assert updated_indicator.indicator_params == {'length': 30}
+        assert updated_indicator.display_name == 'Updated SMA (30)'
+        assert updated_indicator.is_visible is False
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_guest_newer_by_more_than_2min(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T057 [P] [US3]: Unit test for upsert_indicator_configs() timestamp conflict resolution (guest newer by >2min).
+        
+        Verifies:
+        - Guest data wins when guest.updated_at > cloud.updated_at + 2 minutes
+        - Update happens even with UUID match
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from app.models.indicator_config import IndicatorConfig
+
+        user = test_user_with_indicators
+        base_time = datetime.now(timezone.utc) - timedelta(hours=2)
+
+        # Guest indicator significantly newer (> 2 min)
+        now = datetime.now(timezone.utc)
+        guest_indicators = [
+            {
+                'uuid': '00000000-0000-0000-0000-000000000001',
+                'indicatorType': 'sma',
+                'params': {'length': 25},
+                'displayName': 'Newer SMA (25)',
+                'style': {'color': '#FF0000', 'lineWidth': 5},
+                'isVisible': False,
+                'createdAt': base_time.isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',  # > 2 min newer than cloud
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, user.id, guest_indicators)
+
+        # Verify stats - guest is newer, should update
+        assert result['updated'] == 1
+
+        # Verify update happened
+        db_indicators = await db_session.execute(
+            select(IndicatorConfig).where(
+                IndicatorConfig.user_id == user.id,
+                IndicatorConfig.uuid == '00000000-0000-0000-0000-000000000001'
+            )
+        )
+        indicator = db_indicators.scalar_one()
+        assert indicator.indicator_params == {'length': 25}
+        assert indicator.display_name == 'Newer SMA (25)'
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_cloud_newer_or_within_2min(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T058 [P] [US3]: Unit test for upsert_indicator_configs() timestamp conflict resolution (cloud newer or within ±2min).
+        
+        Verifies:
+        - Cloud data wins when cloud is newer or within tolerance
+        - No update happens (skipped count increases)
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from app.models.indicator_config import IndicatorConfig
+
+        user = test_user_with_indicators
+
+        # Guest indicator within 2 min tolerance (cloud wins)
+        now = datetime.now(timezone.utc)
+        guest_indicators = [
+            {
+                'uuid': '00000000-0000-0000-0000-000000000001',
+                'indicatorType': 'sma',
+                'params': {'length': 99},  # Try to change
+                'displayName': 'Guest SMA',
+                'style': {'color': '#000000', 'lineWidth': 1},
+                'isVisible': False,
+                'createdAt': (now - timedelta(hours=3)).isoformat() + 'Z',
+                'updatedAt': (now - timedelta(minutes=1)).isoformat() + 'Z',  # Within 2 min of cloud
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, user.id, guest_indicators)
+
+        # Verify stats - cloud wins, should skip
+        assert result['added'] == 0
+        assert result['updated'] == 0
+        assert result['skipped'] == 1
+
+        # Verify no update happened (cloud data preserved)
+        db_indicators = await db_session.execute(
+            select(IndicatorConfig).where(
+                IndicatorConfig.user_id == user.id,
+                IndicatorConfig.uuid == '00000000-0000-0000-0000-000000000001'
+            )
+        )
+        indicator = db_indicators.scalar_one()
+        assert indicator.indicator_params == {'length': 20}  # Original value preserved
+        assert indicator.display_name == 'Existing SMA (20)'
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_exactly_2_minutes_apart(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T059 [P] [US3]: Unit test for upsert_indicator_configs() edge case: exactly 2 minutes apart.
+        
+        Verifies:
+        - Deterministic behavior: exactly 2 min = within tolerance (prefer cloud)
+        - No update happens
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from app.services.merge_util import MERGE_TIMESTAMP_TOLERANCE_MS
+        from app.models.indicator_config import IndicatorConfig
+
+        user = test_user_with_indicators
+        base_time = datetime.now(timezone.utc) - timedelta(hours=2)
+
+        # Guest indicator exactly 2 minutes newer
+        guest_indicators = [
+            {
+                'uuid': '00000000-0000-0000-0000-000000000001',
+                'indicatorType': 'sma',
+                'params': {'length': 99},
+                'displayName': '2 Minute SMA',
+                'style': {'color': '#000000', 'lineWidth': 1},
+                'isVisible': False,
+                'createdAt': base_time.isoformat() + 'Z',
+                'updatedAt': (base_time + timedelta(milliseconds=MERGE_TIMESTAMP_TOLERANCE_MS)).isoformat() + 'Z',
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, user.id, guest_indicators)
+
+        # Verify stats - exactly 2 min = within tolerance, cloud wins
+        assert result['added'] == 0
+        assert result['updated'] == 0
+        assert result['skipped'] == 1
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_invalid_uuid_skipped(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T055-T061 [P] [US3]: Unit test for upsert_indicator_configs() with invalid UUID.
+        
+        Verifies:
+        - Indicators with invalid UUID are skipped (not inserted or updated)
+        - Invalid UUID doesn't break the entire merge operation
+        """
+        from app.services.merge_util import upsert_indicator_configs
+        from app.models.indicator_config import IndicatorConfig
+
+        user = test_user_with_indicators
+
+        # Guest indicators with one invalid UUID
+        now = datetime.now(timezone.utc)
+        guest_indicators = [
+            {
+                'uuid': 'invalid-uuid-format',  # Invalid UUID
+                'indicatorType': 'sma',
+                'params': {'length': 20},
+                'displayName': 'Invalid UUID',
+                'style': {'color': '#FF5733', 'lineWidth': 2},
+                'isVisible': True,
+                'createdAt': now.isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',
+            },
+            {
+                'uuid': '00000000-0000-0000-0000-000000000003',  # Valid new UUID
+                'indicatorType': 'ema',
+                'params': {'length': 50},
+                'displayName': 'Valid EMA',
+                'style': {'color': '#4CAF50', 'lineWidth': 2},
+                'isVisible': True,
+                'createdAt': now.isoformat() + 'Z',
+                'updatedAt': now.isoformat() + 'Z',
+            },
+        ]
+
+        # Upsert
+        result = await upsert_indicator_configs(db_session, user.id, guest_indicators)
+
+        # Verify stats - invalid skipped, valid added
+        assert result['added'] == 1
+        assert result['updated'] == 0
+        assert result['skipped'] == 1  # Invalid UUID skipped
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_empty_list(
+        self,
+        db_session: AsyncSession,
+        test_user_with_indicators,
+    ):
+        """
+        T055-T061 [P] [US3]: Unit test for upsert_indicator_configs() with empty list.
+        
+        Verifies:
+        - Empty guest indicators list returns all zeros
+        - No database operations performed
+        """
+        from app.services.merge_util import upsert_indicator_configs
+
+        user = test_user_with_indicators
+
+        # Upsert with empty list
+        result = await upsert_indicator_configs(db_session, user.id, [])
+
+        # Verify stats - no operations
+        assert result['added'] == 0
+        assert result['updated'] == 0
+        assert result['skipped'] == 0

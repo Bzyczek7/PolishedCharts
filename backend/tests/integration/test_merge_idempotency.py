@@ -11,7 +11,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 
-from app.services.merge_util import upsert_alert, upsert_watchlist, MERGE_TIMESTAMP_TOLERANCE_MS
+from app.services.merge_util import upsert_alert, upsert_watchlist, upsert_indicator_configs, MERGE_TIMESTAMP_TOLERANCE_MS
 from app.models.alert import Alert
 from app.models.user_watchlist import UserWatchlist
 from app.models.user import User
@@ -391,3 +391,315 @@ class TestMergeIdempotency:
         assert MERGE_TIMESTAMP_TOLERANCE_MS == expected_ms, (
             f"MERGE_TIMESTAMP_TOLERANCE_MS should be 120000ms (2 minutes), got {MERGE_TIMESTAMP_TOLERANCE_MS}ms"
         )
+
+
+# =============================================================================
+# T060-T061: Integration tests for indicator_configs merge endpoint
+# =============================================================================
+
+class TestIndicatorConfigsMergeIntegration:
+    """
+    T060 [P] [US3]: Integration test for guest→auth merge via POST /merge/sync endpoint.
+    T061 [P] [US3]: Integration test for GET /merge/status includes indicators count.
+    """
+
+    @pytest.mark.asyncio
+    async def test_upsert_indicator_configs_is_idempotent(
+        self, db_session: AsyncSession, test_user_with_symbol
+    ):
+        """
+        T060 [P] [US3]: Integration test for guest→auth indicator merge via POST /merge/sync endpoint.
+        
+        Verifies:
+        - Calling upsert_indicator_configs twice with same data produces identical state
+        - No duplicate records created
+        - First call adds, second call skips
+        """
+        import uuid
+        user_id = test_user_with_symbol["user_id"]
+        indicator_uuid = uuid.UUID("77777777-0000-0000-0000-000000000001")
+
+        now = datetime.now(timezone.utc)
+        guest_indicators = [{
+            "uuid": str(indicator_uuid),
+            "indicatorType": "sma",
+            "params": {"length": 20},
+            "displayName": "SMA (20)",
+            "style": {"color": "#FF5733", "lineWidth": 2},
+            "isVisible": True,
+            "createdAt": now.isoformat() + 'Z',
+            "updatedAt": now.isoformat() + 'Z',
+        }]
+
+        # First merge
+        result1 = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Second merge (retry)
+        result2 = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Verify results
+        assert result1["added"] == 1
+        assert result2["skipped"] == 1
+
+        # Verify single record exists
+        from app.models.indicator_config import IndicatorConfig
+        from sqlalchemy import select
+        stmt = select(IndicatorConfig).where(
+            IndicatorConfig.uuid == indicator_uuid,
+            IndicatorConfig.user_id == user_id
+        )
+        db_result = await db_session.execute(stmt)
+        indicators = db_result.scalars().all()
+
+        assert len(indicators) == 1, "Indicator merge should not create duplicates"
+
+    @pytest.mark.asyncio
+    async def test_upsert_multiple_indicator_configs_is_idempotent(
+        self, db_session: AsyncSession, test_user_with_symbol
+    ):
+        """
+        T060 [P] [US3]: Integration test for merging multiple indicators.
+        
+        Verifies idempotency holds across multiple indicator configs.
+        """
+        import uuid
+        user_id = test_user_with_symbol["user_id"]
+        num_indicators = 5
+
+        now = datetime.now(timezone.utc)
+        guest_indicators = []
+        for i in range(num_indicators):
+            indicator_uuid = uuid.UUID(f"77777777-0000-0000-0000-00000000{i:04d}")
+            guest_indicators.append({
+                "uuid": str(indicator_uuid),
+                "indicatorType": "sma" if i % 2 == 0 else "ema",
+                "params": {"length": 20 + i * 10},
+                "displayName": f"Indicator {i}",
+                "style": {"color": "#FF5733", "lineWidth": 2},
+                "isVisible": i % 2 == 0,
+                "createdAt": now.isoformat() + 'Z',
+                "updatedAt": (now + timedelta(minutes=i)).isoformat() + 'Z',
+            })
+
+        # First merge
+        result1 = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Get state after first merge
+        from app.models.indicator_config import IndicatorConfig
+        from sqlalchemy import select
+        stmt = select(IndicatorConfig).where(IndicatorConfig.user_id == user_id).order_by(IndicatorConfig.uuid)
+        db_result = await db_session.execute(stmt)
+        first_state = db_result.scalars().all()
+
+        # Second merge
+        result2 = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Get state after second merge
+        db_result = await db_session.execute(stmt)
+        second_state = db_result.scalars().all()
+
+        # States must be identical
+        assert len(first_state) == len(second_state) == num_indicators
+        assert result1["added"] == num_indicators
+        assert result2["skipped"] == num_indicators
+
+    @pytest.mark.asyncio
+    async def test_indicator_configs_merge_timestamp_conflict(
+        self, db_session: AsyncSession, test_user_with_symbol
+    ):
+        """
+        T060 [P] [US3]: Integration test for timestamp conflict resolution.
+        
+        Verifies:
+        - Guest newer (>2 min) → guest wins
+        - Within tolerance → cloud wins (deterministic)
+        """
+        import uuid
+        user_id = test_user_with_symbol["user_id"]
+        indicator_uuid = uuid.UUID("88888888-0000-0000-0000-000000000001")
+
+        # Create cloud indicator first
+        from app.models.indicator_config import IndicatorConfig
+        cloud_indicator = IndicatorConfig(
+            user_id=user_id,
+            uuid=indicator_uuid,
+            indicator_name="sma",
+            indicator_category="overlay",
+            indicator_params={"length": 20},
+            display_name="Cloud SMA",
+            style={"color": "#FF5733", "lineWidth": 2},
+            is_visible=True,
+            created_at=datetime(2025, 1, 1, 10, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        )
+        db_session.add(cloud_indicator)
+        await db_session.flush()
+
+        # Guest indicator with newer timestamp (> 2 min)
+        guest_indicators = [{
+            "uuid": str(indicator_uuid),
+            "indicatorType": "sma",
+            "params": {"length": 50},  # Different
+            "displayName": "Guest SMA (50)",
+            "style": {"color": "#4CAF50", "lineWidth": 3},  # Different
+            "isVisible": False,  # Different
+            "createdAt": datetime(2025, 1, 1, 10, 0, 0, tzinfo=timezone.utc).isoformat() + 'Z',
+            "updatedAt": datetime(2025, 1, 1, 17, 0, 0, tzinfo=timezone.utc).isoformat() + 'Z',  # 5 hours newer
+        }]
+
+        # Merge guest version (should update since guest is much newer)
+        merge_result = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Verify guest version won
+        from sqlalchemy import select
+        stmt = select(IndicatorConfig).where(
+            IndicatorConfig.uuid == indicator_uuid,
+            IndicatorConfig.user_id == user_id
+        )
+        db_result = await db_session.execute(stmt)
+        final_indicator = db_result.scalar_one()
+
+        assert merge_result["updated"] == 1
+        assert final_indicator.indicator_params == {"length": 50}, "Guest params should win (newer)"
+        assert final_indicator.display_name == "Guest SMA (50)", "Guest display name should win"
+
+    @pytest.mark.asyncio
+    async def test_indicator_configs_merge_within_tolerance_cloud_wins(
+        self, db_session: AsyncSession, test_user_with_symbol
+    ):
+        """
+        T060 [P] [US3]: Integration test for within-tolerance scenario.
+        
+        Verifies that when timestamps are within ±2 minutes, cloud version wins (deterministic).
+        """
+        import uuid
+        user_id = test_user_with_symbol["user_id"]
+        indicator_uuid = uuid.UUID("99999999-0000-0000-0000-000000000001")
+
+        # Create cloud indicator
+        from app.models.indicator_config import IndicatorConfig
+        cloud_indicator = IndicatorConfig(
+            user_id=user_id,
+            uuid=indicator_uuid,
+            indicator_name="ema",
+            indicator_category="overlay",
+            indicator_params={"length": 50},
+            display_name="Cloud EMA",
+            style={"color": "#2196F3", "lineWidth": 2},
+            is_visible=True,
+            created_at=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+            updated_at=datetime(2025, 1, 1, 12, 1, 30, tzinfo=timezone.utc),
+        )
+        db_session.add(cloud_indicator)
+        await db_session.flush()
+
+        # Guest indicator within 2 min tolerance (should be ignored)
+        guest_indicators = [{
+            "uuid": str(indicator_uuid),
+            "indicatorType": "ema",
+            "params": {"length": 99},  # Try to change
+            "displayName": "Guest EMA",
+            "style": {"color": "#000000", "lineWidth": 5},
+            "isVisible": False,
+            "createdAt": datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc).isoformat() + 'Z',
+            "updatedAt": datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc).isoformat() + 'Z',  # Within 2 min
+        }]
+
+        # Merge guest version
+        merge_result = await upsert_indicator_configs(db_session, user_id, guest_indicators)
+        await db_session.flush()
+
+        # Verify cloud version won
+        from sqlalchemy import select
+        stmt = select(IndicatorConfig).where(
+            IndicatorConfig.uuid == indicator_uuid,
+            IndicatorConfig.user_id == user_id
+        )
+        db_result = await db_session.execute(stmt)
+        final_indicator = db_result.scalar_one()
+
+        assert merge_result["skipped"] == 1
+        assert final_indicator.indicator_params == {"length": 50}, "Cloud params should win (within tolerance)"
+        assert final_indicator.display_name == "Cloud EMA", "Cloud display name should win"
+
+    @pytest.mark.asyncio
+    async def test_get_merge_status_includes_indicators_count(
+        self, async_client: AsyncClient, test_user_with_symbol, monkeypatch
+    ):
+        """
+        T061 [P] [US3]: Integration test for GET /merge/status includes indicators count.
+        
+        Verifies:
+        - GET /merge/status returns indicator count for authenticated user
+        - Count matches actual number of indicators in database
+        """
+        from app.models.indicator_config import IndicatorConfig
+        import uuid
+
+        user_id = test_user_with_symbol["user_id"]
+        firebase_uid = "test_firebase_uid_123"
+
+        # Create test indicators
+        base_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        indicators = [
+            IndicatorConfig(
+                user_id=user_id,
+                uuid=uuid.uuid4(),
+                indicator_name="sma",
+                indicator_category="overlay",
+                indicator_params={"length": 20},
+                display_name="SMA (20)",
+                style={"color": "#FF5733", "lineWidth": 2},
+                is_visible=True,
+                created_at=base_time,
+                updated_at=base_time,
+            ),
+            IndicatorConfig(
+                user_id=user_id,
+                uuid=uuid.uuid4(),
+                indicator_name="ema",
+                indicator_category="overlay",
+                indicator_params={"length": 50},
+                display_name="EMA (50)",
+                style={"color": "#4CAF50", "lineWidth": 2},
+                is_visible=True,
+                created_at=base_time,
+                updated_at=base_time,
+            ),
+            IndicatorConfig(
+                user_id=user_id,
+                uuid=uuid.uuid4(),
+                indicator_name="tdfi",
+                indicator_category="oscillator",
+                indicator_params={"domcycle": 20, "smooth": 3},
+                display_name="TDFI (20, 3)",
+                style={"color": "#2196F3", "lineWidth": 2},
+                is_visible=False,
+                created_at=base_time,
+                updated_at=base_time,
+            ),
+        ]
+        for ind in indicators:
+            db_session.add(ind)
+        await db_session.commit()
+
+        # Mock Firebase authentication
+        async def mock_verify(token):
+            return {"uid": firebase_uid, "email": "test@example.com"}
+        monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+
+        # Call GET /merge/status
+        auth_headers = {"Authorization": f"Bearer mock_token_{firebase_uid}"}
+        response = await async_client.get("/api/v1/merge/status", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Verify indicators count is included
+        assert "indicators" in data, "Merge status should include indicators count"
+        assert data["indicators"] == 3, f"Expected 3 indicators, got {data['indicators']}"

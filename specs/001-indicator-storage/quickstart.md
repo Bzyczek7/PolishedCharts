@@ -292,6 +292,79 @@ npm test useIndicatorInstances.test.ts
 
 ## Migration Script
 
+### Running the Migration (T084)
+
+**IMPORTANT**: This is a one-time migration script for users who have existing indicators in localStorage from before the cloud storage feature was implemented.
+
+**Prerequisites**:
+1. Sign in to your PolishedCharts account
+2. Make sure you have existing indicators in localStorage (created before this feature)
+
+**Steps**:
+
+1. Open the PolishedCharts application in your browser
+2. Open the browser console (F12 → Console tab)
+3. Copy and paste the migration script from `frontend/src/migrations/migrateIndicatorsToCloud.ts`
+4. Run the migration command:
+   ```javascript
+   await window.migrateIndicatorsToCloud()
+   ```
+
+**Expected Output**:
+```
+[Migration] Starting indicator migration from localStorage to cloud...
+[Migration] Found 3 indicators in localStorage. Starting upload...
+[Migration] Uploading indicator: SMA (20) (sma)
+[Migration] ✓ Successfully migrated: SMA (20)
+[Migration] Uploading indicator: EMA (50) (ema)
+[Migration] ✓ Successfully migrated: EMA (50)
+[Migration] Uploading indicator: TDFI (20, 3) (tdfi)
+[Migration] ✓ Successfully migrated: TDFI (20, 3)
+
+[Migration] Migration complete!
+[Migration] Total: 3
+[Migration] Migrated: 3
+[Migration] Failed: 0
+```
+
+**Verification** (T085):
+```javascript
+window.verifyMigration()
+```
+
+Expected output:
+```
+[Verification] Checking indicator counts...
+[Verification] localStorage: 3 indicators
+[Verification] Cloud: 3 indicators
+[Verification] ✓ Counts match! Migration appears successful.
+```
+
+**Cleanup** (Optional):
+After verifying successful migration, you can remove indicators from localStorage:
+```javascript
+window.cleanupLocalStorageAfterMigration()
+```
+
+**⚠️ WARNING**: Cleanup is irreversible! Only run this after verifying that all indicators were successfully migrated to the cloud.
+
+**Rollback Procedure**:
+If migration fails:
+1. Your indicators remain in localStorage (no data is deleted during migration)
+2. The script reports which indicators failed to migrate
+3. You can retry the migration after fixing any issues
+4. Failed indicators are not uploaded to the cloud but remain in localStorage
+
+**Troubleshooting**:
+
+| Issue | Solution |
+|-------|----------|
+| "User not authenticated" | Sign in to your account before running migration |
+| "Failed to get auth token" | Refresh the page and sign in again |
+| "HTTP 404" | Backend endpoint not available - ensure backend is running |
+| "HTTP 500" | Server error - check logs and retry |
+| "Quota exceeded" | localStorage quota issue - try clearing browser cache |
+
 ### Running the Migration
 
 Open browser console and run:

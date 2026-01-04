@@ -25,11 +25,11 @@ This is a **web application** with separate backend and frontend:
 
 **Purpose**: Project initialization and verify existing codebase structure
 
-- [ ] T001 Verify backend project structure at `backend/app/` exists with FastAPI setup
-- [ ] T002 Verify frontend project structure at `frontend/src/` exists with React setup
-- [ ] T003 [P] Verify PostgreSQL database connectivity and SQLAlchemy async session configuration in `backend/app/db/session.py`
-- [ ] T004 [P] Verify Firebase authentication middleware exists in `backend/app/services/auth_middleware.py`
-- [ ] T005 [P] Review existing Alert/UserWatchlist/Layout models in `backend/app/models/` to understand patterns for IndicatorConfig
+- [X] T001 Verify backend project structure at `backend/app/` exists with FastAPI setup
+- [X] T002 Verify frontend project structure at `frontend/src/` exists with React setup
+- [X] T003 [P] Verify PostgreSQL database connectivity and SQLAlchemy async session configuration in `backend/app/db/session.py`
+- [X] T004 [P] Verify Firebase authentication middleware exists in `backend/app/services/auth_middleware.py`
+- [X] T005 [P] Review existing Alert/UserWatchlist/Layout models in `backend/app/models/` to understand patterns for IndicatorConfig
 
 **Checkpoint**: Existing project structure verified - ready to implement new feature
 
@@ -41,23 +41,23 @@ This is a **web application** with separate backend and frontend:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T006 Create IndicatorConfig database model in `backend/app/models/indicator_config.py` with composite unique constraint on (user_id, uuid)
-- [ ] T007 Add IndicatorConfig export to `backend/app/models/__init__.py`
-- [ ] T008 Generate Alembic migration for indicator_configs table: `alembic revision --autogenerate -m "Add indicator_configs table"`
-- [ ] T009 Run Alembic migration to create indicator_configs table in PostgreSQL
-- [ ] T010 Verify table creation and constraints in PostgreSQL (check `uq_indicator_config_user_uuid` constraint exists)
-- [ ] T011 Create Pydantic request/response schemas in `backend/app/api/v1/indicator_configs.py` (IndicatorStyle, IndicatorConfigCreate, IndicatorConfigUpdate, IndicatorConfigResponse)
-- [ ] T012 Implement GET /indicator-configs endpoint in `backend/app/api/v1/indicator_configs.py` to retrieve all indicators for authenticated user
-- [ ] T013 Implement POST /indicator-configs endpoint in `backend/app/api/v1/indicator_configs.py` to create new indicator configuration
-- [ ] T014 Implement PUT /indicator-configs/{uuid} endpoint in `backend/app/api/v1/indicator_configs.py` to update existing indicator
-- [ ] T015 Implement DELETE /indicator-configs/{uuid} endpoint in `backend/app/api/v1/indicator_configs.py` to delete indicator
-- [ ] T016 Register indicator_configs router in `backend/app/api/api.py` at `/api/v1/indicator-configs`
-- [ ] T017 Create TypeScript interface GuestIndicator in `frontend/src/types/auth.ts`
-- [ ] T018 Update LocalStorageData interface to include indicators array in `frontend/src/types/auth.ts`
-- [ ] T019 Update MergeRequest interface to include indicators array in `frontend/src/types/auth.ts`
-- [ ] T020 Update MergeResponse interface to include indicators stats in `frontend/src/types/auth.ts`
-- [ ] T021 Update MergeStatus interface to include indicators count in `frontend/src/types/auth.ts`
-- [ ] T021a [US1] Implement indicator parameter validation in `backend/app/api/v1/indicator_configs.py` (validate parameter names, types, ranges per indicator specification; reject invalid configs with 400 error)
+- [X] T006 Create IndicatorConfig database model in `backend/app/models/indicator_config.py` with composite unique constraint on (user_id, uuid)
+- [X] T007 Add IndicatorConfig export to `backend/app/models/__init__.py`
+- [X] T008 Generate Alembic migration for indicator_configs table: `alembic revision --autogenerate -m "Add indicator_configs table"`
+- [X] T009 Run Alembic migration to create indicator_configs table in PostgreSQL
+- [X] T010 Verify table creation and constraints in PostgreSQL (check `uq_indicator_config_user_uuid` constraint exists)
+- [X] T011 Create Pydantic request/response schemas in `backend/app/api/v1/indicator_configs.py` (IndicatorStyle, IndicatorConfigCreate, IndicatorConfigUpdate, IndicatorConfigResponse)
+- [X] T012 Implement GET /indicator-configs endpoint in `backend/app/api/v1/indicator_configs.py` to retrieve all indicators for authenticated user
+- [X] T013 Implement POST /indicator-configs endpoint in `backend/app/api/v1/indicator_configs.py` to create new indicator configuration
+- [X] T014 Implement PUT /indicator-configs/{uuid} endpoint in `backend/app/api/v1/indicator_configs.py` to update existing indicator
+- [X] T015 Implement DELETE /indicator-configs/{uuid} endpoint in `backend/app/api/v1/indicator_configs.py` to delete indicator
+- [X] T016 Register indicator_configs router in `backend/app/api/api.py` at `/api/v1/indicator-configs`
+- [X] T017 Create TypeScript interface GuestIndicator in `frontend/src/types/auth.ts`
+- [X] T018 Update LocalStorageData interface to include indicators array in `frontend/src/types/auth.ts`
+- [X] T019 Update MergeRequest interface to include indicators array in `frontend/src/types/auth.ts`
+- [X] T020 Update MergeResponse interface to include indicators stats in `frontend/src/types/auth.ts`
+- [X] T021 Update MergeStatus interface to include indicators count in `frontend/src/types/auth.ts`
+- [X] T021a [US1] Implement indicator parameter validation in `backend/app/api/v1/indicator_configs.py` (validate parameter names, types, ranges per indicator specification; reject invalid configs with 400 error)
 
 **Checkpoint**: Foundation ready - API endpoints created, types updated, user story implementation can now begin
 
@@ -73,28 +73,28 @@ This is a **web application** with separate backend and frontend:
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T022 [P] [US1] Write contract test for GET /indicator-configs endpoint in `backend/tests/test_indicator_configs.py` (verifies response schema, 200 status, user isolation)
-- [ ] T023 [P] [US1] Write contract test for POST /indicator-configs endpoint in `backend/tests/test_indicator_configs.py` (verifies creation, 201 status, UUID generation)
-- [ ] T024 [P] [US1] Write contract test for PUT /indicator-configs/{uuid} endpoint in `backend/tests/test_indicator_configs.py` (verifies update, 200 status, timestamp update)
-- [ ] T025 [P] [US1] Write contract test for DELETE /indicator-configs/{uuid} endpoint in `backend/tests/test_indicator_configs.py` (verifies deletion, 204 status)
-- [ ] T026 [P] [US1] Write integration test for multi-device sync in `backend/tests/test_indicator_configs.py` (create indicator as user1, verify user2 cannot see it, verify user1 can retrieve on "second device" via new session)
+- [X] T022 [P] [US1] Write contract test for GET /indicator-configs endpoint in `backend/tests/test_indicator_configs.py` (verifies response schema, 200 status, user isolation)
+- [X] T023 [P] [US1] Write contract test for POST /indicator-configs endpoint in `backend/tests/test_indicator_configs.py` (verifies creation, 201 status, UUID generation)
+- [X] T024 [P] [US1] Write contract test for PUT /indicator-configs/{uuid} endpoint in `backend/tests/test_indicator_configs.py` (verifies update, 200 status, timestamp update)
+- [X] T025 [P] [US1] Write contract test for DELETE /indicator-configs/{uuid} endpoint in `backend/tests/test_indicator_configs.py` (verifies deletion, 204 status)
+- [X] T026 [P] [US1] Write integration test for multi-device sync in `backend/tests/test_indicator_configs.py` (create indicator as user1, verify user2 cannot see it, verify user1 can retrieve on "second device" via new session)
 
 ### Implementation for User Story 1
 
-- [ ] T027 [US1] Implement getAuthToken() function in `frontend/src/hooks/useIndicatorInstances.ts` to retrieve Firebase ID token
-- [ ] T028 [US1] Implement cached axios instance with getAuthClient() in `frontend/src/hooks/useIndicatorInstances.ts` to avoid repeated token fetches (performance optimization)
-- [ ] T029 [US1] Implement generateUUID() helper function in `frontend/src/hooks/useIndicatorInstances.ts` for creating new indicator IDs
-- [ ] T030 [US1] Implement createIndicatorInstance() helper function in `frontend/src/hooks/useIndicatorInstances.ts` to create new indicator objects with defaults
-- [ ] T031 [US1] Refactor loadInstances effect in `frontend/src/hooks/useIndicatorInstances.ts` to call GET /indicator-configs API when authenticated
-- [ ] T032 [US1] Add API error handling with localStorage fallback in `frontend/src/hooks/useIndicatorInstances.ts` (FR-008: fallback when database unavailable)
-- [ ] T033 [US1] Refactor addIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` to call POST /indicator-configs API when authenticated
-- [ ] T034 [US1] Implement optimistic updates in addIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` (update UI immediately, rollback on error)
-- [ ] T035 [US1] Refactor removeIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` to call DELETE /indicator-configs/{uuid} API when authenticated
-- [ ] T036 [US1] Refactor updateStyle callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API when authenticated
-- [ ] T037 [US1] Refactor updateParams callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API with indicator_params update
-- [ ] T038 [US1] Refactor toggleVisibility callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API with is_visible update
-- [ ] T039 [US1] Add retry logic with exponential backoff (30-second timeout) in `frontend/src/hooks/useIndicatorInstances.ts` for API failures
-- [ ] T040 [US1] Add loading and error states to hook return value in `frontend/src/hooks/useIndicatorInstances.ts` for better UX
+- [X] T027 [US1] Implement getAuthToken() function in `frontend/src/hooks/useIndicatorInstances.ts` to retrieve Firebase ID token
+- [X] T028 [US1] Implement cached axios instance with getAuthClient() in `frontend/src/hooks/useIndicatorInstances.ts` to avoid repeated token fetches (performance optimization)
+- [X] T029 [US1] Implement generateUUID() helper function in `frontend/src/hooks/useIndicatorInstances.ts` for creating new indicator IDs
+- [X] T030 [US1] Implement createIndicatorInstance() helper function in `frontend/src/hooks/useIndicatorInstances.ts` to create new indicator objects with defaults
+- [X] T031 [US1] Refactor loadInstances effect in `frontend/src/hooks/useIndicatorInstances.ts` to call GET /indicator-configs API when authenticated
+- [X] T032 [US1] Add API error handling with localStorage fallback in `frontend/src/hooks/useIndicatorInstances.ts` (FR-008: fallback when database unavailable)
+- [X] T033 [US1] Refactor addIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` to call POST /indicator-configs API when authenticated
+- [X] T034 [US1] Implement optimistic updates in addIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` (update UI immediately, rollback on error)
+- [X] T035 [US1] Refactor removeIndicator callback in `frontend/src/hooks/useIndicatorInstances.ts` to call DELETE /indicator-configs/{uuid} API when authenticated
+- [X] T036 [US1] Refactor updateStyle callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API when authenticated
+- [X] T037 [US1] Refactor updateParams callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API with indicator_params update
+- [X] T038 [US1] Refactor toggleVisibility callback in `frontend/src/hooks/useIndicatorInstances.ts` to call PUT /indicator-configs/{uuid} API with is_visible update
+- [X] T039 [US1] Add retry logic with exponential backoff (30-second timeout) in `frontend/src/hooks/useIndicatorInstances.ts` for API failures
+- [X] T040 [US1] Add loading and error states to hook return value in `frontend/src/hooks/useIndicatorInstances.ts` for better UX
 
 **Checkpoint**: At this point, User Story 1 should be fully functional - authenticated users can create indicators on one device and see them on another device. Test independently by signing in on two devices/browsers.
 
@@ -108,23 +108,23 @@ This is a **web application** with separate backend and frontend:
 
 ### Tests for User Story 2 (REQUIRED - TDD Approach) ⚠️
 
-- [ ] T041 [P] [US2] Write integration test for localStorage fallback in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API failure, verify localStorage used)
-- [ ] T042 [P] [US2] Write integration test for retry logic in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API 500 error, verify retry with backoff, verify success on retry)
-- [ ] T043 [P] [US2] Write integration test for optimistic updates rollback in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API failure after optimistic update, verify state rollback)
+- [X] T041 [P] [US2] Write integration test for localStorage fallback in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API failure, verify localStorage used)
+- [X] T042 [P] [US2] Write integration test for retry logic in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API 500 error, verify retry with backoff, verify success on retry)
+- [X] T043 [P] [US2] Write integration test for optimistic updates rollback in `frontend/src/hooks/useIndicatorInstances.test.ts` (mock API failure after optimistic update, verify state rollback)
 
 ### Implementation for User Story 2
 
-- [ ] T044 [P] [US2] Implement safeSetItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with quota-exceeded error handling
-- [ ] T045 [P] [US2] Implement safeGetItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with error handling
-- [ ] T046 [P] [US2] Implement safeRemoveItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with error handling
-- [ ] T047 [P] [US2] Implement clearLocalStorage() function in `frontend/src/hooks/useIndicatorInstances.ts` to clean up after successful API sync
-- [ ] T048 [US2] Add localStorage write scheduling with debounce (100ms) in `frontend/src/hooks/useIndicatorInstances.ts` using scheduleInstanceWrite()
-- [ ] T049 [US2] Implement flushPendingWrites() function in `frontend/src/hooks/useIndicatorInstances.ts` to persist pending changes on unmount
-- [ ] T050 [US2] Add useEffect cleanup in `frontend/src/hooks/useIndicatorInstances.ts` to flush pending writes when component unmounts
-- [ ] T051 [US2] Implement API-to-localStorage fallback logic in loadInstances effect in `frontend/src/hooks/useIndicatorInstances.ts` (try API first, fallback to localStorage on error)
-- [ ] T052 [US2] Add isOffline state tracking in `frontend/src/hooks/useIndicatorInstances.ts` to show sync status to user
-- [ ] T053 [US2] Implement automatic retry with exponential backoff in `frontend/src/hooks/useIndicatorInstances.ts` (30-second timeout per SC-003)
-- [ ] T054 [US2] Add visual sync indicator to UI components consuming useIndicatorInstances hook (show pending sync when isOffline=true)
+- [X] T044 [P] [US2] Implement safeSetItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with quota-exceeded error handling
+- [X] T045 [P] [US2] Implement safeGetItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with error handling
+- [X] T046 [P] [US2] Implement safeRemoveItem() helper in `frontend/src/hooks/useIndicatorInstances.ts` with error handling
+- [X] T047 [P] [US2] Implement clearLocalStorage() function in `frontend/src/hooks/useIndicatorInstances.ts` to clean up after successful API sync
+- [X] T048 [US2] Add localStorage write scheduling with debounce (100ms) in `frontend/src/hooks/useIndicatorInstances.ts` using scheduleInstanceWrite()
+- [X] T049 [US2] Implement flushPendingWrites() function in `frontend/src/hooks/useIndicatorInstances.ts` to persist pending changes on unmount
+- [X] T050 [US2] Add useEffect cleanup in `frontend/src/hooks/useIndicatorInstances.ts` to flush pending writes when component unmounts
+- [X] T051 [US2] Implement API-to-localStorage fallback logic in loadInstances effect in `frontend/src/hooks/useIndicatorInstances.ts` (try API first, fallback to localStorage on error)
+- [X] T052 [US2] Add isOffline state tracking in `frontend/src/hooks/useIndicatorInstances.ts` to show sync status to user
+- [X] T053 [US2] Implement automatic retry with exponential backoff in `frontend/src/hooks/useIndicatorInstances.ts` (30-second timeout per SC-003)
+- [X] T054 [US2] Add visual sync indicator to UI components consuming useIndicatorInstances hook (show pending sync when isOffline=true)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently. Test persistence by clearing browser cache and verifying indicators restored from database. Test offline scenario by stopping backend server.
 
@@ -140,28 +140,28 @@ This is a **web application** with separate backend and frontend:
 
 > **NOTE: Merge logic is CRITICAL for data integrity (SC-004: 100% success rate). MUST be test-driven.
 
-- [ ] T055 [P] [US3] Write unit test for upsert_indicator_configs() with new user (no existing indicators) in `backend/tests/test_merge_util.py`
-- [ ] T056 [P] [US3] Write unit test for upsert_indicator_configs() with existing indicators (UUID match) in `backend/tests/test_merge_util.py`
-- [ ] T057 [P] [US3] Write unit test for upsert_indicator_configs() timestamp conflict resolution (guest newer by >2min) in `backend/tests/test_merge_util.py`
-- [ ] T058 [P] [US3] Write unit test for upsert_indicator_configs() timestamp conflict resolution (cloud newer or within ±2min) in `backend/tests/test_merge_util.py`
-- [ ] T059 [P] [US3] Write unit test for upsert_indicator_configs() edge case: exactly 2 minutes apart (deterministic: keep existing) in `backend/tests/test_merge_util.py`
-- [ ] T060 [P] [US3] Write integration test for guest→auth merge via POST /merge/sync endpoint in `backend/tests/test_merge.py`
-- [ ] T061 [P] [US3] Write integration test for GET /merge/status endpoint includes indicators count in `backend/tests/test_merge.py`
+- [X] T055 [P] [US3] Write unit test for upsert_indicator_configs() with new user (no existing indicators) in `backend/tests/test_merge_util.py`
+- [X] T056 [P] [US3] Write unit test for upsert_indicator_configs() with existing indicators (UUID match) in `backend/tests/test_merge_util.py`
+- [X] T057 [P] [US3] Write unit test for upsert_indicator_configs() timestamp conflict resolution (guest newer by >2min) in `backend/tests/test_merge_util.py`
+- [X] T058 [P] [US3] Write unit test for upsert_indicator_configs() timestamp conflict resolution (cloud newer or within ±2min) in `backend/tests/test_merge_util.py`
+- [X] T059 [P] [US3] Write unit test for upsert_indicator_configs() edge case: exactly 2 minutes apart (deterministic: keep existing) in `backend/tests/test_merge_util.py`
+- [X] T060 [P] [US3] Write integration test for guest→auth merge via POST /merge/sync endpoint in `backend/tests/test_merge.py`
+- [X] T061 [P] [US3] Write integration test for GET /merge/status endpoint includes indicators count in `backend/tests/test_merge.py`
 
 ### Implementation for User Story 3
 
-- [ ] T062 [P] [US3] Implement upsert_indicator_configs() function in `backend/app/services/merge_util.py` following upsert_alert() pattern
-- [ ] T063 [P] [US3] Implement should_update() timestamp comparison helper in `backend/app/services/merge_util.py` (checks if guest > existing + 2 minutes)
-- [ ] T064 [P] [US3] Add GuestIndicator Pydantic schema to `backend/app/api/v1/merge.py` (id, indicatorType, displayName, style, isVisible, createdAt)
-- [ ] T065 [P] [US3] Update MergeRequest schema in `backend/app/api/v1/merge.py` to include indicators: List[GuestIndicator]
-- [ ] T066 [P] [US3] Update MergeResponse schema in `backend/app/api/v1/merge.py` to include indicators stats
-- [ ] T067 [P] [US3] Update MergeStatus schema in `backend/app/api/v1/merge.py` to include indicators count
-- [ ] T068 [US3] Add upsert_indicator_configs() import to POST /merge/sync endpoint in `backend/app/api/v1/merge.py`
-- [ ] T069 [US3] Call upsert_indicator_configs() in POST /merge/sync endpoint in `backend/app/api/v1/merge.py` (pass guest indicators from request)
-- [ ] T070 [US3] Add indicator count query to GET /merge/status endpoint in `backend/app/api/v1/merge.py` (count IndicatorConfig WHERE user_id = ?)
-- [ ] T071 [US3] Update frontend merge payload to include indicators array in merge service/hook (collect from localStorage before sending to POST /merge)
-- [ ] T072 [US3] Clear localStorage indicators after successful merge in frontend merge handler (call clearLocalStorage() after merge succeeds)
-- [ ] T073 [US3] Reload indicators from API after successful guest→auth merge in frontend (trigger loadInstances effect)
+- [X] T062 [P] [US3] Implement upsert_indicator_configs() function in `backend/app/services/merge_util.py` following upsert_alert() pattern
+- [X] T063 [P] [US3] Implement should_update() timestamp comparison helper in `backend/app/services/merge_util.py` (checks if guest > existing + 2 minutes)
+- [X] T064 [P] [US3] Add GuestIndicator Pydantic schema to `backend/app/api/v1/merge.py` (id, indicatorType, displayName, style, isVisible, createdAt)
+- [X] T065 [P] [US3] Update MergeRequest schema in `backend/app/api/v1/merge.py` to include indicators: List[GuestIndicator]
+- [X] T066 [P] [US3] Update MergeResponse schema in `backend/app/api/v1/merge.py` to include indicators stats
+- [X] T067 [P] [US3] Update MergeStatus schema in `backend/app/api/v1/merge.py` to include indicators count
+- [X] T068 [US3] Add upsert_indicator_configs() import to POST /merge/sync endpoint in `backend/app/api/v1/merge.py`
+- [X] T069 [US3] Call upsert_indicator_configs() in POST /merge/sync endpoint in `backend/app/api/v1/merge.py` (pass guest indicators from request)
+- [X] T070 [US3] Add indicator count query to GET /merge/status endpoint in `backend/app/api/v1/merge.py` (count IndicatorConfig WHERE user_id = ?)
+- [X] T071 [US3] Update frontend merge payload to include indicators array in merge service/hook (collect from localStorage before sending to POST /merge)
+- [X] T072 [US3] Clear localStorage indicators after successful merge in frontend merge handler (call clearLocalStorage() after merge succeeds)
+- [X] T073 [US3] Reload indicators from API after successful guest→auth merge in frontend (trigger loadInstances effect)
 
 **Checkpoint**: All user stories should now be independently functional. Test guest→auth transition by configuring indicators as guest, then signing in, and verifying all indicators preserved and merged correctly.
 
@@ -175,10 +175,10 @@ This is a **web application** with separate backend and frontend:
 
 > **NOTE: Constitution Check in plan.md shows tests incomplete with [ ] checkboxes. These tasks address those gaps.**
 
-- [ ] T074 [P] Create backend test file structure: `backend/tests/test_indicator_configs.py` with pytest fixtures and imports
-- [ ] T075 [P] Create backend test file structure: `backend/tests/test_merge_util.py` with pytest fixtures and imports
-- [ ] T076 [P] Create frontend test file structure: `frontend/src/hooks/useIndicatorInstances.test.ts` with vitest setup and mocks
-- [ ] T077 [P] Create frontend test file structure: `frontend/src/migrations/migrateIndicatorsToCloud.test.ts` for migration script validation
+- [X] T074 [P] Create backend test file structure: `backend/tests/test_indicator_configs.py` with pytest fixtures and imports
+- [X] T075 [P] Create backend test file structure: `backend/tests/test_merge_util.py` with pytest fixtures and imports
+- [X] T076 [P] Create frontend test file structure: `frontend/src/hooks/useIndicatorInstances.test.ts` with vitest setup and mocks
+- [X] T077 [P] Create frontend test file structure: `frontend/src/migrations/migrateIndicatorsToCloud.test.ts` for migration script validation
 - [ ] T078 [P] Configure pytest in `backend/pyproject.toml` or `backend/pytest.ini` with async test support and coverage settings
 - [ ] T079 [P] Configure vitest in `frontend/vitest.config.ts` with test environment variables and coverage settings
 - [ ] T080 [P] Add GitHub Actions workflow for backend tests in `.github/workflows/backend-tests.yml` (pytest, coverage, typecheck)
@@ -186,13 +186,13 @@ This is a **web application** with separate backend and frontend:
 
 ### OpenAPI Specification
 
-- [ ] T082 Generate OpenAPI spec from implemented FastAPI endpoints: `cd backend && python -c "from app.api.v1.indicator_configs import router; import json; print(json.dumps(router.openapi(), indent=2))"` and merge into `specs/001-indicator-storage/contracts/openapi.yaml`
-- [ ] T083 Verify OpenAPI spec matches implementation: all endpoints (GET, POST, PUT, DELETE /indicator-configs) documented with correct schemas
+- [X] T082 Generate OpenAPI spec from implemented FastAPI endpoints: `cd backend && python -c "from app.api.v1.indicator_configs import router; import json; print(json.dumps(router.openapi(), indent=2))"` and merge into `specs/001-indicator-storage/contracts/openapi.yaml`
+- [X] T083 Verify OpenAPI spec matches implementation: all endpoints (GET, POST, PUT, DELETE /indicator-configs) documented with correct schemas
 
 ### Migration Script & Documentation
 
-- [ ] T084 [P] Create one-time migration script `frontend/src/migrations/migrateIndicatorsToCloud.ts` to move localStorage indicators to cloud
-- [ ] T085 [P] Add migration instructions to quickstart.md (how to run migration script in browser console, expected output, rollback procedure)
+- [X] T084 [P] Create one-time migration script `frontend/src/migrations/migrateIndicatorsToCloud.ts` to move localStorage indicators to cloud
+- [X] T085 [P] Add migration instructions to quickstart.md (how to run migration script in browser console, expected output, rollback procedure)
 - [ ] T086 [P] Update CLAUDE.md with IndicatorConfig model and API endpoints documentation
 
 ### Performance Monitoring & Validation

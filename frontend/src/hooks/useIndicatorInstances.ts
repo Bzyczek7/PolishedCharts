@@ -451,96 +451,92 @@ export function useIndicatorInstances() {
 
   /**
    * Add a new indicator instance
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const addIndicator = useCallback(async (
+  const addIndicator = useCallback((
     indicatorName: string,
     params: Record<string, number | string>
-  ): Promise<AddIndicatorResult> => {
+  ): AddIndicatorResult => {
     const newInstance = createIndicatorInstance(indicatorName, params);
 
-    // Optimistic update - add to state immediately
+    // Optimistic update - add to state immediately (synchronous)
     const newInstances = [...instances, newInstance];
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await createIndicatorAPI(newInstance, token);
-        return { success: true, instanceId: newInstance.id };
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to create indicator in API, rolling back:', err);
-        setInstances(instances); // Rollback state
-        
-        // Fallback to localStorage
-        saveIndicatorInstance(newInstance);
-        const listIndex: IndicatorListIndex = {
-          instances: newInstances.map(inst => inst.id),
-          updatedAt: new Date().toISOString(),
-        };
-        saveIndicatorList(listIndex);
-        setIsOffline(true);
-        
-        return { 
-          success: true, 
-          instanceId: newInstance.id,
-          error: 'Saved locally only - API unavailable'
-        };
-      }
+      user.getIdToken().then(token => {
+        createIndicatorAPI(newInstance, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to create indicator in API, rolling back:', err);
+          setInstances(instances); // Rollback state
+
+          // Fallback to localStorage
+          saveIndicatorInstance(newInstance);
+          const listIndex: IndicatorListIndex = {
+            instances: newInstances.map(inst => inst.id),
+            updatedAt: new Date().toISOString(),
+          };
+          saveIndicatorList(listIndex);
+          setIsOffline(true);
+        });
+      });
     } else {
-      // Guest mode - save to localStorage
+      // Guest mode - save to localStorage immediately
       saveIndicatorInstance(newInstance);
       const listIndex: IndicatorListIndex = {
         instances: newInstances.map(inst => inst.id),
         updatedAt: new Date().toISOString(),
       };
       saveIndicatorList(listIndex);
-      return { success: true, instanceId: newInstance.id };
     }
+
+    return { success: true, instanceId: newInstance.id };
   }, [instances, isAuthenticated, user, createIndicatorAPI]);
 
   /**
    * Remove an indicator instance
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const removeIndicator = useCallback(async (instanceId: string): Promise<boolean> => {
+  const removeIndicator = useCallback((instanceId: string): boolean => {
     const previousInstances = instances;
-    
+
     // Optimistic update - remove from state immediately
     const newInstances = instances.filter(inst => inst.id !== instanceId);
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await deleteIndicatorAPI(instanceId, token);
-        return true;
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to delete indicator from API, rolling back:', err);
-        setInstances(previousInstances); // Rollback state
-        return false;
-      }
+      user.getIdToken().then(token => {
+        deleteIndicatorAPI(instanceId, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to delete indicator from API, rolling back:', err);
+          setInstances(previousInstances); // Rollback state
+        });
+      });
     } else {
-      // Guest mode - remove from localStorage
+      // Guest mode - remove from localStorage immediately
       removeIndicatorInstance(instanceId);
       const listIndex: IndicatorListIndex = {
         instances: newInstances.map(inst => inst.id),
         updatedAt: new Date().toISOString(),
       };
       saveIndicatorList(listIndex);
-      return true;
     }
+    return true;
   }, [instances, isAuthenticated, user, deleteIndicatorAPI]);
 
   /**
    * Update instance style
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const updateStyle = useCallback(async (
+  const updateStyle = useCallback((
     instanceId: string,
     style: Partial<IndicatorStyle>
-  ): Promise<boolean> => {
+  ): boolean => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -560,32 +556,31 @@ export function useIndicatorInstances() {
     );
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await updateIndicatorAPI(updatedInstance, token);
-        return true;
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to update style in API, rolling back:', err);
-        setInstances(instances);
-        return false;
-      }
+      user.getIdToken().then(token => {
+        updateIndicatorAPI(updatedInstance, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to update style in API, rolling back:', err);
+          setInstances(instances);
+        });
+      });
     } else {
-      // Guest mode - save to localStorage
+      // Guest mode - save to localStorage immediately
       saveIndicatorInstance(updatedInstance);
-      return true;
     }
+    return true;
   }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
    * Update instance parameters
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const updateParams = useCallback(async (
+  const updateParams = useCallback((
     instanceId: string,
     params: Record<string, number | string>
-  ): Promise<boolean> => {
+  ): boolean => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -608,29 +603,28 @@ export function useIndicatorInstances() {
     );
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await updateIndicatorAPI(updatedInstance, token);
-        return true;
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to update params in API, rolling back:', err);
-        setInstances(instances);
-        return false;
-      }
+      user.getIdToken().then(token => {
+        updateIndicatorAPI(updatedInstance, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to update params in API, rolling back:', err);
+          setInstances(instances);
+        });
+      });
     } else {
-      // Guest mode - save to localStorage
+      // Guest mode - save to localStorage immediately
       saveIndicatorInstance(updatedInstance);
-      return true;
     }
+    return true;
   }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
    * Toggle instance visibility
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const toggleVisibility = useCallback(async (instanceId: string): Promise<boolean> => {
+  const toggleVisibility = useCallback((instanceId: string): boolean => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -645,32 +639,31 @@ export function useIndicatorInstances() {
     );
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await updateIndicatorAPI(updatedInstance, token);
-        return true;
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to toggle visibility in API, rolling back:', err);
-        setInstances(instances);
-        return false;
-      }
+      user.getIdToken().then(token => {
+        updateIndicatorAPI(updatedInstance, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to toggle visibility in API, rolling back:', err);
+          setInstances(instances);
+        });
+      });
     } else {
-      // Guest mode - save to localStorage
+      // Guest mode - save to localStorage immediately
       saveIndicatorInstance(updatedInstance);
-      return true;
     }
+    return true;
   }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
    * Update instance (generic method)
+   * Returns synchronously for backward compatibility (optimistic update).
+   * API sync happens in background.
    */
-  const updateInstance = useCallback(async (
+  const updateInstance = useCallback((
     instanceId: string,
     updates: Partial<IndicatorInstance>
-  ): Promise<boolean> => {
+  ): boolean => {
     const instance = instances.find(inst => inst.id === instanceId);
     if (!instance) return false;
 
@@ -685,23 +678,20 @@ export function useIndicatorInstances() {
     );
     setInstances(newInstances);
 
-    // Try to sync with API if authenticated
+    // Sync with API in background if authenticated (fire and forget)
     if (isAuthenticated && user) {
-      try {
-        const token = await user.getIdToken();
-        await updateIndicatorAPI(updatedInstance, token);
-        return true;
-      } catch (err) {
-        // Rollback on error
-        console.error('[useIndicatorInstances] Failed to update instance in API, rolling back:', err);
-        setInstances(instances);
-        return false;
-      }
+      user.getIdToken().then(token => {
+        updateIndicatorAPI(updatedInstance, token).catch(err => {
+          // Rollback on error
+          console.error('[useIndicatorInstances] Failed to update instance in API, rolling back:', err);
+          setInstances(instances);
+        });
+      });
     } else {
-      // Guest mode - save to localStorage
+      // Guest mode - save to localStorage immediately
       saveIndicatorInstance(updatedInstance);
-      return true;
     }
+    return true;
   }, [instances, isAuthenticated, user, updateIndicatorAPI]);
 
   /**
