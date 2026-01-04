@@ -292,10 +292,10 @@ DEFAULT_PARAMS: Dict[str, Dict[str, Any]] = {
     "stoch": {"k": 14, "d": 3, "smooth_k": 3},
     "stochrsi": {"length": 14, "rsi_length": 14, "k": 3, "d": 3},
     # Volatility
-    "bbands": {"length": 20, "lower_std": 2.0, "upper_std": 2.0},
+    "bbands": {"length": 20, "std": 2.0, "lower_std": 2.0, "upper_std": 2.0, "ddof": 0},
     "atr": {"length": 14},
     "kc": {"length": 20, "scalar": 2},
-    "donchian": {"lower_length": 20, "upper_length": 20},
+    "donchian": {"lower_length": 20, "upper_length": 20, "length": 20},
     # Trend
     "cci": {"length": 20},
     "adx": {"length": 14},
@@ -443,6 +443,12 @@ class PandasTAIndicator(Indicator):
         # Initialize _func before calling super().__init__ to avoid issues
         self._indicator_name = indicator_name
         self._func: Optional[Callable] = None
+
+        # Filter params to only those supported by this version of pandas-ta
+        # This allows DEFAULT_PARAMS to contain supersets of keys (e.g., both 'std' and 'lower_std')
+        # while only passing valid ones to the validation logic
+        valid_params = self.parameter_definitions.keys()
+        params = {k: v for k, v in params.items() if k in valid_params}
 
         super().__init__(**params)
         self._column_mapping: Dict[str, str] = COLUMN_MAPPINGS.get(indicator_name, {})
