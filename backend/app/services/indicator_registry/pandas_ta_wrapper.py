@@ -17,7 +17,10 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 import numpy as np
-import pandas_ta_remake as pta
+try:
+    import pandas_ta as pta
+except:
+    import pandas_ta_remake as pta
 
 from app.schemas.indicator import (
     IndicatorMetadata, IndicatorDisplayType, ColorMode,
