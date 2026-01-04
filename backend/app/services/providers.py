@@ -34,9 +34,9 @@ class YFinanceProvider(MarketDataProvider):
         "30m": 30,
         "60m": 60,
         "1h": 90,
-        "1d": 365 * 5, # 5 years
-        "1wk": 365 * 10,
-        "1mo": 365 * 20,
+        "1d": 365 * 2, # 2 years (reduced from 5 to prevent timeouts)
+        "1wk": 365 * 5, # 5 years (reduced from 10)
+        "1mo": 365 * 10,
     }
 
     # Hard limits per interval (library/Yahoo constraints)

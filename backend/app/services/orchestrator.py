@@ -170,6 +170,22 @@ class DataOrchestrator:
                         # Re-query DB after filling gaps to get fresh data
                         result = await db.execute(stmt)
                         candles = result.scalars().all()
+                        
+                        # Convert SQLAlchemy objects to dictionaries immediately
+                        candles = [
+                            {
+                                "timestamp": c.timestamp,
+                                "open": float(c.open) if c.open is not None else None,
+                                "high": float(c.high) if c.high is not None else None,
+                                "low": float(c.low) if c.low is not None else None,
+                                "close": float(c.close) if c.close is not None else None,
+                                "volume": int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else 0,
+                                "interval": c.interval,
+                                "ticker": ticker,
+                                "symbol_id": c.symbol_id,
+                            }
+                            for c in candles
+                        ]
                         logger.info(f"📊 After gap fill: {len(candles)} candles")
                     except asyncio.TimeoutError:
                         logger.error(f"Gap filling timed out for {ticker} ({interval})")
