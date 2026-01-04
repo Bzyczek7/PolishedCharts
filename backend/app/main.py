@@ -62,6 +62,18 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def startup_event():
     print("Starting up and initializing poller...")
 
+    # Auto-migrate database schema
+    from alembic.config import Config
+    from alembic import command
+    import asyncio
+
+    try:
+        alembic_cfg = Config("alembic.ini")
+        asyncio.create_task(asyncio.to_thread(command.upgrade, alembic_cfg, "head"))
+        print("Database migration scheduled")
+    except Exception as e:
+        print(f"WARNING: Database migration failed: {e}")
+
     # Initialize Firebase Admin SDK (T020)
     from app.services.firebase_admin import initialize_firebase
     try:
@@ -112,7 +124,7 @@ async def startup_event():
     from app.services.data_poller import DataPoller
     app.state.poller = DataPoller(
         yf_provider=app.state.yf_provider,
-        symbols=["BTC/USD"],  # Crypto assets (24/7) - equities loaded from DB via load_watchlist_from_db()
+        symbols=[],  # Load watchlist from DB instead of hardcoding symbols
         db_session_factory=AsyncSessionLocal,
         alert_engine=engine,
         indicator_service=indicator_service,
@@ -136,8 +148,11 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 def health_check():
-    import pandas_ta
-    return {"status": "ok", "pandas_ta": "✅"}
+    try:
+        import pandas_ta as ta  # works with remake
+        return {"status": "ok", "pandas_ta": "✅"}
+    except ImportError:
+        return {"status": "error", "pandas_ta": "missing"}
 
 @app.get("/")
 def root():
