@@ -51,10 +51,12 @@ class CandleService:
                 if interval in ('1d', '1wk'):
                     if isinstance(timestamp, str):
                         timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    # Truncate to midnight (00:00:00) for daily/weekly intervals
-                    from datetime import datetime, timezone
+                    # Convert to UTC and truncate to midnight (00:00:00 UTC) for daily/weekly intervals
+                    from datetime import timezone
                     if timestamp.tzinfo is None:
                         timestamp = timestamp.replace(tzinfo=timezone.utc)
+                    else:
+                        timestamp = timestamp.astimezone(timezone.utc)
                     timestamp = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
 
                 values.append({

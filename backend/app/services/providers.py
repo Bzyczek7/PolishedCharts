@@ -176,6 +176,12 @@ class YFinanceProvider(MarketDataProvider):
                     df = await loop.run_in_executor(None, _fetch)
                     break  # Success, exit retry loop
                 except Exception as fetch_error:
+                    # Check if this is a delisted symbol error
+                    error_msg = str(fetch_error).lower()
+                    if "delisted" in error_msg or "no price data found" in error_msg:
+                        logger.warning(f"Symbol {symbol} appears to be delisted: {fetch_error}")
+                        return []  # Return empty list for delisted symbols
+
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error(f"Failed to fetch data from yfinance for {symbol} after {max_retries} retries: {fetch_error}")
@@ -271,10 +277,15 @@ class YFinanceProvider(MarketDataProvider):
                 if timestamp_key not in unique_candles:
                     unique_candles[timestamp_key] = candle
                 else:
-                    # If we have multiple entries for same timestamp, keep the one with latest original time
-                    # For this, we'd need to track original times, but for now let's just keep the first one
-                    # The daily intervals are handled above, so this is mainly for intraday
-                    pass
+                    # For duplicate timestamps, prefer the entry with the most complete data
+                    # Check if current candle has more complete data than stored one
+                    current_candle = unique_candles[timestamp_key]
+                    current_complete_fields = sum(1 for v in [candle.get('open'), candle.get('high'), candle.get('low'), candle.get('close')] if v is not None and pd.notna(v))
+                    stored_complete_fields = sum(1 for v in [current_candle.get('open'), current_candle.get('high'), current_candle.get('low'), current_candle.get('close')] if v is not None and pd.notna(v))
+
+                    # Replace if current candle has more complete data
+                    if current_complete_fields > stored_complete_fields:
+                        unique_candles[timestamp_key] = candle
 
             # Convert back to list
             candles = list(unique_candles.values())
