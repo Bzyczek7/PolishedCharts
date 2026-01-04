@@ -1,0 +1,409 @@
+openapi: 3.0.3
+info:
+  title: Indicator Configurations API
+  description: REST API for managing user-specific indicator configurations in PolishedCharts
+  version: 1.0.0
+  contact:
+    name: PolishedCharts API
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local development server
+  - url: https://polishedcharts-backend.onrender.com/api/v1
+    description: Production server
+
+tags:
+  - name: indicator-configs
+    description: Indicator configuration management
+
+paths:
+  /indicator-configs:
+    get:
+      tags:
+        - indicator-configs
+      summary: Get all indicator configurations
+      description: Retrieve all indicator configurations for the authenticated user
+      operationId: getIndicatorConfigs
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IndicatorConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - indicator-configs
+      summary: Create indicator configuration
+      description: Create a new indicator configuration for the authenticated user
+      operationId: createIndicatorConfig
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndicatorConfigCreate'
+      responses:
+        '201':
+          description: Indicator configuration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorConfigResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /indicator-configs/{uuid}:
+    parameters:
+      - name: uuid
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Unique identifier of the indicator configuration
+
+    get:
+      tags:
+        - indicator-configs
+      summary: Get indicator configuration by UUID
+      description: Retrieve a single indicator configuration by its UUID
+      operationId: getIndicatorConfig
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorConfigResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - indicator-configs
+      summary: Update indicator configuration
+      description: Update an existing indicator configuration
+      operationId: updateIndicatorConfig
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndicatorConfigUpdate'
+      responses:
+        '200':
+          description: Indicator configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndicatorConfigResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      tags:
+        - indicator-configs
+      summary: Delete indicator configuration
+      description: Delete an indicator configuration
+      operationId: deleteIndicatorConfig
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Indicator configuration deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID Token
+      description: Firebase authentication token from client
+
+  schemas:
+    IndicatorConfigResponse:
+      type: object
+      description: Full indicator configuration with timestamps
+      properties:
+        id:
+          type: integer
+          description: Internal database ID (read-only)
+          example: 123
+        uuid:
+          type: string
+          format: uuid
+          description: Stable identifier for merge operations
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        indicator_name:
+          type: string
+          description: Indicator type name
+          enum: [sma, ema, tdfi, crsi, adxvma, macd, rsi, cci]
+          example: "sma"
+        indicator_category:
+          type: string
+          description: Indicator category
+          enum: [overlay, oscillator]
+          example: "overlay"
+        indicator_params:
+          type: object
+          description: Indicator parameter values
+          additionalProperties: true
+          example:
+            length: 20
+        display_name:
+          type: string
+          description: Human-readable display name
+          maxLength: 255
+          example: "SMA (20)"
+        style:
+          type: object
+          description: Visual styling configuration
+          properties:
+            color:
+              type: string
+              pattern: '^#[0-9A-Fa-f]{6}$'
+              example: "#FF5733"
+            lineWidth:
+              type: integer
+              minimum: 1
+              maximum: 10
+              example: 2
+            showLastValue:
+              type: boolean
+              example: true
+            seriesColors:
+              type: object
+              additionalProperties:
+                type: string
+                pattern: '^#[0-9A-Fa-f]{6}$'
+          example:
+            color: "#FF5733"
+            lineWidth: 2
+            showLastValue: true
+        is_visible:
+          type: boolean
+          description: Visibility state
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Config creation timestamp (UTC)
+          example: "2025-01-04T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp (UTC)
+          example: "2025-01-04T12:30:00Z"
+      required:
+        - id
+        - uuid
+        - indicator_name
+        - indicator_category
+        - indicator_params
+        - display_name
+        - style
+        - is_visible
+        - created_at
+        - updated_at
+
+    IndicatorConfigCreate:
+      type: object
+      description: Request schema for creating a new indicator configuration
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          description: Optional UUID (generates new UUID if not provided)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        indicator_name:
+          type: string
+          description: Indicator type name
+          enum: [sma, ema, tdfi, crsi, adxvma, macd, rsi, cci]
+          example: "sma"
+        indicator_category:
+          type: string
+          description: Indicator category
+          enum: [overlay, oscillator]
+          example: "overlay"
+        indicator_params:
+          type: object
+          description: Indicator parameter values
+          additionalProperties: true
+          example:
+            length: 20
+        display_name:
+          type: string
+          description: Human-readable display name
+          maxLength: 255
+          example: "SMA (20)"
+        style:
+          type: object
+          description: Visual styling configuration
+          properties:
+            color:
+              type: string
+              pattern: '^#[0-9A-Fa-f]{6}$'
+              example: "#FF5733"
+            lineWidth:
+              type: integer
+              minimum: 1
+              maximum: 10
+              example: 2
+            showLastValue:
+              type: boolean
+              example: true
+            seriesColors:
+              type: object
+              additionalProperties:
+                type: string
+                pattern: '^#[0-9A-Fa-f]{6}$'
+          example:
+            color: "#FF5733"
+            lineWidth: 2
+            showLastValue: true
+        is_visible:
+          type: boolean
+          description: Visibility state
+          default: true
+          example: true
+      required:
+        - indicator_name
+        - indicator_category
+        - indicator_params
+        - display_name
+        - style
+
+    IndicatorConfigUpdate:
+      type: object
+      description: Request schema for updating an existing indicator configuration
+      properties:
+        indicator_params:
+          type: object
+          description: Indicator parameter values
+          additionalProperties: true
+          example:
+            length: 50
+        display_name:
+          type: string
+          description: Human-readable display name
+          maxLength: 255
+          example: "SMA (50)"
+        style:
+          type: object
+          description: Visual styling configuration
+          properties:
+            color:
+              type: string
+              pattern: '^#[0-9A-Fa-f]{6}$'
+              example: "#4CAF50"
+            lineWidth:
+              type: integer
+              minimum: 1
+              maximum: 10
+              example: 3
+            showLastValue:
+              type: boolean
+              example: false
+            seriesColors:
+              type: object
+              additionalProperties:
+                type: string
+                pattern: '^#[0-9A-Fa-f]{6}$'
+          example:
+            color: "#4CAF50"
+            lineWidth: 3
+            showLastValue: false
+        is_visible:
+          type: boolean
+          description: Visibility state
+          example: false
+
+    Error:
+      type: object
+      description: Error response schema
+      properties:
+        message:
+          type: string
+          description: Human-readable error message
+          example: "Validation error"
+        detail:
+          type: string
+          description: Detailed error information
+          example: "indicator_name is required"
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Validation error"
+            detail: "indicator_name must be one of: sma, ema, tdfi, crsi, adxvma, macd, rsi, cci"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Unauthorized"
+            detail: "Invalid or expired Firebase token"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Not found"
+            detail: "Indicator configuration with UUID '550e8400-e29b-41d4-a716-446655440000' not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            message: "Internal server error"
+            detail: "An unexpected error occurred"

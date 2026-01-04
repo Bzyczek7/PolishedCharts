@@ -14,7 +14,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from app.services.auth_middleware import get_current_user
-from app.services.merge_util import upsert_alert, upsert_watchlist, upsert_layouts
+from app.services.merge_util import upsert_alert, upsert_watchlist, upsert_layouts, upsert_indicator_configs
 from app.db.session import AsyncSessionLocal
 from sqlalchemy import select, func
 from app.models.alert import Alert
@@ -58,12 +58,25 @@ class GuestLayout(BaseModel):
     updated_at: str
 
 
+class GuestIndicator(BaseModel):
+    """Guest indicator from localStorage."""
+    uuid: str
+    indicatorType: str
+    displayName: str
+    params: Dict[str, Any]
+    style: Dict[str, Any]
+    isVisible: bool
+    createdAt: str
+    updatedAt: str
+
+
 class MergeRequest(BaseModel):
     """Guest data merge request."""
     schemaVersion: int
     alerts: List[GuestAlert]
     watchlist: GuestWatchlist
     layouts: List[GuestLayout]
+    indicators: List[GuestIndicator] = []
 
 
 class MergeEntityStats(BaseModel):
@@ -84,6 +97,7 @@ class MergeStatus(BaseModel):
     alerts: int
     watchlists: int
     layouts: int
+    indicators: int
 
 
 # =============================================================================
@@ -135,12 +149,17 @@ async def merge_guest_data(
         layouts_data = [layout.model_dump() for layout in request.layouts]
         layouts_stats = await upsert_layouts(db, user_id, layouts_data)
 
+        # Merge indicators
+        indicators_data = [indicator.model_dump() for indicator in request.indicators]
+        indicators_stats = await upsert_indicator_configs(db, user_id, indicators_data)
+
     return MergeResponse(
         message="Merge completed successfully",
         stats={
             "alerts": MergeEntityStats(**alerts_stats),
             "watchlist": MergeEntityStats(**watchlist_stats),
             "layouts": MergeEntityStats(**layouts_stats),
+            "indicators": MergeEntityStats(**indicators_stats),
         }
     )
 
@@ -183,8 +202,16 @@ async def get_merge_status(user: dict = Depends(get_current_user)):
         )
         layouts_count = layouts_result.scalar() or 0
 
+        # Count indicators
+        from app.models.indicator_config import IndicatorConfig
+        indicators_result = await db.execute(
+            select(func.count(IndicatorConfig.id)).where(IndicatorConfig.user_id == user_id)
+        )
+        indicators_count = indicators_result.scalar() or 0
+
     return MergeStatus(
         alerts=alerts_count,
         watchlists=watchlists_count,
         layouts=layouts_count,
+        indicators=indicators_count,
     )

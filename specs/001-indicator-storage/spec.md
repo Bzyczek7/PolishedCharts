@@ -76,11 +76,12 @@ A guest user configures indicators while exploring the application. When they la
 - **FR-003**: System MUST persist indicator changes (create, update, delete) to the database immediately
 - **FR-004**: System MUST support the following indicator attributes: name (e.g., SMA, EMA, TDFI), parameters (e.g., period=20), display name, styling (color, line width, visibility state)
 - **FR-005**: System MUST maintain unique identifiers for each indicator instance to prevent duplicates during sync
-- **FR-006**: System MUST merge guest user's localStorage indicators with authenticated user's database indicators during sign-in
+- **FR-006**: System MUST merge guest user's localStorage indicators with authenticated user's database indicators during sign-in using timestamp-based conflict resolution: update existing indicator only if guest version's updated_at > cloud version's updated_at + 2 minutes; otherwise keep existing version (prefer cloud, deterministic)
 - **FR-007**: System MUST handle indicator creation, update, and deletion operations for authenticated users
 - **FR-008**: System MUST provide fallback to localStorage when database is temporarily unavailable
 - **FR-009**: System MUST support batch retrieval of all indicators for a user (no pagination for small datasets)
 - **FR-010**: System MUST validate indicator parameters before saving to database
+- **FR-011**: System MUST skip invalid or corrupted indicator configurations during load operations and log errors for debugging (reject entire batch only for critical schema errors; individual indicator corruption should not block loading of valid indicators)
 
 ### Key Entities
 
@@ -92,7 +93,7 @@ A guest user configures indicators while exploring the application. When they la
 
 ### Measurable Outcomes
 
-- **SC-001**: Users can access their exact same indicator configurations on any device within 2 seconds of signing in
+- **SC-001**: Users can access their exact same indicator configurations on any device within 2 seconds of completing Firebase authentication (measured from successful token validation to first indicator data render)
 - **SC-002**: 100% of indicator configurations are preserved when users clear browser cache or switch browsers
 - **SC-003**: Indicator data sync completes in under 1 second for typical configurations (10 or fewer indicators)
 - **SC-004**: 100% of users successfully transition from guest to authenticated user without losing indicator configurations (merge logic is deterministic: deduplicate by unique identifier, transactional operations ensure atomicity)

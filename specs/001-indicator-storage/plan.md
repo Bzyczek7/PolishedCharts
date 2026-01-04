@@ -62,9 +62,9 @@ Migrate indicator configurations from browser localStorage to PostgreSQL databas
 
 ### Testing and Quality Gates
 
-- [ ] Core logic uses TDD (alert engine, indicators, candle normalization) - **NEW TASK** - New merge logic requires TDD approach
-- [ ] Bug fixes include regression tests - N/A (new feature, not a bug fix)
-- [ ] CI includes: lint, typecheck, unit, integration tests - **NEW TASK** - Tests to be added in Phase 2
+- [x] Core logic uses TDD (alert engine, indicators, candle normalization) - **VERIFIED** - Tasks T055-T061 provide TDD for merge logic
+- [x] Bug fixes include regression tests - N/A (new feature, not a bug fix)
+- [x] CI includes: lint, typecheck, unit, integration tests - **VERIFIED** - Tasks T080-T081 add GitHub Actions workflows
 
 ### Performance Budgets
 

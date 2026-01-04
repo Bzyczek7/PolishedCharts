@@ -272,6 +272,91 @@ async def upsert_layouts(
     return stats
 
 
+async def upsert_indicator_configs(
+    db: AsyncSession,
+    user_id: int,
+    guest_indicators: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    """
+    Upsert guest indicator configurations to cloud using upsert-by-UUID strategy.
+
+    Merge rule (FR-013, FR-010):
+        - If UUID doesn't exist: insert as new
+        - If guest.updated_at > cloud.updated_at + 2 minutes: update (guest wins)
+        - If |guest.updated_at - cloud.updated_at| <= 2 minutes: keep existing (prefer cloud, deterministic)
+        - Else: keep existing (cloud wins)
+
+    Args:
+        db: Database session
+        user_id: User ID to associate indicators with
+        guest_indicators: List of guest indicator dicts from localStorage
+
+    Returns:
+        Dict with counts: {added: int, updated: int, skipped: int}
+    """
+    from app.models.indicator_config import IndicatorConfig
+    import uuid
+
+    stats = {'added': 0, 'updated': 0, 'skipped': 0}
+
+    if not guest_indicators:
+        return stats
+
+    for guest_indicator in guest_indicators:
+        guest_uuid = guest_indicator['uuid']
+        guest_updated_at = datetime.fromisoformat(guest_indicator['updatedAt'].replace('Z', '+00:00'))
+
+        # Parse UUID
+        try:
+            guest_uuid_parsed = uuid.UUID(guest_uuid)
+        except ValueError:
+            # Invalid UUID - skip this indicator
+            stats['skipped'] += 1
+            continue
+
+        # Check if indicator exists in cloud
+        result = await db.execute(
+            select(IndicatorConfig).where(
+                IndicatorConfig.user_id == user_id,
+                IndicatorConfig.uuid == guest_uuid_parsed
+            )
+        )
+        existing_indicator = result.scalar_one_or_none()
+
+        if existing_indicator is None:
+            # Create new indicator
+            new_indicator = IndicatorConfig(
+                user_id=user_id,
+                uuid=guest_uuid_parsed,
+                indicator_name=guest_indicator['indicatorType'],
+                indicator_category='overlay',  # Default, can be inferred from indicator registry
+                indicator_params=guest_indicator.get('params', {}),
+                display_name=guest_indicator.get('displayName', guest_indicator['indicatorType']),
+                style=guest_indicator.get('style', {}),
+                is_visible=guest_indicator.get('isVisible', True),
+                created_at=datetime.fromisoformat(guest_indicator['createdAt'].replace('Z', '+00:00')),
+                updated_at=guest_updated_at,
+            )
+            db.add(new_indicator)
+            stats['added'] += 1
+        else:
+            # Check if we should update based on timestamps
+            if should_update(guest_updated_at, existing_indicator.updated_at):
+                # Update existing indicator
+                existing_indicator.indicator_params = guest_indicator.get('params', existing_indicator.indicator_params)
+                existing_indicator.display_name = guest_indicator.get('displayName', existing_indicator.display_name)
+                existing_indicator.style = guest_indicator.get('style', existing_indicator.style)
+                existing_indicator.is_visible = guest_indicator.get('isVisible', existing_indicator.is_visible)
+                existing_indicator.updated_at = guest_updated_at
+                stats['updated'] += 1
+            else:
+                # Skip - cloud is more recent or within tolerance
+                stats['skipped'] += 1
+
+    await db.commit()
+    return stats
+
+
 # Generic wrapper function for backward compatibility
 async def upsert_by_uuid(
     db: AsyncSession,
