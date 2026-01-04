@@ -26,7 +26,8 @@ from app.services.indicator_registry import pandas_ta_wrapper
 logger = logging.getLogger(__name__)
 
 # Flag to control auto-registration of pandas-ta indicators
-_AUTO_REGISTER_PANDAS_TA = True
+# DISABLED: Causes serialization errors with numpy/pandas objects in JSON responses
+_AUTO_REGISTER_PANDAS_TA = False
 
 
 def initialize_standard_indicators() -> None:
