@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.indicator_config import IndicatorConfig
-from app.services.firebase_auth import verify_firebase_token
+from app.services.auth_middleware import get_current_user
 
 
 # =============================================================================
@@ -157,7 +157,7 @@ async def test_get_indicator_configs_empty(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     response = await async_client.get("/api/v1/indicator-configs", headers=auth_headers)
 
@@ -185,7 +185,7 @@ async def test_get_indicator_configs_success(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     response = await async_client.get("/api/v1/indicator-configs", headers=auth_headers)
 
@@ -241,7 +241,7 @@ async def test_create_indicator_config_success(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     payload = {
         "indicator_name": "sma",
@@ -293,7 +293,7 @@ async def test_create_indicator_config_invalid_indicator_name(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     payload = {
         "indicator_name": "invalid_indicator",
@@ -324,7 +324,7 @@ async def test_create_indicator_config_missing_required_field(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     payload = {
         "indicator_name": "sma",
@@ -359,7 +359,7 @@ async def test_update_indicator_config_success(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     config_uuid = str(sample_indicator_config.uuid)
     payload = {
@@ -400,7 +400,7 @@ async def test_update_indicator_config_not_found(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     fake_uuid = str(uuid.uuid4())
     payload = {"display_name": "Updated"}
@@ -429,7 +429,7 @@ async def test_update_indicator_config_invalid_uuid(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     payload = {"display_name": "Updated"}
 
@@ -465,7 +465,7 @@ async def test_delete_indicator_config_success(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     config_uuid = str(sample_indicator_config.uuid)
 
@@ -498,7 +498,7 @@ async def test_delete_indicator_config_not_found(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     fake_uuid = str(uuid.uuid4())
 
@@ -525,7 +525,7 @@ async def test_delete_indicator_config_invalid_uuid(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     response = await async_client.delete(
         "/api/v1/indicator-configs/invalid-uuid",
@@ -572,7 +572,7 @@ async def test_user_isolation_create_indicator(
             return await mock_verify_1(token)
         return await mock_verify_2(token)
     
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     # User 1 creates indicator
     payload = {
@@ -629,7 +629,7 @@ async def test_user_isolation_update_delete(
             return {"uid": test_user.firebase_uid, "email": test_user.email}
         return {"uid": test_user_2.firebase_uid, "email": test_user_2.email}
     
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     # User 1 creates indicator
     payload = {
@@ -685,7 +685,7 @@ async def test_new_user_empty_indicators(
     # Mock Firebase authentication
     async def mock_verify(token):
         return {"uid": test_user.firebase_uid, "email": test_user.email}
-    monkeypatch.setattr("app.services.auth_middleware.verify_firebase_token", mock_verify)
+    monkeypatch.setattr("app.services.auth_middleware.get_current_user", mock_verify)
 
     response = await async_client.get("/api/v1/indicator-configs", headers=auth_headers)
     assert response.status_code == 200
