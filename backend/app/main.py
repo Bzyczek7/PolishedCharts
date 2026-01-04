@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse, Response
 from app.core.config import settings
@@ -29,29 +29,16 @@ app = FastAPI(
 # Note: Authorization header must be explicitly listed (wildcard * doesn't cover it in Chrome 97+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "https://bzyczek7.github.io", "*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://bzyczek7.github.io",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "Authorization"],  # Explicitly include Authorization
 )
 
-
-# Handle CORS preflight (OPTIONS) requests before they reach auth middleware
-@app.middleware("http")
-async def handle_cors_preflight(request: Request, call_next):
-    if request.method == "OPTIONS":
-        return Response(
-            status_code=204,
-            headers={
-                "Access-Control-Allow-Origin": request.headers.get("origin", "http://localhost:5173"),
-                "Access-Control-Allow-Methods": "*",
-                # Note: Chrome requires explicit Authorization header listing (wildcard * insufficient)
-                "Access-Control-Allow-Headers": "*, Authorization",
-                "Access-Control-Allow-Credentials": "true",
-            }
-        )
-    response = await call_next(request)
-    return response
 
 logger = logging.getLogger(__name__)
 
