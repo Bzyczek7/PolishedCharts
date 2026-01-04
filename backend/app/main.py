@@ -49,14 +49,43 @@ worker_manager = WorkerManager()
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global exception handler caught: {exc}")
     logger.error(traceback.format_exc())
+
+    # Get origin from request for CORS - allows browser to read error responses
+    origin = request.headers.get("origin", "http://localhost:5173")
+
     return ORJSONResponse(
         status_code=500,
         content={
-            "message": "Internal Server Error", 
-            "detail": str(exc), 
-            "traceback": traceback.format_exc()
+            "message": "Internal Server Error",
+            "detail": str(exc),
         },
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+        }
     )
+
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint that verifies critical services."""
+    from app.services.firebase_admin import is_firebase_initialized
+
+    status = {
+        "status": "ok",
+        "firebase": "initialized" if is_firebase_initialized() else "not_initialized"
+    }
+
+    # Try importing pandas-ta
+    try:
+        import pandas_ta
+        status["pandas_ta"] = "ok"
+    except ImportError:
+        status["pandas_ta"] = "missing"
+        status["status"] = "degraded"
+
+    return status
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -74,14 +103,18 @@ async def startup_event():
     except Exception as e:
         print(f"WARNING: Database migration failed: {e}")
 
-    # Initialize Firebase Admin SDK (T020)
-    from app.services.firebase_admin import initialize_firebase
+    # Initialize Firebase Admin SDK (T020) - CRITICAL for auth
+    from app.services.firebase_admin import initialize_firebase, is_firebase_initialized
     try:
         initialize_firebase()
-        print("Firebase Admin SDK initialized")
+        if not is_firebase_initialized():
+            raise RuntimeError("Firebase initialization completed but SDK not ready")
+        print("✅ Firebase Admin SDK initialized successfully")
     except Exception as e:
-        print(f"WARNING: Firebase Admin SDK initialization failed: {e}")
-        print("Authentication endpoints will not be available")
+        print(f"❌ CRITICAL: Firebase Admin SDK initialization failed: {e}")
+        print("Authentication will NOT work. Please set FIREBASE_SERVICE_ACCOUNT_KEY environment variable.")
+        print("Get service account key from: https://console.firebase.google.com/project/_/settings/serviceaccounts/adminsdk")
+        # Don't fail startup - allow app to run in guest mode
 
     engine = AlertEngine(db_session_factory=AsyncSessionLocal)
 
