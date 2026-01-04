@@ -20,7 +20,10 @@ import numpy as np
 try:
     import pandas_ta as pta
 except:
-    import pandas_ta_remake as pta
+    try:
+        import pandas_ta_remake as pta
+    except:
+        import pandas_ta_classic as pta
 
 from app.schemas.indicator import (
     IndicatorMetadata, IndicatorDisplayType, ColorMode,
