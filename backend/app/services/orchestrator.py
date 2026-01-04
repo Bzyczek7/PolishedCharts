@@ -94,6 +94,24 @@ class DataOrchestrator:
 
         result = await db.execute(stmt)
         candles = result.scalars().all()
+
+        # Convert SQLAlchemy objects to dictionaries immediately to avoid lazy-loading issues
+        # This ensures all attributes are loaded while we're still in the async context
+        candles = [
+            {
+                "timestamp": c.timestamp,
+                "open": float(c.open) if c.open is not None else None,
+                "high": float(c.high) if c.high is not None else None,
+                "low": float(c.low) if c.low is not None else None,
+                "close": float(c.close) if c.close is not None else None,
+                "volume": int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else 0,
+                "interval": c.interval,
+                "ticker": ticker,
+                "symbol_id": c.symbol_id,
+            }
+            for c in candles
+        ]
+
         db_time = (time.time() - db_start) * 1000
         logger.info(f"[TIMING] Database query took {db_time:.0f}ms for {ticker} ({interval}), returned {len(candles)} candles")
 
@@ -163,34 +181,15 @@ class DataOrchestrator:
             logger.info(f"✅ DB has sufficient data ({len(candles)} candles, {coverage_ratio*100:.0f}% coverage) - skipping yfinance fetch")
 
         # 3. Filter out candles with invalid price data
+        # Candles are already dictionaries from the conversion above
         valid_candles = []
         for c in candles:
-            # Access all attributes immediately to avoid lazy-loading issues
-            try:
-                open_val = float(c.open) if c.open is not None else None
-                high_val = float(c.high) if c.high is not None else None
-                low_val = float(c.low) if c.low is not None else None
-                close_val = float(c.close) if c.close is not None else None
-                volume_val = int(c.volume) if (c.volume is not None and math.isfinite(c.volume)) else 0
-
-                # Check if any of the price values are invalid
-                if (open_val is not None and math.isfinite(open_val) and
-                    high_val is not None and math.isfinite(high_val) and
-                    low_val is not None and math.isfinite(low_val) and
-                    close_val is not None and math.isfinite(close_val)):
-                    valid_candles.append({
-                        "timestamp": c.timestamp,
-                        "open": open_val,
-                        "high": high_val,
-                        "low": low_val,
-                        "close": close_val,
-                        "volume": volume_val,
-                        "interval": c.interval,
-                        "ticker": ticker
-                    })
-            except Exception as e:
-                logger.warning(f"Skipping candle with invalid data for {ticker}: {e}")
-                continue
+            # Check if any of the price values are invalid
+            if (c.get("open") is not None and math.isfinite(c["open"]) and
+                c.get("high") is not None and math.isfinite(c["high"]) and
+                c.get("low") is not None and math.isfinite(c["low"]) and
+                c.get("close") is not None and math.isfinite(c["close"])):
+                valid_candles.append(c)
 
         # FEATURE 014: Cache the results after DB query
         try:

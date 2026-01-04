@@ -75,11 +75,11 @@
       "values": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, 157.2, 160.1, 162.8, 165.4, 168.1, 170.7, 173.2, 175.8, 178.3, 180.9, 183.4, 185.9, 188.4, 190.8, 193.2, 195.6, 198.0, 200.4, 202.8, 205.2, 207.5, 209.8, 212.1, 214.4, 216.7, 218.9, 221.1, 223.3, 225.5, 227.7, 229.8, 232.0, 234.1],
       "params": {"period": 15, "threshold": 0}
     },
-    "ema": {
+    "ema_20": {
       "values": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 167.5, 169.8, 172.1, 174.4, 176.7, 179.0, 181.3, 183.6, 185.9, 188.2, 190.5, 192.8, 195.1, 197.4, 199.7, 202.0, 204.3, 206.6, 208.9, 211.2, 213.5, 215.8, 218.1, 220.4, 222.7, 225.0, 227.3, 229.6, 231.9, 234.2, 236.5],
       "params": {"period": 20, "source": "close"}
     },
-    "sma": {
+    "sma_50": {
       "values": [null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, 201.5, 203.2, 204.9],
       "params": {"period": 50, "source": "close"}
     }

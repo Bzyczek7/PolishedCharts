@@ -11,8 +11,16 @@ import {
   type Auth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
   type UserCredential,
 } from 'firebase/auth';
+
+// Mobile browser detection for redirect vs popup flow
+function isMobileBrowser(): boolean {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
+}
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
@@ -43,21 +51,18 @@ googleProvider.addScope('email');
 googleProvider.addScope('profile');
 
 /**
- * Sign in with Google OAuth using popup.
- *
- * Forces account selection on every sign-in by setting custom parameters.
- *
- * @returns UserCredential with the signed-in user
- * @throws Error if sign-in fails or popup is closed
+ * Sign in with Google OAuth using popup (desktop) or redirect (mobile).
  */
-export async function signInWithGoogle(): Promise<UserCredential> {
-  // Force Google to show account chooser on every sign-in
-  googleProvider.setCustomParameters({
-    prompt: 'select_account',
-  });
+export async function signInWithGoogle(): Promise<UserCredential | null> {
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-  const result = await signInWithPopup(auth, googleProvider);
-  return result;
+  // Mobile redirect path (no UserCredential returned)
+  if (isMobileBrowser()) {
+    await signInWithRedirect(auth, googleProvider);
+    return null;
+  }
+
+  return await signInWithPopup(auth, googleProvider);
 }
 
 /**

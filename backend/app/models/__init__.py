@@ -11,6 +11,7 @@ from app.models.ticker_universe import TickerUniverse
 from app.models.user import User
 from app.models.user_watchlist import UserWatchlist
 from app.models.watchlist import WatchlistEntry
+from app.models.indicator_config import IndicatorConfig
 
 __all__ = [
     "Alert",
@@ -28,4 +29,5 @@ __all__ = [
     "User",
     "UserWatchlist",
     "WatchlistEntry",
+    "IndicatorConfig",
 ]

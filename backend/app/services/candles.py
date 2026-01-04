@@ -31,6 +31,9 @@ class CandleService:
 
         Normalizes timestamps to midnight (00:00:00 UTC) for 1d and 1wk intervals
         to prevent duplicate candles with different times for the same day.
+
+        Batches inserts to avoid PostgreSQL's 32767 parameter limit.
+        Each candle uses 8 parameters, so max ~4000 candles per batch.
         """
         lock = self._get_lock(symbol_id, interval)
 
@@ -65,25 +68,36 @@ class CandleService:
                     "volume": c.get("volume", 0)
                 })
 
-            # PostgreSQL specific ON CONFLICT DO UPDATE
-            stmt = insert(Candle).values(values)
-            
-            update_dict = {
-                "open": stmt.excluded.open,
-                "high": stmt.excluded.high,
-                "low": stmt.excluded.low,
-                "close": stmt.excluded.close,
-                "volume": stmt.excluded.volume,
-            }
+            # Batch insert to avoid PostgreSQL's 32767 parameter limit
+            # Each candle uses 8 parameters (symbol_id, timestamp, interval, open, high, low, close, volume)
+            # Max safe batch size = 32767 / 8 = ~4095, use 4000 for safety
+            BATCH_SIZE = 4000
+            total_upserted = 0
 
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["symbol_id", "interval", "timestamp"],
-                set_=update_dict
-            )
+            for i in range(0, len(values), BATCH_SIZE):
+                batch = values[i:i + BATCH_SIZE]
 
-            await db.execute(stmt)
+                # PostgreSQL specific ON CONFLICT DO UPDATE
+                stmt = insert(Candle).values(batch)
+
+                update_dict = {
+                    "open": stmt.excluded.open,
+                    "high": stmt.excluded.high,
+                    "low": stmt.excluded.low,
+                    "close": stmt.excluded.close,
+                    "volume": stmt.excluded.volume,
+                }
+
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["symbol_id", "interval", "timestamp"],
+                    set_=update_dict
+                )
+
+                await db.execute(stmt)
+                total_upserted += len(batch)
+
             await db.commit()
-            logger.info(f"Upserted {len(values)} candles for symbol_id={symbol_id}, interval={interval}")
+            logger.info(f"Upserted {total_upserted} candles for symbol_id={symbol_id}, interval={interval}")
 
     async def find_gaps(
         self, 

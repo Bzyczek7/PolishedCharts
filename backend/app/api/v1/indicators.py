@@ -863,7 +863,13 @@ async def calculate_batch_indicators(
         tasks = []
         for idx, req in enumerate(batch_request.requests):
             fetch_signature = f"{req.symbol.upper()}:{req.interval}:{req.from_ts}:{req.to_ts}"
-            candles_data, db_symbol = candles_cache.get(fetch_signature, (None, None))
+            cached_value = candles_cache.get(fetch_signature, (None, None))
+
+            # Handle case where cached value is None (fetch failed) vs tuple (success)
+            if cached_value is None:
+                candles_data, db_symbol = None, None
+            else:
+                candles_data, db_symbol = cached_value
 
             if candles_data is None:
                 # No candles available - mark as failed

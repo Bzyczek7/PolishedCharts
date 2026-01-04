@@ -31,7 +31,7 @@ def is_crypto_ticker(ticker: str) -> bool:
     # yfinance crypto format: BTC-USD, ETH-USD, etc.
     if '-' in ticker and ticker.endswith('-USD'):
         return True
-    # Alternative format: BTC/USD, ETH/USD
+    # Alternative crypto format with slash separator
     if '/' in ticker and ticker.endswith('/USD'):
         return True
     return False

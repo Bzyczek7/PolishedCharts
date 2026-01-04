@@ -16,7 +16,7 @@ interface SymbolSearchProps {
 }
 
 const SymbolSearch = ({ open, onOpenChange, onSelect }: SymbolSearchProps) => {
-  const recentSymbols = ["IBM", "AAPL", "BTC/USD", "TSLA"]
+  const recentSymbols = ["IBM", "AAPL", "TSLA", "SPY"]
   const popularStocks = [
     { symbol: "MSFT", name: "Microsoft Corp.", exchange: "NASDAQ" },
     { symbol: "GOOGL", name: "Alphabet Inc.", exchange: "NASDAQ" },

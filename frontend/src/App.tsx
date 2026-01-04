@@ -677,6 +677,11 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
     console.log('[Initial Fetch] Triggered for symbol:', symbol, 'interval:', chartInterval, 'dataMode:', dataMode)
     console.log('[Initial Fetch] useEffect executing, current candles:', candles.length)
 
+    // Generate unique fetch ID for this request
+    const fetchId = `${symbol}-${chartInterval}-${Date.now()}`
+    currentFetchIdRef.current = fetchId
+    console.log('[Initial Fetch] Generated fetchId:', fetchId)
+
     // Reset pagination state when symbol or interval changes
     setHasMoreHistory(true)
     lastFetchedToDateRef.current = null
@@ -685,7 +690,7 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
 
     const fetchData = async () => {
         try {
-            console.log('[Initial Fetch] fetchData() called for symbol:', symbol, 'interval:', chartInterval)
+            console.log('[Initial Fetch] fetchData() called for symbol:', symbol, 'interval:', chartInterval, 'fetchId:', fetchId)
             // For daily intervals, use yesterday's close to avoid "gap" detection for today's incomplete candle
             // For intraday intervals, use current time (real-time updates expected)
             const now = new Date()
@@ -716,7 +721,14 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   console.error('[Initial Fetch] ERROR fetching candles:', err);
   return [];
 })
-            console.log('[Initial Fetch] Received', candleData.length, 'candles')
+            console.log('[Initial Fetch] Received', candleData.length, 'candles', 'fetchId:', fetchId)
+
+            // CRITICAL: Only update state if this response matches the current request
+            // This prevents stale responses from overwriting state after symbol changes
+            if (currentFetchIdRef.current !== fetchId) {
+                console.warn('[Initial Fetch] Stale response discarded - fetchId:', fetchId, 'current:', currentFetchIdRef.current)
+                return
+            }
 
             // CRITICAL: Only update candles if we got valid data
             // If fetch fails (returns empty), preserve existing data to prevent infinite scroll loop
@@ -793,6 +805,9 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
   const overlayInstancesRef = useRef(overlayInstances)
   indicatorsRef.current = indicators
   overlayInstancesRef.current = overlayInstances
+
+  // Race condition fix: Track current fetch request to prevent stale responses
+  const currentFetchIdRef = useRef<string>('')
 
   // Listen for timing events from hooks and WebSocket
   useEffect(() => {
@@ -2090,6 +2105,8 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                             </div>
                                         </div>
                                     }>
+                                        {/* Only render chart when we have candles for THIS symbol to prevent empty charts */}
+                                        {candles.length > 0 && (
                                         <ChartComponent
                                             key={`${symbol}-${chartInterval}`}
                                             symbol={symbol}
@@ -2104,6 +2121,7 @@ function AppContent({ symbol, setSymbol }: AppContentProps) {
                                             showVolume={true}
                                             showLastPrice={true}
                                         />
+                                        )}
                                     </ErrorBoundary>
                                 </>
                             )}

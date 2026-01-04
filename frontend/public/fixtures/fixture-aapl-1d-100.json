@@ -1139,7 +1139,7 @@
         "threshold": 0
       }
     },
-    "ema": {
+    "ema_20": {
       "values": [
         202.49,
         203.48,
@@ -1247,7 +1247,7 @@
         "source": "close"
       }
     },
-    "sma": {
+    "sma_50": {
       "values": [
         null,
         null,

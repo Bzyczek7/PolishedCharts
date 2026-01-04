@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
 from app.models.symbol import Symbol
-from app.models.candle import Candle
 from app.services.providers import YFinanceProvider
+from app.services.candles import CandleService
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ class DataUpdater:
     """
     def __init__(self):
         self.yf_provider = YFinanceProvider()
+        self.candle_service = CandleService()
         self.update_intervals = {
             "1m": 900,    # 15 minutes (900 seconds)
             "2m": 1800,   # 30 minutes (1800 seconds)
@@ -110,8 +111,22 @@ class DataUpdater:
             )
             
             if candles:
-                # Save to database
-                await self._save_candles_to_db(symbol, interval, candles)
+                # Save to database using atomic upsert (no race condition)
+                async with self.SessionLocal() as session:
+                    symbol_result = await session.execute(
+                        select(Symbol.id).where(Symbol.ticker == symbol)
+                    )
+                    symbol_id = symbol_result.scalar_one_or_none()
+
+                    if symbol_id:
+                        await self.candle_service.upsert_candles(
+                            session, symbol_id, interval, candles
+                        )
+                        await session.commit()
+
+                # Invalidate cache
+                from app.services.cache import invalidate_symbol
+                invalidate_symbol(symbol)
                 logger.info(f"Updated {len(candles)} candles for {symbol} ({interval})")
             else:
                 logger.warning(f"No new data fetched for {symbol} ({interval})")
@@ -119,60 +134,7 @@ class DataUpdater:
         except Exception as e:
             logger.error(f"Error updating data for {symbol} ({interval}): {e}")
             raise
-    
-    async def _save_candles_to_db(self, symbol: str, interval: str, candles: List[Dict]):
-        """Save fetched candles to the database"""
-        async with self.SessionLocal() as session:
-            # Get the symbol from database
-            symbol_result = await session.execute(select(Symbol).where(Symbol.ticker == symbol))
-            symbol_obj = symbol_result.scalars().first()
 
-            if not symbol_obj:
-                logger.error(f"Symbol {symbol} not found in database")
-                return
-
-            # Process and save each candle
-            for candle_data in candles:
-                # Check if candle already exists in database
-                existing_result = await session.execute(
-                    select(Candle).where(
-                        Candle.symbol_id == symbol_obj.id,
-                        Candle.interval == interval,
-                        Candle.timestamp == candle_data["timestamp"]
-                    )
-                )
-                existing_candle = existing_result.scalars().first()
-                
-                if existing_candle:
-                    # Update existing candle
-                    existing_candle.open = candle_data["open"]
-                    existing_candle.high = candle_data["high"]
-                    existing_candle.low = candle_data["low"]
-                    existing_candle.close = candle_data["close"]
-                    existing_candle.volume = candle_data["volume"]
-                else:
-                    # Create new candle
-                    new_candle = Candle(
-                        symbol_id=symbol_obj.id,
-                        timestamp=candle_data["timestamp"],
-                        interval=interval,
-                        open=candle_data["open"],
-                        high=candle_data["high"],
-                        low=candle_data["low"],
-                        close=candle_data["close"],
-                        volume=candle_data["volume"]
-                    )
-                    session.add(new_candle)
-            
-            await session.commit()
-
-            # Invalidate cache for this symbol to force recalculation of indicators
-            from app.services.cache import invalidate_symbol
-            invalidate_symbol(symbol)
-            logger.debug(f"Invalidated cache for {symbol} after candle update")
-
-            logger.debug(f"Saved {len(candles)} candles to database for {symbol} ({interval})")
-    
     async def stop_updates(self):
         """Stop all update tasks"""
         logger.info("Stopping automated data update service...")

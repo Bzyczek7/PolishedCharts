@@ -333,6 +333,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const userCredential = await signInWithGoogle();
 
+      // Mobile redirect path: function returns null, page navigates
+      // Anything after this line doesn't run in redirect flow
+      if (!userCredential) {
+        return;
+      }
+
       // Google accounts are pre-verified
       const token = await userCredential.user.getIdToken();
       const profile = await verifyToken(token);
